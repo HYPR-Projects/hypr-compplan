@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# Deploy da Cloud Function do HYPR Commplan.
+#
+# Mesmo padrão do Report Center (backend Python) — uniformidade de operação:
+#   - Cloud Functions Gen2 em us-central1
+#   - min-instances=1 pra eliminar cold start
+#   - Captura secrets da revisão atual e re-passa via YAML temp
+#     (gcloud functions deploy NÃO preserva envvars existentes)
+#   - Traffic split forçado para 100% na nova revisão ao final
+#
+# Pré-requisitos (uma vez só):
+#   1. gcloud auth login && gcloud config set project site-hypr
+#   2. SA `commplan-runner` criada com BQ Data Editor + Job User
+#      (ver setup_one_time.sh)
+#   3. Tabelas commplan_* criadas no BigQuery
+#      (ver sql/01-schema.sql + 02-seeds.sql + 03-migrations.sql)
+#
+# Primeira execução:
+#   - Como não há revisão anterior, capturar dos defaults locais:
+#       JWT_SECRET=xxx GOOGLE_OAUTH_CLIENT_ID=yyy ./deploy.sh
+#
+# Execuções subsequentes:
+#   ./deploy.sh
+# ─────────────────────────────────────────────────────────────────────────────
+
+set -euo pipefail
+
+PROJECT_ID="${PROJECT_ID:-site-hypr}"
+REGION="${REGION:-us-central1}"
+FUNCTION_NAME="commplan_api"
+SERVICE_NAME="commplan-api"
+SERVICE_ACCOUNT="commplan-runner@${PROJECT_ID}.iam.gserviceaccount.com"
+
+cd "$(dirname "$0")"
+
+# ── 1. Capturar envvars da revisão ativa (igual Report Center) ──────────────
+echo "▸ Capturando envvars da revisão ativa em produção..."
+
+ACTIVE_REV=$(gcloud run services describe "$SERVICE_NAME" \
+  --region="$REGION" \
+  --project="$PROJECT_ID" \
+  --format="value(status.traffic[0].revisionName)" 2>/dev/null || echo "")
+
+extract_env() {
+  local var_name="$1"
+  if [ -z "$ACTIVE_REV" ]; then
+    # Primeira execução — usa valor passado via env local
+    eval echo "\${$var_name:-}"
+    return
+  fi
+  gcloud run revisions describe "$ACTIVE_REV" \
+    --region="$REGION" \
+    --project="$PROJECT_ID" \
+    --format=json 2>/dev/null | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+env = data.get('spec', {}).get('containers', [{}])[0].get('env', [])
+for e in env:
+    if e.get('name') == '$var_name':
+        print(e.get('value', ''))
+        break
+"
+}
+
+if [ -z "$ACTIVE_REV" ]; then
+  echo "  ⚠ Nenhuma revisão anterior — primeira execução."
+  echo "    Esperando JWT_SECRET, GOOGLE_OAUTH_CLIENT_ID e EMAIL_PASS via env local."
+else
+  echo "  revisão ativa: $ACTIVE_REV"
+fi
+
+JWT_SECRET=$(extract_env "JWT_SECRET")
+GOOGLE_OAUTH_CLIENT_ID=$(extract_env "GOOGLE_OAUTH_CLIENT_ID")
+EMAIL_PASS=$(extract_env "EMAIL_PASS")
+
+if [ -z "$JWT_SECRET" ]; then
+  echo ""
+  echo "✗ JWT_SECRET ausente."
+  echo "  Sem ele o login quebra. Pegue o valor do Report Center:"
+  echo "    Cloud Run console → report-data → Edit → Variables → JWT_SECRET"
+  echo ""
+  echo "  Aí execute na primeira vez:"
+  echo "    JWT_SECRET=xxx GOOGLE_OAUTH_CLIENT_ID=yyy.apps.googleusercontent.com EMAIL_PASS=zzz ./deploy.sh"
+  exit 1
+fi
+echo "  ✓ JWT_SECRET capturado"
+
+if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ]; then
+  echo "  ✓ GOOGLE_OAUTH_CLIENT_ID capturado"
+else
+  echo "  ⚠ GOOGLE_OAUTH_CLIENT_ID ausente — login Google não funcionará"
+fi
+
+if [ -n "$EMAIL_PASS" ]; then
+  echo "  ✓ EMAIL_PASS capturado"
+else
+  echo "  ⚠ EMAIL_PASS ausente — notificações por email desabilitadas"
+fi
+
+# ── 2. Montar arquivo YAML com todas as envvars ──────────────────────────────
+ENV_FILE=$(mktemp -t commplan-envs.XXXXXX.yaml)
+trap "rm -f $ENV_FILE" EXIT
+
+cat > "$ENV_FILE" <<EOF
+GCP_PROJECT_ID: '${PROJECT_ID}'
+BQ_DATASET: 'hypr_commplan'
+BQ_SOURCE_DATASET: 'hypr_sales_center'
+BQ_REPORTHUB_DATASET: 'prod_prod_hypr_reporthub'
+NODE_ENV: 'production'
+ALLOWED_ORIGINS: 'https://commplan.hypr.mobi,https://hypr-commplan-frontend.vercel.app,http://localhost:5173'
+EMAIL_HOST: 'smtp.gmail.com'
+EMAIL_PORT: '587'
+EMAIL_USER: 'noreply@hypr.mobi'
+EMAIL_FROM: 'HYPR Commplan <noreply@hypr.mobi>'
+REPORT_CENTER_URL: 'https://report-data-453955675457.us-central1.run.app'
+JWT_SECRET: '${JWT_SECRET}'
+EOF
+
+if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ]; then
+  echo "GOOGLE_OAUTH_CLIENT_ID: '${GOOGLE_OAUTH_CLIENT_ID}'" >> "$ENV_FILE"
+fi
+if [ -n "$EMAIL_PASS" ]; then
+  echo "EMAIL_PASS: '${EMAIL_PASS}'" >> "$ENV_FILE"
+fi
+
+# ── 3. Deploy ────────────────────────────────────────────────────────────────
+echo ""
+echo "▸ Iniciando deploy (3-5 min)..."
+
+gcloud functions deploy "$FUNCTION_NAME" \
+  --gen2 \
+  --runtime=nodejs20 \
+  --region="$REGION" \
+  --project="$PROJECT_ID" \
+  --source=. \
+  --entry-point=commplan \
+  --trigger-http \
+  --allow-unauthenticated \
+  --service-account="$SERVICE_ACCOUNT" \
+  --memory=1Gi \
+  --cpu=1 \
+  --timeout=120s \
+  --min-instances=1 \
+  --max-instances=10 \
+  --concurrency=20 \
+  --env-vars-file="$ENV_FILE"
+
+# ── 4. Rotear 100% do tráfego para a revisão recém-deployada ─────────────────
+echo ""
+echo "▸ Roteando 100% do tráfego para a nova revisão..."
+gcloud run services update-traffic "$SERVICE_NAME" \
+  --region="$REGION" \
+  --project="$PROJECT_ID" \
+  --to-latest
+
+# ── 5. Output final ──────────────────────────────────────────────────────────
+echo ""
+echo "✓ Deploy concluído. URL pública:"
+gcloud functions describe "$FUNCTION_NAME" \
+  --region="$REGION" \
+  --project="$PROJECT_ID" \
+  --format="value(serviceConfig.uri)"
+
+echo ""
+echo "▸ Logs em tempo real:"
+echo "    gcloud run services logs tail $SERVICE_NAME --region=$REGION --project=$PROJECT_ID"

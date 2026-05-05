@@ -1,0 +1,115 @@
+.quarter__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.quarter__controls .field {
+  margin: 0;
+}
+
+.quarter-table {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.quarter-table__head,
+.quarter-row {
+  display: grid;
+  grid-template-columns: 24px 1.6fr 1.4fr 0.7fr 1fr 1.1fr 1.1fr 40px;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+}
+
+.quarter-table__head {
+  background: var(--bg-overlay);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.quarter-row {
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background var(--duration) var(--ease-out);
+}
+
+.quarter-row:last-child { border-bottom: none; }
+.quarter-row:hover { background: var(--bg-elevated); }
+
+.quarter-row__cs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.quarter-row__cs-name {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.quarter-row__num {
+  text-align: right;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-feature-settings: 'tnum' 1;
+}
+
+.quarter-row__num--dim { color: var(--text-tertiary); }
+.quarter-row__num--cyan { color: var(--brand); font-weight: 600; }
+
+.quarter-row__blocked {
+  margin-left: var(--space-2);
+}
+
+.quarter-row__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.quarter-row__view {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  transition: all var(--duration) var(--ease-out);
+}
+
+.quarter-row__view:hover {
+  background: var(--bg-overlay);
+  color: var(--brand);
+}
+
+.quarter__bulk {
+  margin-top: var(--space-6);
+  padding: var(--space-5);
+  background: var(--bg-overlay);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.quarter__bulk-tip {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  max-width: 480px;
+  line-height: var(--leading-relaxed);
+}
+
+.quarter__bulk-actions {
+  display: flex;
+  gap: var(--space-3);
+}

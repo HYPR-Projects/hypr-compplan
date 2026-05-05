@@ -1,0 +1,51 @@
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--bg-base);
+  flex-shrink: 0;
+  user-select: none;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.avatar--xs { width: 20px; height: 20px; font-size: 9px; }
+.avatar--sm { width: 26px; height: 26px; font-size: 10px; }
+.avatar--md { width: 32px; height: 32px; font-size: 11px; }
+.avatar--lg { width: 40px; height: 40px; font-size: 13px; }
+.avatar--xl { width: 56px; height: 56px; font-size: 18px; }
+
+/* Cores rotativas (estilo Report Center) */
+.avatar--c1 { background: var(--avatar-1); }
+.avatar--c2 { background: var(--avatar-2); }
+.avatar--c3 { background: var(--avatar-3); }
+.avatar--c4 { background: var(--avatar-4); }
+.avatar--c5 { background: var(--avatar-5); }
+.avatar--c6 { background: var(--avatar-6); }
+
+.avatar--more {
+  background: var(--bg-overlay);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  font-weight: 500;
+}
+
+.avatar-group {
+  display: inline-flex;
+  align-items: center;
+}
+
+.avatar-group .avatar {
+  margin-left: -6px;
+  border: 2px solid var(--bg-surface);
+}
+
+.avatar-group .avatar:first-child { margin-left: 0; }
+
+.avatar-group .avatar:hover {
+  z-index: 2;
+  transform: translateY(-2px);
+}

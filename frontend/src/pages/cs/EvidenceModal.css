@@ -1,0 +1,96 @@
+.evidence-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* ─── Summary ──────────────────────────────────────────────────────── */
+.evidence-modal__summary {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--bg-overlay);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+}
+
+.evidence-modal__summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.evidence-modal__summary-divider {
+  width: 1px;
+  background: var(--border-subtle);
+}
+
+.evidence-modal__pct {
+  font-size: var(--text-xl);
+  font-weight: 500;
+  color: var(--brand);
+  letter-spacing: -0.02em;
+}
+
+.evidence-modal__brl {
+  font-size: var(--text-xl);
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+/* ─── Histórico de revisão ─────────────────────────────────────────── */
+.evidence-modal__history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+
+.evidence-modal__history-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.evidence-modal__history-item--success { color: var(--status-green); }
+.evidence-modal__history-item--fail    { color: var(--status-red); }
+
+.evidence-modal__history-tip {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-style: italic;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+/* ─── Form ─────────────────────────────────────────────────────────── */
+.evidence-modal__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.evidence-modal__error {
+  padding: var(--space-3);
+  background: rgba(245, 39, 43, 0.08);
+  color: var(--status-red);
+  border: 1px solid rgba(245, 39, 43, 0.20);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+/* ─── Footer ───────────────────────────────────────────────────────── */
+.evidence-modal__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+}

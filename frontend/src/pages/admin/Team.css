@@ -1,0 +1,121 @@
+.team-section {
+  margin-bottom: var(--space-10);
+}
+
+.team-section .section-title {
+  margin-bottom: var(--space-2);
+}
+
+.section-help {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-5);
+  max-width: 720px;
+  line-height: var(--leading-relaxed);
+}
+
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-4);
+}
+
+.member-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  transition: all var(--duration) var(--ease-out);
+}
+
+.member-card:hover {
+  border-color: var(--border);
+  transform: translateY(-1px);
+}
+
+.member-card__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.member-card__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.member-card__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+  flex-wrap: wrap;
+}
+
+.member-card__email {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.member-card__edit {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  transition: all var(--duration) var(--ease-out);
+  flex-shrink: 0;
+}
+
+.member-card__edit:hover {
+  background: var(--bg-overlay);
+  color: var(--brand);
+}
+
+.member-card__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.member-card__metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.member-card__metric-value {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.member-card__metric-value--cyan { color: var(--brand); font-weight: 600; }
+
+.member-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.member-form__error {
+  padding: var(--space-3);
+  background: rgba(245, 39, 43, 0.08);
+  color: var(--status-red);
+  border: 1px solid rgba(245, 39, 43, 0.20);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}

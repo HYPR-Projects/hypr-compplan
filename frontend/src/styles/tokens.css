@@ -1,0 +1,199 @@
+/* ╔══════════════════════════════════════════════════════════════════╗
+   ║  HYPR° Commplan — Design Tokens                                   ║
+   ║                                                                    ║
+   ║  Paleta oficial HYPR (brand guide):                               ║
+   ║    1C262F · FCFEFE · 246C84 · EDD900 · 4CB050 · 78909C · 536872  ║
+   ║                                                                    ║
+   ║  Suporta dark (default) e light via data-theme="light" no <html>. ║
+   ╚══════════════════════════════════════════════════════════════════╝ */
+
+:root {
+  /* ── Brand HYPR (paleta oficial) ───────────────────────────────────
+     Cyan teal — usado em destaques, botões primários, links, focus.
+     Escolha do tom varia por tema (dark vai mais luminoso pra contraste). */
+  --hypr-teal-900:    #1C262F;   /* Fundo dark oficial */
+  --hypr-teal-700:    #246C84;   /* Cyan HYPR escuro (brand principal) */
+  --hypr-teal-500:    #3397B9;   /* Cyan médio (variação saturada) */
+  --hypr-teal-200:    #C5EAF6;   /* Cyan claro (soft bg / glow) */
+  --hypr-white:       #FCFEFE;   /* Branco oficial */
+  --hypr-gray-500:    #78909C;   /* Cinza azulado (text secondary) */
+  --hypr-gray-700:    #536872;   /* Cinza escuro (borders / tertiary) */
+  --hypr-gray-200:    #E5EBF2;   /* Cinza claro (light bg) */
+
+  /* Status oficial (do brand guide) */
+  --hypr-yellow-700:  #B1A300;
+  --hypr-yellow-500:  #EDD900;
+  --hypr-yellow-200:  #F6F0A9;
+  --hypr-red-700:     #B11C1F;
+  --hypr-red-500:     #F5272B;
+  --hypr-red-200:     #FFBEBF;
+  --hypr-green-500:   #4CB050;   /* Verde HYPR */
+
+  /* ── Aliases semânticos (referenciar SEMPRE estes nos componentes) ── */
+  --brand:            var(--hypr-teal-700);
+  --brand-strong:     var(--hypr-teal-500);
+  --brand-soft:       rgba(36, 108, 132, 0.12);
+  --brand-glow:       rgba(51, 151, 185, 0.28);
+
+  /* Status semânticos */
+  --status-green:     var(--hypr-green-500);
+  --status-green-dim: #3D8A40;
+  --status-yellow:    var(--hypr-yellow-500);
+  --status-yellow-dim:var(--hypr-yellow-700);
+  --status-red:       var(--hypr-red-500);
+  --status-red-dim:   var(--hypr-red-700);
+  --status-blue:      var(--hypr-teal-500);
+  --status-purple:    #C084FC;
+
+  /* ── Avatares (cores rotativas pra iniciais) ────────────────────── */
+  --avatar-1: #4CB050;   /* HYPR green */
+  --avatar-2: #3397B9;   /* HYPR teal mid */
+  --avatar-3: #F5272B;   /* HYPR red */
+  --avatar-4: #EDD900;   /* HYPR yellow */
+  --avatar-5: #78909C;   /* HYPR gray */
+  --avatar-6: #246C84;   /* HYPR teal dark */
+
+  /* ── Tipografia ─────────────────────────────────────────────────── */
+  --font-sans:  'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:  'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  --text-xs:    11px;
+  --text-sm:    13px;
+  --text-base:  14px;
+  --text-md:    15px;
+  --text-lg:    18px;
+  --text-xl:    22px;
+  --text-2xl:   28px;
+  --text-3xl:   36px;
+  --text-4xl:   48px;
+
+  --leading-tight:   1.15;
+  --leading-snug:    1.35;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.75;
+
+  --tracking-tight:  -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide:   0.04em;
+  --tracking-wider:  0.08em;
+
+  /* ── Espaçamento (escala 4-base) ────────────────────────────────── */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* ── Layout ─────────────────────────────────────────────────────── */
+  --max-width:        1440px;
+  --content-padding:  48px;
+  --sidebar-width:    240px;
+  --header-height:    72px;
+  --radius-sm:        6px;
+  --radius:           10px;
+  --radius-lg:        14px;
+  --radius-xl:        20px;
+  --radius-pill:      999px;
+
+  /* ── Animation curves ───────────────────────────────────────────── */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --duration-fast:  120ms;
+  --duration:       200ms;
+  --duration-slow:  400ms;
+}
+
+/* ╔══ DARK THEME (default — paleta HYPR oficial) ═══════════════════╗ */
+:root,
+[data-theme="dark"] {
+  --bg-base:         #1C262F;             /* HYPR oficial dark */
+  --bg-surface:      #232E38;             /* +6% brightness pra cards */
+  --bg-elevated:     #2A3540;             /* +10% pra hover/elevated */
+  --bg-overlay:      #313D49;             /* +14% pra overlays */
+  --bg-input:        #19222A;             /* -3% pra inputs (recuo visual) */
+
+  --border-subtle:   rgba(252, 254, 254, 0.05);
+  --border:          rgba(252, 254, 254, 0.10);
+  --border-strong:   rgba(252, 254, 254, 0.18);
+  --border-focus:    var(--hypr-teal-500);
+
+  /* Em dark, brand fica mais luminoso pra contraste */
+  --brand:            var(--hypr-teal-500);     /* 3397B9 */
+  --brand-strong:     #4DAFCF;                  /* +brilho pra hover */
+  --brand-soft:       rgba(51, 151, 185, 0.14);
+  --brand-glow:       rgba(51, 151, 185, 0.32);
+
+  --text-primary:    #FCFEFE;             /* HYPR white */
+  --text-secondary:  #B8C4CE;             /* gray-500 mais claro */
+  --text-tertiary:   var(--hypr-gray-500);
+  --text-disabled:   #4A5560;
+  --text-inverse:    var(--hypr-teal-900);
+
+  --shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow:     0 4px 16px rgba(0, 0, 0, 0.30), 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-lg:  0 12px 40px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-glow: 0 0 0 1px var(--brand-glow), 0 8px 32px var(--brand-soft);
+
+  /* Sutil "mist" no fundo — efeito Report Center */
+  --bg-gradient: radial-gradient(
+    ellipse 1200px 800px at 70% -10%,
+    rgba(51, 151, 185, 0.08),
+    transparent 50%
+  ), radial-gradient(
+    ellipse 800px 600px at 0% 100%,
+    rgba(36, 108, 132, 0.05),
+    transparent 60%
+  );
+}
+
+/* ╔══ LIGHT THEME ════════════════════════════════════════════════════╗ */
+[data-theme="light"] {
+  --bg-base:         #FCFEFE;             /* HYPR white oficial */
+  --bg-surface:      #FFFFFF;
+  --bg-elevated:     #FFFFFF;
+  --bg-overlay:      #F6F8FA;
+  --bg-input:        #F2F5F8;
+
+  --border-subtle:   rgba(28, 38, 47, 0.06);
+  --border:          rgba(28, 38, 47, 0.12);
+  --border-strong:   rgba(28, 38, 47, 0.20);
+  --border-focus:    var(--hypr-teal-700);
+
+  /* Em light, brand fica no tom escuro oficial pra contraste */
+  --brand:            var(--hypr-teal-700);     /* 246C84 */
+  --brand-strong:     #1A5468;                  /* mais escuro pra hover */
+  --brand-soft:       rgba(36, 108, 132, 0.10);
+  --brand-glow:       rgba(36, 108, 132, 0.22);
+
+  --text-primary:    var(--hypr-teal-900);
+  --text-secondary:  var(--hypr-gray-700);
+  --text-tertiary:   var(--hypr-gray-500);
+  --text-disabled:   #B0BBC4;
+  --text-inverse:    var(--hypr-white);
+
+  --shadow-sm:  0 1px 2px rgba(28, 38, 47, 0.06);
+  --shadow:     0 2px 8px rgba(28, 38, 47, 0.06), 0 1px 2px rgba(28, 38, 47, 0.04);
+  --shadow-lg:  0 16px 48px rgba(28, 38, 47, 0.10), 0 4px 12px rgba(28, 38, 47, 0.05);
+  --shadow-glow: 0 0 0 1px var(--brand-glow), 0 8px 24px var(--brand-soft);
+
+  /* Light tem versões mais saturadas dos status pra contraste */
+  --status-green:     #3D8A40;
+  --status-green-dim: #2D6A30;
+  --status-yellow:    var(--hypr-yellow-700);
+  --status-yellow-dim:#8E8200;
+  --status-red:       var(--hypr-red-700);
+  --status-red-dim:   #8B1518;
+
+  --bg-gradient: radial-gradient(
+    ellipse 1000px 600px at 80% -10%,
+    rgba(36, 108, 132, 0.06),
+    transparent 60%
+  );
+}

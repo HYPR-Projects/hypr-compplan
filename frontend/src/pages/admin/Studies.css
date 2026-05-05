@@ -1,0 +1,6 @@
+/* Studies usa o mesmo padrão visual de Team — apenas garantindo grid */
+.studies-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: var(--space-4);
+}

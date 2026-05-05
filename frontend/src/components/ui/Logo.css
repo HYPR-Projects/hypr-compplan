@@ -1,0 +1,48 @@
+.hypr-logo {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  user-select: none;
+}
+
+.hypr-logo__main {
+  display: inline-flex;
+  align-items: baseline;
+  color: var(--text-primary);
+  letter-spacing: 0.32em;
+  font-weight: 600;
+}
+
+.hypr-logo__main > span {
+  margin-right: 0.04em;
+}
+
+.hypr-logo__deg {
+  color: var(--brand);
+  margin-left: -0.06em;
+  font-weight: 400;
+  text-shadow: 0 0 16px var(--brand-glow);
+}
+
+.hypr-logo__sub {
+  color: var(--brand);
+  letter-spacing: var(--tracking-tight);
+  font-weight: 500;
+  text-transform: none;
+}
+
+/* Tamanhos */
+.hypr-logo--sm  { font-size: 14px; }
+.hypr-logo--sm .hypr-logo__sub { font-size: 14px; }
+
+.hypr-logo--md  { font-size: 18px; }
+.hypr-logo--md .hypr-logo__sub { font-size: 18px; }
+
+.hypr-logo--lg  { font-size: 28px; }
+.hypr-logo--lg .hypr-logo__sub { font-size: 28px; }
+
+.hypr-logo--xl  { font-size: 40px; }
+.hypr-logo--xl .hypr-logo__sub { font-size: 40px; }

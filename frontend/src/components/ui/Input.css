@@ -1,0 +1,104 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.field__label {
+  color: var(--text-tertiary);
+}
+
+.field__wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color var(--duration) var(--ease-out),
+              box-shadow var(--duration) var(--ease-out);
+}
+
+.field__wrap:hover { border-color: var(--border-strong); }
+
+.field__wrap:focus-within {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.field__input {
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: var(--text-base);
+}
+
+.field__input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.field__textarea {
+  min-height: 80px;
+  padding: 12px 14px;
+  resize: vertical;
+  font-family: var(--font-sans);
+  line-height: var(--leading-snug);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.field__textarea:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.field__prefix,
+.field__suffix {
+  padding: 0 var(--space-3);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.field__prefix { padding-right: 0; }
+.field__suffix { padding-left: 0; }
+
+.field__wrap--select {
+  cursor: pointer;
+}
+
+.field__select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  padding-right: 36px;
+}
+
+.field__select-arrow {
+  position: absolute;
+  right: 14px;
+  pointer-events: none;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.field__error {
+  color: var(--status-red);
+  font-size: var(--text-xs);
+}
+
+.field__hint {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.field--error .field__wrap {
+  border-color: var(--status-red);
+}
+
+.field--error .field__wrap:focus-within {
+  box-shadow: 0 0 0 3px rgba(245, 39, 43, 0.18);
+}

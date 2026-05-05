@@ -1,0 +1,106 @@
+import { NavLink, useNavigate } from 'react-router-dom';
+import {
+  Home, Calendar, FileText, Users, BookOpen, Shield,
+  Settings, LogOut, Sun, Moon, History, Sparkles, Archive,
+} from 'lucide-react';
+import { useTheme } from '../../hooks/useTheme.jsx';
+import { auth } from '../../lib/api.js';
+import Logo from '../ui/Logo.jsx';
+import Avatar from '../ui/Avatar.jsx';
+import './AppShell.css';
+
+/**
+ * Estrutura: sidebar fixo à esquerda + header global + main content.
+ *
+ * Sidebar tem itens diferentes pra CS vs Admin. CS vê: Dashboard, Campanhas,
+ * Histórico. Admin vê tudo + seção administrativa expandida.
+ */
+
+const NAV_CS = [
+  { to: '/dashboard',  label: 'Meu painel',  icon: Home },
+  { to: '/campanhas',  label: 'Campanhas',   icon: FileText },
+  { to: '/historico',  label: 'Histórico',   icon: History },
+];
+
+const NAV_ADMIN = [
+  { to: '/admin',                label: 'Visão geral',  icon: Home },
+  { to: '/admin/quarter',        label: 'Quarter atual', icon: Calendar },
+  { to: '/admin/evidencias',     label: 'Evidências',    icon: Sparkles, badge: 'pending' },
+  { to: '/admin/legacy',         label: 'Campanhas legadas', icon: Archive, badge: 'pending' },
+  { to: '/admin/team',           label: 'Time',          icon: Users },
+  { to: '/admin/regras',         label: 'Regras',        icon: BookOpen },
+  { to: '/admin/estudos',        label: 'Estudos',       icon: BookOpen },
+  { to: '/admin/abs',            label: 'Clientes ABS',  icon: Shield },
+  { to: '/admin/mentorias',      label: 'Mentorias',     icon: Users },
+  { to: '/admin/auditoria',      label: 'Auditoria',     icon: History },
+];
+
+export default function AppShell({ children, pendingEvidences = 0 }) {
+  const user = auth.getUser();
+  const isAdmin = user?.role === 'admin';
+  const items = isAdmin ? NAV_ADMIN : NAV_CS;
+  const { theme, toggle } = useTheme();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    auth.clearToken();
+    auth.clearUser();
+    navigate('/login', { replace: true });
+  };
+
+  return (
+    <div className="shell">
+      <aside className="shell__sidebar">
+        <div className="shell__brand">
+          <Logo subtitle="Commplan" size="sm" />
+        </div>
+
+        <nav className="shell__nav">
+          {items.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === '/admin' || item.to === '/dashboard'}
+              className={({ isActive }) =>
+                `shell__nav-item ${isActive ? 'shell__nav-item--active' : ''}`
+              }
+            >
+              <item.icon size={16} />
+              <span>{item.label}</span>
+              {item.badge === 'pending' && pendingEvidences > 0 && (
+                <span className="shell__nav-badge mono">{pendingEvidences}</span>
+              )}
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="shell__sidebar-footer">
+          <button className="shell__theme-toggle" onClick={toggle} title="Alternar tema">
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+            <span>{theme === 'dark' ? 'Claro' : 'Escuro'}</span>
+          </button>
+        </div>
+      </aside>
+
+      <div className="shell__content">
+        <header className="shell__header">
+          <div className="shell__user">
+            <Avatar name={user?.name || user?.email} email={user?.email} size="sm" />
+            <div className="shell__user-info">
+              <div className="shell__user-name">{user?.name || user?.email?.split('@')[0]}</div>
+              <div className="shell__user-role">
+                {isAdmin ? 'Administrador' : 'Customer Success'}
+              </div>
+            </div>
+          </div>
+          <button className="shell__logout" onClick={handleLogout} title="Sair">
+            <LogOut size={15} />
+            <span>Sair</span>
+          </button>
+        </header>
+
+        <main className="shell__main">{children}</main>
+      </div>
+    </div>
+  );
+}
