@@ -4,6 +4,7 @@ import { Sparkles } from 'lucide-react';
 import Logo from '../components/ui/Logo.jsx';
 import Button from '../components/ui/Button.jsx';
 import { auth, endpoints } from '../lib/api.js';
+import { config } from '../lib/config.js';
 import './Login.css';
 
 /**
@@ -26,7 +27,7 @@ export default function Login() {
   }, [navigate]);
 
   useEffect(() => {
-    const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
+    const clientId = config.googleOAuthClientId;
     if (!clientId) return; // dev sem oauth
 
     // Carrega Google Identity Services

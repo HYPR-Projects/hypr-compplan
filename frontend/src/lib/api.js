@@ -11,7 +11,9 @@
  *   - Outros: lança Error com message do backend
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+import { config } from './config.js';
+
+const API_BASE = config.apiUrl;
 const TOKEN_KEY = 'commplan_jwt';
 
 export const auth = {
