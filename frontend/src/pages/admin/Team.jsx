@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Edit3, ShieldCheck, User, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Plus, Edit3, ShieldCheck } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
@@ -8,17 +8,58 @@ import Avatar from '../../components/ui/Avatar.jsx';
 import { Input, Select } from '../../components/ui/Input.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { fmt } from '../../lib/format.js';
-import { MOCK_TEAM_OVERVIEW } from '../../lib/mockData.js';
+import { endpoints } from '../../lib/api.js';
 import './Team.css';
 
 export default function AdminTeam() {
-  const [team, setTeam] = useState([
-    ...MOCK_TEAM_OVERVIEW.map(c => ({ ...c, role: 'cs' })),
-    { email: 'matheus.machado@hypr.mobi', name: 'Matheus Machado', role: 'admin', current_salary: null, active: true },
-    { email: 'mateus.lambranho@hypr.mobi', name: 'Mateus Lambranho', role: 'admin', current_salary: null, active: true },
-  ]);
+  const [team, setTeam] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(null);
+
+  async function load() {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await endpoints.listMembers();
+      // O backend retorna { items: [...] } ou direto o array — normalizamos
+      const items = Array.isArray(data) ? data : (data.items || []);
+      setTeam(items);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function handleSave(data) {
+    try {
+      if (creating) {
+        await endpoints.createMember(data);
+      } else {
+        await endpoints.updateMember(editing.email, data);
+      }
+      setCreating(false);
+      setEditing(null);
+      await load();
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  if (error) {
+    return (
+      <AppShell>
+        <Card>
+          <h2 className="page-title">Erro ao carregar time</h2>
+          <p className="card__subtitle">{error}</p>
+        </Card>
+      </AppShell>
+    );
+  }
 
   const css = team.filter(m => m.role === 'cs');
   const admins = team.filter(m => m.role === 'admin');
@@ -37,47 +78,46 @@ export default function AdminTeam() {
         </Button>
       </header>
 
-      <section className="team-section fade-up" style={{ '--i': 1 }}>
-        <h2 className="section-title">Customer Success</h2>
-        <p className="section-help">
-          Salários atualizados aqui têm efeito a partir do próximo quarter. Mudanças
-          retroativas ficam no histórico (close-and-insert) — bônus já calculados não recompõem.
-        </p>
+      {loading && <div className="empty-state">Carregando time…</div>}
 
-        <div className="team-grid">
-          {css.map((m, i) => (
-            <MemberCard key={m.email} member={m} onEdit={() => setEditing(m)} i={i} />
-          ))}
-        </div>
-      </section>
+      {!loading && (
+        <>
+          <section className="team-section fade-up" style={{ '--i': 1 }}>
+            <h2 className="section-title">Customer Success</h2>
+            <p className="section-help">
+              Salários atualizados aqui têm efeito a partir do próximo quarter.
+              Mudanças retroativas ficam no histórico (close-and-insert) — bônus já calculados não recompõem.
+            </p>
 
-      <section className="team-section fade-up" style={{ '--i': 2 }}>
-        <h2 className="section-title">Administradores</h2>
-        <p className="section-help">
-          Admins veem o painel global, aprovam evidências, fecham quarters e gerenciam regras.
-        </p>
+            <div className="team-grid">
+              {css.length === 0 ? (
+                <Card><p className="card__subtitle">Nenhum CS cadastrado.</p></Card>
+              ) : css.map((m, i) => (
+                <MemberCard key={m.email} member={m} onEdit={() => setEditing(m)} i={i} />
+              ))}
+            </div>
+          </section>
 
-        <div className="team-grid">
-          {admins.map((m, i) => (
-            <MemberCard key={m.email} member={m} onEdit={() => setEditing(m)} i={i} />
-          ))}
-        </div>
-      </section>
+          <section className="team-section fade-up" style={{ '--i': 2 }}>
+            <h2 className="section-title">Administradores</h2>
+            <p className="section-help">
+              Admins veem o painel global, aprovam evidências, fecham quarters e gerenciam regras.
+            </p>
+
+            <div className="team-grid">
+              {admins.map((m, i) => (
+                <MemberCard key={m.email} member={m} onEdit={() => setEditing(m)} i={i} />
+              ))}
+            </div>
+          </section>
+        </>
+      )}
 
       {(creating || editing) && (
         <MemberModal
           member={editing}
           onClose={() => { setCreating(false); setEditing(null); }}
-          onSave={(data) => {
-            // TODO: endpoints.createMember / updateMember
-            if (creating) {
-              setTeam((t) => [...t, { ...data, active: true }]);
-            } else {
-              setTeam((t) => t.map(m => m.email === editing.email ? { ...m, ...data } : m));
-            }
-            setCreating(false);
-            setEditing(null);
-          }}
+          onSave={handleSave}
         />
       )}
     </AppShell>
@@ -89,12 +129,11 @@ function MemberCard({ member, onEdit, i }) {
   return (
     <div className="member-card stagger" style={{ '--i': i }}>
       <div className="member-card__main">
-        <Avatar name={member.name} size="lg" />
+        <Avatar name={member.name || member.email} size="lg" />
         <div className="member-card__info">
           <div className="member-card__name">
-            {member.name}
-            {isAdmin ? <Badge variant="cyan"><ShieldCheck size={11} /> Admin</Badge> : null}
-            {member.has_mentees && <Badge variant="green">Mentor</Badge>}
+            {member.name || member.email}
+            {isAdmin && <Badge variant="cyan"><ShieldCheck size={11} /> Admin</Badge>}
           </div>
           <div className="member-card__email">{member.email}</div>
         </div>
@@ -108,17 +147,7 @@ function MemberCard({ member, onEdit, i }) {
           <div className="member-card__metric">
             <span className="label">Salário fixo</span>
             <span className="member-card__metric-value mono">
-              {member.current_salary ? fmt.brl(member.current_salary) : 'Não definido'}
-            </span>
-          </div>
-          <div className="member-card__metric">
-            <span className="label">Camp. ativas</span>
-            <span className="member-card__metric-value mono">{member.campaigns_active || 0}</span>
-          </div>
-          <div className="member-card__metric">
-            <span className="label">Bônus quarter</span>
-            <span className="member-card__metric-value mono member-card__metric-value--cyan">
-              {fmt.brl(member.bonus_q1_brl || 0)}
+              {member.fixed_salary_brl ? fmt.brl(member.fixed_salary_brl) : 'Não definido'}
             </span>
           </div>
         </div>
@@ -133,7 +162,7 @@ function MemberModal({ member, onClose, onSave }) {
     email: member?.email || '',
     name: member?.name || '',
     role: member?.role || 'cs',
-    current_salary: member?.current_salary || '',
+    fixed_salary_brl: member?.fixed_salary_brl || '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -145,16 +174,20 @@ function MemberModal({ member, onClose, onSave }) {
       if (!form.email.endsWith('@hypr.mobi')) {
         throw new Error('Email precisa ser do domínio @hypr.mobi');
       }
-      if (form.role === 'cs' && !form.current_salary) {
+      if (form.role === 'cs' && !form.fixed_salary_brl) {
         throw new Error('CS precisa ter salário fixo definido');
       }
-      await new Promise(r => setTimeout(r, 400));
-      onSave({
+      const today = new Date().toISOString().slice(0, 10);
+      const body = {
         email: form.email.toLowerCase(),
         name: form.name,
         role: form.role,
-        current_salary: form.role === 'cs' ? Number(form.current_salary) : null,
-      });
+      };
+      if (form.role === 'cs') {
+        body.fixed_salary_brl = Number(form.fixed_salary_brl);
+        body.effective_from = today;
+      }
+      await onSave(body);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -166,7 +199,7 @@ function MemberModal({ member, onClose, onSave }) {
     <Modal
       open
       onClose={onClose}
-      title={isNew ? 'Adicionar pessoa ao time' : `Editar ${member.name}`}
+      title={isNew ? 'Adicionar pessoa ao time' : `Editar ${member.name || member.email}`}
       subtitle={isNew ? 'O acesso será criado automaticamente. SSO via Google.' : member.email}
       size="md"
       footer={
@@ -210,8 +243,8 @@ function MemberModal({ member, onClose, onSave }) {
             label="Salário fixo mensal"
             type="number"
             placeholder="12000"
-            value={form.current_salary}
-            onChange={(e) => setForm({ ...form, current_salary: e.target.value })}
+            value={form.fixed_salary_brl}
+            onChange={(e) => setForm({ ...form, fixed_salary_brl: e.target.value })}
             prefix="R$"
             hint="Esse valor é descontado em 2× do bônus bruto trimestral. Mudanças aqui só afetam quarters futuros."
           />

@@ -108,6 +108,7 @@ export const endpoints = {
   studiesAvailable(version='2026') { return api.get(`/commplan/studies/available?version=${version}`); },
 
   // Admin
+  adminOverview(q)       { return api.get(`/commplan/admin/overview/${q}`); },
   adminQuarter(q)        { return api.get(`/commplan/admin/quarter/${q}`); },
   computeQuarter(q)      { return api.post(`/commplan/admin/quarter/${q}/compute`); },
   approveQuarter(q, cs)  { return api.put(`/commplan/admin/quarter/${q}/${encodeURIComponent(cs)}/approve`); },

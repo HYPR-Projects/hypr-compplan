@@ -1,34 +1,32 @@
+import { useEffect, useState } from 'react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
-import AreaChart from '../../components/charts/AreaChart.jsx';
+import { endpoints } from '../../lib/api.js';
 import { fmt } from '../../lib/format.js';
-import { MOCK_HISTORY, MOCK_QUARTER_SUMMARY } from '../../lib/mockData.js';
-import './History.css';
 
 export default function CsHistory() {
-  // Inclui o quarter atual no início pra ver continuidade
-  const allQuarters = [
-    {
-      quarter: MOCK_QUARTER_SUMMARY.quarter,
-      status: MOCK_QUARTER_SUMMARY.status,
-      bonus_gross_brl: MOCK_QUARTER_SUMMARY.bonus_gross_brl,
-      bonus_net_brl: MOCK_QUARTER_SUMMARY.bonus_net_brl,
-      campaigns_count: MOCK_QUARTER_SUMMARY.campaigns_count,
-      current: true,
-    },
-    ...MOCK_HISTORY,
-  ];
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Ordem cronológica pro chart
-  const chartData = [...allQuarters].reverse().map((q) => ({
-    x: q.quarter,
-    bruto: q.bonus_gross_brl,
-    liquido: q.bonus_net_brl,
-  }));
+  useEffect(() => {
+    endpoints.meHistory()
+      .then(d => setHistory(Array.isArray(d) ? d : (d.items || [])))
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const totalLifetime = MOCK_HISTORY.reduce((s, q) => s + q.bonus_net_brl, 0);
-  const avgQuarterly = totalLifetime / MOCK_HISTORY.length;
+  if (error) {
+    return (
+      <AppShell>
+        <Card>
+          <h2 className="page-title">Erro ao carregar histórico</h2>
+          <p className="card__subtitle">{error}</p>
+        </Card>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -36,79 +34,56 @@ export default function CsHistory() {
         <div>
           <h1 className="page-title">Histórico</h1>
           <div className="page-subtitle">
-            <span>Todos os quarters · ganhos consolidados</span>
+            <span>Bônus de quarters anteriores</span>
           </div>
         </div>
       </header>
 
-      <section className="history-stats fade-up" style={{ '--i': 1 }}>
-        <div className="history-stats__item">
-          <span className="label">Total acumulado (líquido)</span>
-          <span className="history-stats__value mono">{fmt.brl(totalLifetime)}</span>
-        </div>
-        <div className="history-stats__divider" />
-        <div className="history-stats__item">
-          <span className="label">Média por quarter</span>
-          <span className="history-stats__value mono">{fmt.brl(avgQuarterly)}</span>
-        </div>
-        <div className="history-stats__divider" />
-        <div className="history-stats__item">
-          <span className="label">Quarters fechados</span>
-          <span className="history-stats__value mono">{MOCK_HISTORY.length}</span>
-        </div>
-      </section>
+      {loading && <div className="empty-state">Carregando…</div>}
 
-      <Card className="fade-up" style={{ '--i': 2, marginBottom: 'var(--space-8)' }}>
-        <header className="card__header">
-          <div>
-            <h3 className="card__title">Evolução por quarter</h3>
-            <p className="card__subtitle">Bônus bruto vs líquido</p>
-          </div>
-        </header>
-        <AreaChart
-          data={chartData}
-          xKey="x"
-          yKey="liquido"
-          color="cyan"
-          height={240}
-          formatY={(v) => fmt.brlCompact(v)}
-          formatTooltip={(v) => fmt.brl(v)}
-          tooltipLabel="Líquido"
-        />
-      </Card>
+      {!loading && history.length === 0 && (
+        <Card>
+          <p className="card__subtitle">
+            Você ainda não tem quarters fechados. Quando o admin marcar um quarter como pago, ele aparece aqui.
+          </p>
+        </Card>
+      )}
 
-      <section className="fade-up" style={{ '--i': 3 }}>
-        <div className="history-table">
-          <div className="history-table__head">
+      {history.length > 0 && (
+        <div className="quarter-table">
+          <div className="quarter-table__head">
             <span>Quarter</span>
             <span>Status</span>
-            <span style={{ textAlign: 'right' }}>Campanhas</span>
             <span style={{ textAlign: 'right' }}>Bruto</span>
+            <span style={{ textAlign: 'right' }}>Desconto</span>
             <span style={{ textAlign: 'right' }}>Líquido</span>
           </div>
-          {allQuarters.map((q, i) => (
-            <div key={q.quarter} className="history-row stagger" style={{ '--i': i }}>
-              <div className="history-row__quarter">
-                <span>{q.quarter}</span>
-                {q.current && <Badge variant="cyan">Atual</Badge>}
-              </div>
+
+          {history.map((q, i) => (
+            <div key={q.quarter} className="quarter-row stagger" style={{ '--i': i }}>
+              <div><strong>{q.quarter}</strong></div>
               <div>
-                <Badge variant={q.status === 'paid' ? 'green' : q.status === 'approved' ? 'cyan' : 'yellow'}>
+                <Badge variant={
+                  q.status === 'paid' ? 'green'
+                  : q.status === 'approved' ? 'cyan'
+                  : 'neutral'
+                }>
                   {q.status === 'paid' ? 'Pago'
                     : q.status === 'approved' ? 'Aprovado'
-                    : q.status === 'pending_approval' ? 'Aguardando'
-                    : 'Em andamento'}
+                    : 'Em rascunho'}
                 </Badge>
               </div>
-              <div className="mono history-row__num">{q.campaigns_count}</div>
-              <div className="mono history-row__num">{fmt.brl(q.bonus_gross_brl)}</div>
-              <div className="mono history-row__num history-row__net">
-                {fmt.brl(q.bonus_net_brl)}
+              <div className="mono quarter-row__num">{fmt.brl(Number(q.total_bonus_brl) || 0)}</div>
+              <div className="mono quarter-row__num quarter-row__num--dim">
+                −{fmt.brl(Number(q.salary_deduction_brl) || 0)}
+              </div>
+              <div className="mono quarter-row__num quarter-row__num--cyan">
+                {fmt.brl(Number(q.net_bonus_brl) || 0)}
               </div>
             </div>
           ))}
         </div>
-      </section>
+      )}
     </AppShell>
   );
 }

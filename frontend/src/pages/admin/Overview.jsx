@@ -1,38 +1,79 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, Users, Sparkles, Target, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card, KpiCard } from '../../components/ui/Card.jsx';
-import { Badge, StatusDot } from '../../components/ui/Badge.jsx';
+import { Badge } from '../../components/ui/Badge.jsx';
 import Avatar from '../../components/ui/Avatar.jsx';
 import AreaChart from '../../components/charts/AreaChart.jsx';
 import BarChart from '../../components/charts/BarChart.jsx';
 import { fmt, currentQuarter } from '../../lib/format.js';
-import {
-  MOCK_TEAM_OVERVIEW, MOCK_GROWTH_DATA, MOCK_TOP_STUDIES,
-  MOCK_AUDIENCES_PER_MONTH,
-} from '../../lib/mockData.js';
+import { endpoints } from '../../lib/api.js';
 import './Overview.css';
 
 export default function AdminOverview() {
   const navigate = useNavigate();
-  const team = MOCK_TEAM_OVERVIEW;
   const quarter = currentQuarter();
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
 
-  const totalBonusQ = team.reduce((s, c) => s + c.bonus_q1_brl, 0);
-  const totalCampaigns = team.reduce((s, c) => s + c.campaigns_active, 0);
-  const totalPending = team.reduce((s, c) => s + c.pending_claims, 0);
-  // Mock: faturamento total bruto/líquido — calcular do backend depois
-  const totalRevenueGross = 14_750_000;
-  const totalRevenueNet = totalRevenueGross * 0.8347;
+  useEffect(() => {
+    let cancelled = false;
+    endpoints.adminOverview(quarter)
+      .then(d => { if (!cancelled) setData(d); })
+      .catch(e => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [quarter]);
 
-  // Cresc. compplan agregado
-  const aggGrowth = MOCK_GROWTH_DATA.map(g => ({
-    ...g,
-    compplan: g.compplan * team.length * 1.4, // aproxima total time
+  if (error) {
+    return (
+      <AppShell>
+        <Card>
+          <h2 className="page-title">Erro ao carregar visão geral</h2>
+          <p className="card__subtitle">{error}</p>
+        </Card>
+      </AppShell>
+    );
+  }
+
+  if (!data) {
+    return (
+      <AppShell>
+        <header className="page-header">
+          <h1 className="page-title">Visão geral</h1>
+          <div className="page-subtitle">Carregando…</div>
+        </header>
+      </AppShell>
+    );
+  }
+
+  const { kpis, by_cs: team, growth, top_studies, audiences_per_month } = data;
+
+  // Adapta growth pro shape esperado pelo AreaChart
+  const growthData = growth.map(g => ({
+    x: g.month,
+    compplan: g.invest_total,
+  }));
+
+  const audiencesData = audiences_per_month.map(a => ({
+    x: a.month,
+    value: a.n,
+  }));
+
+  // Top studies precisa do nome — se backend só mandou id, mostra o id
+  const topStudiesData = top_studies.map(s => ({
+    name: s.study_id,
+    value: s.uses,
+  }));
+
+  // Distribuição por CS pra bar chart
+  const distribByCs = team.map(c => ({
+    name: (c.cs_name || c.cs_email).split(' ')[0],
+    value: c.bonus_brl,
   }));
 
   return (
-    <AppShell pendingEvidences={totalPending}>
+    <AppShell pendingEvidences={kpis.n_pending_evi}>
       <header className="page-header fade-up">
         <div>
           <h1 className="page-title">Visão geral</h1>
@@ -41,12 +82,12 @@ export default function AdminOverview() {
             <span className="page-subtitle__sep">·</span>
             <span>{team.length} CSs ativos</span>
             <span className="page-subtitle__sep">·</span>
-            <span>{totalCampaigns} campanhas</span>
-            {totalPending > 0 && (
+            <span>{kpis.n_camp} campanhas</span>
+            {kpis.n_pending_evi > 0 && (
               <>
                 <span className="page-subtitle__sep">·</span>
                 <span style={{ color: 'var(--status-yellow)' }}>
-                  {totalPending} evidências aguardando revisão
+                  {kpis.n_pending_evi} evidências aguardando revisão
                 </span>
               </>
             )}
@@ -59,10 +100,10 @@ export default function AdminOverview() {
         <Card className="kpi kpi--hero stagger" style={{ '--i': 0 }}>
           <div className="kpi__label label">Investimento gerido — {quarter}</div>
           <div className="kpi__value mono kpi__value--cyan">
-            {fmt.brlCompact(totalRevenueGross)}
+            {fmt.brlCompact(kpis.invest_total)}
           </div>
           <div className="kpi__hero-breakdown">
-            <span className="mono">{fmt.brlCompact(totalRevenueNet)} líquido</span>
+            <span className="mono">{fmt.brlCompact(kpis.invest_total * 0.8347)} líquido</span>
             <span className="page-subtitle__sep">·</span>
             <span>tax 16,53%</span>
           </div>
@@ -70,16 +111,16 @@ export default function AdminOverview() {
 
         <KpiCard
           label="Bônus total do time"
-          value={fmt.brlCompact(totalBonusQ)}
+          value={fmt.brlCompact(kpis.total_bonus_brl)}
         />
         <KpiCard
           label="Campanhas ativas"
-          value={totalCampaigns}
+          value={kpis.n_camp}
         />
         <KpiCard
           label="Evidências pendentes"
-          value={totalPending}
-          status={totalPending > 5 ? 'yellow' : 'green'}
+          value={kpis.n_pending_evi}
+          status={kpis.n_pending_evi > 5 ? 'yellow' : 'green'}
         />
       </section>
 
@@ -88,38 +129,46 @@ export default function AdminOverview() {
         <Card className="dashboard-grid__main fade-up" style={{ '--i': 4 }}>
           <header className="card__header">
             <div>
-              <h3 className="card__title">Compplan agregado</h3>
+              <h3 className="card__title">Investimento agregado</h3>
               <p className="card__subtitle">Todos os CSs · últimos 6 meses</p>
             </div>
           </header>
-          <AreaChart
-            data={aggGrowth}
-            xKey="x"
-            yKey="compplan"
-            color="cyan"
-            height={260}
-            formatY={(v) => fmt.brlCompact(v)}
-            formatTooltip={(v) => fmt.brl(v)}
-            tooltipLabel="Compplan total"
-          />
+          {growthData.length > 0 ? (
+            <AreaChart
+              data={growthData}
+              xKey="x"
+              yKey="compplan"
+              color="cyan"
+              height={260}
+              formatY={(v) => fmt.brlCompact(v)}
+              formatTooltip={(v) => fmt.brl(v)}
+              tooltipLabel="Investimento"
+            />
+          ) : (
+            <div className="empty-state">Sem dados nos últimos 6 meses</div>
+          )}
         </Card>
 
         <Card className="fade-up" style={{ '--i': 5 }}>
           <header className="card__header">
             <div>
-              <h3 className="card__title">Audiences Discoveries</h3>
-              <p className="card__subtitle">Total time · por mês</p>
+              <h3 className="card__title">Campanhas com audiences</h3>
+              <p className="card__subtitle">Por mês · últimos 6 meses</p>
             </div>
           </header>
-          <AreaChart
-            data={MOCK_AUDIENCES_PER_MONTH.map(d => ({ ...d, value: d.value * 6 }))}
-            xKey="x"
-            yKey="value"
-            color="green"
-            height={180}
-            formatY={(v) => fmt.numCompact(v)}
-            formatTooltip={(v) => `${v} audiences`}
-          />
+          {audiencesData.length > 0 ? (
+            <AreaChart
+              data={audiencesData}
+              xKey="x"
+              yKey="value"
+              color="green"
+              height={180}
+              formatY={(v) => fmt.numCompact(v)}
+              formatTooltip={(v) => `${v} campanhas`}
+            />
+          ) : (
+            <div className="empty-state">Sem dados</div>
+          )}
         </Card>
       </section>
 
@@ -134,32 +183,36 @@ export default function AdminOverview() {
 
         <div className="cs-leaderboard">
           {[...team]
-            .sort((a, b) => b.bonus_q1_brl - a.bonus_q1_brl)
+            .sort((a, b) => b.bonus_brl - a.bonus_brl)
             .map((cs, i) => (
-              <CsLeaderRow key={cs.email} cs={cs} rank={i + 1} i={i} />
+              <CsLeaderRow key={cs.cs_email} cs={cs} rank={i + 1} i={i} />
             ))}
         </div>
       </section>
 
-      {/* ─── Estudos mais usados ────────────────────────────────────── */}
+      {/* ─── Estudos mais usados + Distribuição de bônus ─────────────── */}
       <section className="dashboard-grid">
         <Card className="fade-up" style={{ '--i': 9 }}>
           <header className="card__header">
             <div>
-              <h3 className="card__title">Ranking de estudos</h3>
-              <p className="card__subtitle">Mais usados no quarter</p>
+              <h3 className="card__title">Estudos mais usados</h3>
+              <p className="card__subtitle">Top 10 do quarter</p>
             </div>
           </header>
-          <BarChart
-            data={MOCK_TOP_STUDIES}
-            xKey="name"
-            yKey="value"
-            layout="horizontal"
-            height={260}
-            color="cyan"
-            highlightTopN={3}
-            formatValue={(v) => `${v}×`}
-          />
+          {topStudiesData.length > 0 ? (
+            <BarChart
+              data={topStudiesData}
+              xKey="name"
+              yKey="value"
+              layout="horizontal"
+              height={260}
+              color="cyan"
+              highlightTopN={3}
+              formatValue={(v) => `${v}×`}
+            />
+          ) : (
+            <div className="empty-state">Nenhum estudo declarado ainda</div>
+          )}
         </Card>
 
         <Card className="fade-up" style={{ '--i': 10 }}>
@@ -169,15 +222,21 @@ export default function AdminOverview() {
               <p className="card__subtitle">Por CS · {quarter}</p>
             </div>
           </header>
-          <BarChart
-            data={team.map(c => ({ name: c.name.split(' ')[0], value: c.bonus_q1_brl }))}
-            xKey="name"
-            yKey="value"
-            layout="horizontal"
-            height={260}
-            color="cyan"
-            formatValue={(v) => fmt.brlCompact(v)}
-          />
+          {distribByCs.some(d => d.value > 0) ? (
+            <BarChart
+              data={distribByCs}
+              xKey="name"
+              yKey="value"
+              layout="horizontal"
+              height={260}
+              color="cyan"
+              formatValue={(v) => fmt.brlCompact(v)}
+            />
+          ) : (
+            <div className="empty-state">
+              Sem bônus calculados ainda. Vá em <strong>Quarter atual</strong> e clique em <strong>Recalcular tudo</strong>.
+            </div>
+          )}
         </Card>
       </section>
     </AppShell>
@@ -185,38 +244,36 @@ export default function AdminOverview() {
 }
 
 function CsLeaderRow({ cs, rank, i }) {
-  const navigate = useNavigate();
   return (
     <div className="cs-row stagger" style={{ '--i': i }}>
       <div className="cs-row__rank">{rank}</div>
-      <Avatar name={cs.name} size="md" />
+      <Avatar name={cs.cs_name || cs.cs_email} size="md" />
       <div className="cs-row__main">
-        <div className="cs-row__name">{cs.name}</div>
-        <div className="cs-row__email">{cs.email}</div>
+        <div className="cs-row__name">{cs.cs_name || cs.cs_email}</div>
+        <div className="cs-row__email">{cs.cs_email}</div>
       </div>
 
       <div className="cs-row__metric">
         <span className="label">Salário fixo</span>
-        <span className="mono cs-row__metric-value">{fmt.brlCompact(cs.current_salary)}</span>
+        <span className="mono cs-row__metric-value">{fmt.brlCompact(cs.fixed_salary_brl)}</span>
       </div>
 
       <div className="cs-row__metric">
         <span className="label">Campanhas</span>
-        <span className="mono cs-row__metric-value">{cs.campaigns_active}</span>
+        <span className="mono cs-row__metric-value">{cs.n_camp}</span>
       </div>
 
       <div className="cs-row__metric">
         <span className="label">Bônus quarter</span>
         <span className="mono cs-row__metric-value cs-row__metric-value--cyan">
-          {fmt.brl(cs.bonus_q1_brl)}
+          {fmt.brl(cs.bonus_brl)}
         </span>
       </div>
 
       <div className="cs-row__cta">
-        {cs.pending_claims > 0 && (
-          <Badge variant="yellow">{cs.pending_claims} pendente{cs.pending_claims > 1 ? 's' : ''}</Badge>
+        {cs.n_pending_evi > 0 && (
+          <Badge variant="yellow">{cs.n_pending_evi} pendente{cs.n_pending_evi > 1 ? 's' : ''}</Badge>
         )}
-        {cs.has_mentees && <Badge variant="cyan">Mentor</Badge>}
       </div>
     </div>
   );

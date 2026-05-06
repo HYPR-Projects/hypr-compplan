@@ -1,16 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  ArrowLeft, CheckCircle2, XCircle, Clock, AlertCircle,
-  Edit3, ExternalLink, Plus, Sparkles, Lock,
-} from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock, AlertCircle, Plus } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
-import { Badge, StatusDot } from '../../components/ui/Badge.jsx';
+import { Badge } from '../../components/ui/Badge.jsx';
 import Button from '../../components/ui/Button.jsx';
 import EvidenceModal from './EvidenceModal.jsx';
-import { fmt } from '../../lib/format.js';
-import { MOCK_CAMPAIGNS } from '../../lib/mockData.js';
+import { fmt, currentQuarter } from '../../lib/format.js';
+import { endpoints } from '../../lib/api.js';
 import './CampaignDetail.css';
 
 const CATEGORY_LABELS = {
@@ -22,24 +19,56 @@ const CATEGORY_LABELS = {
   onboarding:    'Onboarding',
 };
 
-const CATEGORY_MAX_PCT = {
-  pre_campaign:  0.0135,
-  setup:         0.0230,
-  optimization:  0.0030,
-  account_mgmt:  0.0120,
-  extras:        0.0055,
-  onboarding:    0.0025,
-};
-
 export default function CampaignDetail() {
   const { token } = useParams();
   const navigate = useNavigate();
+  const [campaign, setCampaign] = useState(null);
+  const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null);
 
-  const campaign = MOCK_CAMPAIGNS.find(c => c.short_token === token) || MOCK_CAMPAIGNS[0];
-  const rules = campaign.rule_results || [];
+  async function load() {
+    try {
+      setError(null);
+      // Busca todas as campanhas do quarter e filtra pelo token
+      // (não temos endpoint específico /me/campaign/:token, então re-uso o /campaigns/:q)
+      const data = await endpoints.meCampaigns(currentQuarter());
+      const campaigns = Array.isArray(data) ? data : (data.campaigns || data.items || []);
+      const found = campaigns.find(c => c.short_token === token);
+      if (!found) throw new Error('Campanha não encontrada');
+      setCampaign(found);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
 
-  // Agrupa por categoria
+  useEffect(() => { load(); }, [token]);
+
+  if (error) {
+    return (
+      <AppShell>
+        <button className="back-link" onClick={() => navigate(-1)}>
+          <ArrowLeft size={14} /> Voltar
+        </button>
+        <Card>
+          <h2 className="page-title">Erro</h2>
+          <p className="card__subtitle">{error}</p>
+        </Card>
+      </AppShell>
+    );
+  }
+
+  if (!campaign) {
+    return (
+      <AppShell>
+        <button className="back-link" onClick={() => navigate(-1)}>
+          <ArrowLeft size={14} /> Voltar
+        </button>
+        <div className="empty-state">Carregando…</div>
+      </AppShell>
+    );
+  }
+
+  const rules = campaign.rule_results || [];
   const byCategory = rules.reduce((acc, r) => {
     (acc[r.category] = acc[r.category] || []).push(r);
     return acc;
@@ -47,7 +76,6 @@ export default function CampaignDetail() {
 
   const earned = rules.filter(r => r.earned).length;
   const total = rules.length;
-  const pending = rules.filter(r => r.breakdown?.evidence_status === 'not_claimed' || r.breakdown?.evidence_status === 'pending_review').length;
 
   return (
     <AppShell>
@@ -58,206 +86,113 @@ export default function CampaignDetail() {
       <header className="page-header campaign-detail__header">
         <div className="fade-up">
           <div className="campaign-detail__breadcrumb">
-            <Badge variant="neutral">{campaign.short_token}</Badge>
-            {campaign.is_abs && <Badge variant="cyan">ABS</Badge>}
+            <span>{campaign.client_name}</span>
             <span className="page-subtitle__sep">·</span>
-            <span>{fmt.dateRange(campaign.campaign_start_date, campaign.campaign_end_date)}</span>
+            <Badge variant="neutral">{campaign.short_token}</Badge>
           </div>
-          <h1 className="page-title campaign-detail__title">
-            <span className="campaign-detail__client">{campaign.client_name}</span>
-            <span className="campaign-detail__campaign">{campaign.campaign_name}</span>
-          </h1>
-        </div>
-
-        <div className="campaign-detail__hero fade-up" style={{ '--i': 1 }}>
-          <div className="campaign-detail__hero-item">
-            <span className="label">Receita líquida</span>
-            <span className="campaign-detail__hero-value mono">{fmt.brl(campaign.revenue_net)}</span>
-            <span className="campaign-detail__hero-meta">
-              {fmt.brl(campaign.revenue_gross)} bruto × 0.8347
-            </span>
-          </div>
-          <div className="campaign-detail__hero-divider" />
-          <div className="campaign-detail__hero-item">
-            <span className="label">Pct atingido</span>
-            <span className="campaign-detail__hero-value mono campaign-detail__hero-value--cyan">
-              {fmt.pct(campaign.cs_total_pct)}
-            </span>
-            <span className="campaign-detail__hero-meta">
-              {earned} de {total} regras
-            </span>
-          </div>
-          <div className="campaign-detail__hero-divider" />
-          <div className="campaign-detail__hero-item">
-            <span className="label">Bônus desta campanha</span>
-            <span className="campaign-detail__hero-value mono campaign-detail__hero-value--strong">
-              {fmt.brl(campaign.cs_bonus_amount)}
-            </span>
-            <span className="campaign-detail__hero-meta">
-              R$ {fmt.num(Math.round(campaign.revenue_net))} × {fmt.pct(campaign.cs_total_pct)}
-            </span>
+          <h1 className="page-title">{campaign.campaign_name}</h1>
+          <div className="page-subtitle">
+            {fmt.dateRange(campaign.campaign_start_date, campaign.campaign_end_date)}
+            <span className="page-subtitle__sep">·</span>
+            <span>{fmt.brl(campaign.revenue_gross)} bruto</span>
+            <span className="page-subtitle__sep">·</span>
+            <span>{fmt.brl(campaign.revenue_net)} líquido</span>
           </div>
         </div>
       </header>
 
-      {pending > 0 && (
-        <Card className="campaign-detail__alert fade-up" accent="yellow" style={{ '--i': 2 }}>
-          <div className="campaign-detail__alert-icon">
-            <Sparkles size={20} />
+      <section className="kpi-row">
+        <Card className="kpi">
+          <div className="kpi__label label">Bônus na campanha</div>
+          <div className="kpi__value mono kpi__value--cyan">
+            {fmt.brl(Number(campaign.cs_bonus_amount) || 0)}
           </div>
-          <div className="campaign-detail__alert-text">
-            <strong>{pending} evidência{pending > 1 ? 's' : ''} pendente{pending > 1 ? 's' : ''}</strong>
-            <p>Submeta as evidências pra que essas regras sejam contabilizadas no cálculo do bônus.</p>
+          <div className="kpi__hero-breakdown">
+            <span>{fmt.pct(campaign.cs_total_pct)} do líquido</span>
           </div>
         </Card>
-      )}
 
-      {/* ─── Categorias e regras ────────────────────────────────────── */}
-      {Object.entries(byCategory).map(([cat, items], idx) => (
-        <CategoryBlock
-          key={cat}
-          category={cat}
-          rules={items}
-          revenueNet={campaign.revenue_net}
-          onEdit={(rule) => setEditing({ rule, campaign })}
-          i={idx}
-        />
-      ))}
+        <Card className="kpi">
+          <div className="kpi__label label">Regras atingidas</div>
+          <div className="kpi__value mono">
+            {earned}/{total}
+          </div>
+        </Card>
+
+        <Card className="kpi">
+          <div className="kpi__label label">Status</div>
+          <div className="kpi__value">
+            {campaign.is_abs ? <Badge variant="cyan">ABS</Badge> : <Badge variant="neutral">Padrão</Badge>}
+          </div>
+        </Card>
+      </section>
+
+      <section className="fade-up">
+        <h2 className="section-title">Regras de bônus por categoria</h2>
+
+        {Object.entries(byCategory).map(([cat, catRules]) => (
+          <Card key={cat} style={{ marginBottom: 'var(--space-4)' }}>
+            <header className="card__header">
+              <h3 className="card__title">{CATEGORY_LABELS[cat] || cat}</h3>
+            </header>
+            <div className="rules-list">
+              {catRules
+                .sort((a, b) => (a.display_order || 99) - (b.display_order || 99))
+                .map(r => (
+                  <RuleRow key={r.rule_id} rule={r} onClaim={() => setEditing(r)} />
+                ))}
+            </div>
+          </Card>
+        ))}
+      </section>
 
       {editing && (
         <EvidenceModal
-          rule={editing.rule}
-          campaign={editing.campaign}
+          rule={editing}
+          campaign={campaign}
           onClose={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null);
-            // TODO: refetch campaign
-          }}
+          onSaved={() => { setEditing(null); load(); }}
         />
       )}
     </AppShell>
   );
 }
 
-function CategoryBlock({ category, rules, revenueNet, onEdit, i }) {
-  const earnedSum = rules.reduce((s, r) => s + (r.effective_pct || 0), 0);
-  const maxPct = CATEGORY_MAX_PCT[category] || 0;
-  const fillPct = maxPct > 0 ? (earnedSum / maxPct) * 100 : 0;
-  const earnedBonus = revenueNet * earnedSum;
-
+function RuleRow({ rule, onClaim }) {
+  const status = rule.evidence_status || (rule.earned ? 'earned' : 'not_claimed');
   return (
-    <section className="category-block fade-up" style={{ '--i': i + 3 }}>
-      <header className="category-block__header">
-        <div>
-          <h2 className="category-block__title">{CATEGORY_LABELS[category]}</h2>
-          <div className="category-block__progress">
-            <div className="category-block__progress-track">
-              <div
-                className="category-block__progress-fill"
-                style={{ width: `${Math.min(100, fillPct)}%` }}
-              />
-            </div>
-            <span className="category-block__progress-label mono">
-              {fmt.pct(earnedSum)} <span className="category-block__progress-max">/ {fmt.pct(maxPct)}</span>
-            </span>
-          </div>
-        </div>
-        <div className="category-block__sum">
-          <span className="label">Bônus na categoria</span>
-          <span className="category-block__sum-value mono">{fmt.brl(earnedBonus)}</span>
-        </div>
-      </header>
-
-      <div className="rule-list">
-        {rules.map((rule, idx) => (
-          <RuleRow key={rule.rule_id} rule={rule} onEdit={() => onEdit(rule)} i={idx} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function RuleRow({ rule, onEdit, i }) {
-  const status = getRuleStatus(rule);
-  const isEditable = status !== 'auto_earned' && status !== 'auto_not_earned';
-
-  return (
-    <div className={`rule-row rule-row--${status} stagger`} style={{ '--i': i }}>
+    <div className="rule-row">
       <div className="rule-row__icon">
-        {status === 'earned' && <CheckCircle2 size={16} />}
-        {status === 'auto_earned' && <CheckCircle2 size={16} />}
-        {status === 'pending_review' && <Clock size={16} />}
-        {status === 'rejected' && <XCircle size={16} />}
-        {status === 'not_claimed' && <AlertCircle size={16} />}
-        {status === 'auto_not_earned' && <XCircle size={16} />}
+        {rule.earned ? (
+          <CheckCircle2 size={18} className="rule-row__icon--earned" />
+        ) : status === 'pending_review' ? (
+          <Clock size={18} className="rule-row__icon--pending" />
+        ) : (
+          <AlertCircle size={18} className="rule-row__icon--blocked" />
+        )}
       </div>
 
-      <div className="rule-row__body">
+      <div className="rule-row__main">
         <div className="rule-row__name">{rule.display_name}</div>
-        <div className="rule-row__detail">
-          <RuleStatusLabel status={status} rule={rule} />
+        <div className="rule-row__meta">
+          {fmt.pct(rule.bonus_pct_config)} do líquido
+          {rule.reason && <> <span className="page-subtitle__sep">·</span> {rule.reason}</>}
         </div>
       </div>
 
-      <div className="rule-row__pct mono">
-        {rule.earned ? `+${fmt.pct(rule.effective_pct)}` : '—'}
+      <div className="rule-row__bonus mono">
+        {fmt.brl(Number(rule.bonus_amount) || 0)}
       </div>
 
-      <div className="rule-row__action">
-        {isEditable && (
-          <button className="rule-row__edit" onClick={onEdit}>
-            {status === 'not_claimed' ? (
-              <><Plus size={13} /> Submeter</>
-            ) : (
-              <><Edit3 size={13} /> Editar</>
-            )}
-          </button>
+      <div className="rule-row__cta">
+        {rule.requires_evidence && !rule.earned && status !== 'pending_review' && (
+          <Button variant="ghost" size="sm" icon={Plus} onClick={onClaim}>
+            Reivindicar
+          </Button>
         )}
-        {!isEditable && (
-          <span className="rule-row__locked" title="Avaliada automaticamente">
-            <Lock size={11} /> Auto
-          </span>
-        )}
+        {status === 'pending_review' && <Badge variant="yellow">Em análise</Badge>}
+        {rule.earned && <Badge variant="green">Aprovado</Badge>}
       </div>
     </div>
   );
-}
-
-function RuleStatusLabel({ status, rule }) {
-  if (status === 'auto_earned') {
-    if (rule.breakdown?.evaluated_as) {
-      const b = rule.breakdown;
-      return (
-        <span className="rule-row__metrics">
-          <span>{b.evaluated_as.toUpperCase()}</span>
-          <span className="page-subtitle__sep">·</span>
-          {b.is_abs && <Badge variant="cyan">ABS</Badge>}
-          {b.over && <span>over: <span className="mono">{b.over.value}%</span> {b.over.ok && '✓'}</span>}
-          {b.ecpm && <span>eCPM: <span className="mono">R$ {b.ecpm.value.toFixed(2)}</span> {b.ecpm.ok && '✓'}</span>}
-          {b.ctr && <span>CTR: <span className="mono">{b.ctr.value}%</span> {b.ctr.ok && '✓'}</span>}
-        </span>
-      );
-    }
-    if (rule.breakdown?.matched_feature) {
-      return <span>Feature aplicada: <strong>{rule.breakdown.matched_feature}</strong></span>;
-    }
-    return 'Avaliação automática · concedido';
-  }
-  if (status === 'auto_not_earned') return 'Avaliação automática · não atingiu critério';
-  if (status === 'earned') return <span className="rule-row__metrics-success">Evidência aprovada</span>;
-  if (status === 'pending_review') return 'Aguardando revisão do admin';
-  if (status === 'rejected') return <span className="rule-row__metrics-fail">Evidência rejeitada · clique em editar pra reenviar</span>;
-  if (status === 'not_claimed') return 'Aguardando você submeter evidência';
-  return '';
-}
-
-function getRuleStatus(rule) {
-  if (rule.breakdown?.evidence_status) {
-    if (rule.breakdown.evidence_status === 'approved') return 'earned';
-    if (rule.breakdown.evidence_status === 'pending_review') return 'pending_review';
-    if (rule.breakdown.evidence_status === 'rejected') return 'rejected';
-    if (rule.breakdown.evidence_status === 'not_claimed') return 'not_claimed';
-  }
-  if (rule.earned) return 'auto_earned';
-  return 'auto_not_earned';
 }

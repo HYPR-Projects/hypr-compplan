@@ -31,6 +31,7 @@ import { router as adminAudit } from './routes/admin/audit.js';
 import { router as adminStudies } from './routes/admin/studies.js';
 import { router as adminTeamMembers } from './routes/admin/team-members.js';
 import { router as adminLegacyAssignments } from './routes/admin/legacy-assignments.js';
+import { router as adminOverview } from './routes/admin/overview.js';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -80,6 +81,7 @@ app.use('/commplan/admin/audit', adminAudit);
 app.use('/commplan/admin/studies', adminStudies);
 app.use('/commplan/admin/team-members', adminTeamMembers);
 app.use('/commplan/admin/legacy', adminLegacyAssignments);
+app.use('/commplan/admin/overview', adminOverview);
 
 // ─── Error handler ───────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
