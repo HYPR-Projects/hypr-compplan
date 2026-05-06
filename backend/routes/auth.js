@@ -30,7 +30,7 @@ router.post('/login', async (req, res) => {
   //         se cs_email aparece em pelo menos 1 checklist → cs
   //         senão → 403
   const teamRows = await query(
-    `SELECT role, active FROM ${sourceTableRef('team_members')}
+    `SELECT role, active FROM ${tableRef('compplan_team')}
      WHERE LOWER(email) = LOWER(@e) LIMIT 1`,
     { e: email }
   );

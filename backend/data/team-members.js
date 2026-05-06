@@ -1,17 +1,12 @@
 /**
- * data/team-members.js — gerencia hypr_sales_center.team_members.
+ * data/team-members.js — gerencia hypr_commplan.compplan_team.
  *
- * team_members é uma tabela COMPARTILHADA com o HYPR Command — fica no
- * dataset hypr_sales_center, NÃO no hypr_commplan. Razão: quando o admin
- * do Commplan adiciona um CS, ele precisa aparecer no Command imediatamente
- * (dropdown de CP em formulários). Ter duas tabelas separadas exigiria
- * duplicação manual.
+ * compplan_team é a tabela ISOLADA do Compplan (não compartilhada com Command).
+ * Razão: o Command tem CSs/CPs/Sales misturados em hypr_sales_center.team_members,
+ * mas o Compplan precisa só dos CSs e admins de bônus. Tabelas separadas evitam
+ * filtros frágeis e desacoplam os dois sistemas.
  *
- * Padrão: Commplan tem WRITE access ao hypr_sales_center.team_members
- * via SA permissions (BQ Data Editor no dataset). Cross-dataset write
- * tem mesma latência que same-dataset.
- *
- * O Commplan usa pra:
+ * O Compplan usa pra:
  *   - decidir role no login (admin vs cs)
  *   - manter nome/email canônico do CS
  *   - origem da lista de CSs no admin
@@ -19,7 +14,7 @@
  * Formato do nome canônico: "Primeiro Sobrenome" (ex: "João Buzolin").
  */
 
-import { query, sourceTableRef, escSql, TTLCache } from '../lib/bigquery.js';
+import { query, tableRef, escSql, TTLCache } from '../lib/bigquery.js';
 
 const cache = new TTLCache(2 * 60_000); // 2min
 
@@ -36,7 +31,7 @@ export async function listAllMembers({ activeOnly = true, role = null } = {}) {
 
   const sql = `
     SELECT email, name, role, added_by, added_at, active
-    FROM ${sourceTableRef('team_members')}
+    FROM ${tableRef('compplan_team')}
     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
     ORDER BY name
   `;
@@ -48,7 +43,7 @@ export async function listAllMembers({ activeOnly = true, role = null } = {}) {
 export async function getMemberByEmail(email) {
   const rows = await query(
     `SELECT email, name, role, added_by, added_at, active
-     FROM ${sourceTableRef('team_members')}
+     FROM ${tableRef('compplan_team')}
      WHERE LOWER(email) = LOWER(@e) LIMIT 1`,
     { e: email }
   );
@@ -59,7 +54,7 @@ export async function getMemberByEmail(email) {
  * Adiciona ou atualiza membro.
  *
  * Idempotente: se o e-mail já existe, atualiza (UPDATE). Senão, INSERT.
- * Padrão upsert é seguro porque team_members é tabela pequena (~20 linhas).
+ * Padrão upsert é seguro porque compplan_team é tabela pequena (~10 linhas).
  */
 export async function upsertMember({ email, name, role = 'cs', addedBy }) {
   const emailLower = email.toLowerCase();
@@ -67,7 +62,7 @@ export async function upsertMember({ email, name, role = 'cs', addedBy }) {
 
   if (existing) {
     const sql = `
-      UPDATE ${sourceTableRef('team_members')}
+      UPDATE ${tableRef('compplan_team')}
       SET name = ${escSql.str(name)},
           role = ${escSql.str(role)},
           active = TRUE
@@ -79,7 +74,7 @@ export async function upsertMember({ email, name, role = 'cs', addedBy }) {
   }
 
   const sql = `
-    INSERT INTO ${sourceTableRef('team_members')}
+    INSERT INTO ${tableRef('compplan_team')}
       (email, name, role, added_by, added_at, active)
     VALUES (
       ${escSql.str(emailLower)},
@@ -98,7 +93,7 @@ export async function upsertMember({ email, name, role = 'cs', addedBy }) {
 /** Desativa membro (soft delete — preserva histórico). */
 export async function deactivateMember(email) {
   await query(
-    `UPDATE ${sourceTableRef('team_members')}
+    `UPDATE ${tableRef('compplan_team')}
      SET active = FALSE
      WHERE LOWER(email) = LOWER(@e)`,
     { e: email }
@@ -112,7 +107,7 @@ export async function setRole(email, role) {
     throw new Error(`role inválido: ${role}`);
   }
   await query(
-    `UPDATE ${sourceTableRef('team_members')}
+    `UPDATE ${tableRef('compplan_team')}
      SET role = ${escSql.str(role)}
      WHERE LOWER(email) = LOWER(@e)`,
     { e: email }
