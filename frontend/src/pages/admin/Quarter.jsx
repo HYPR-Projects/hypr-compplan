@@ -80,8 +80,8 @@ export default function AdminQuarter() {
   }
 
   const summaries = data?.items || [];
-  const totalGross = summaries.reduce((s, x) => s + (Number(x.total_bonus_brl) || 0), 0);
-  const totalNet = summaries.reduce((s, x) => s + (Number(x.net_bonus_brl) || 0), 0);
+  const totalGross = summaries.reduce((s, x) => s + (Number(x.bonus_gross_brl) || 0), 0);
+  const totalNet = summaries.reduce((s, x) => s + (Number(x.bonus_net_brl) || 0), 0);
   const approved = summaries.filter(s => s.status === 'approved' || s.status === 'paid').length;
 
   return (
@@ -199,13 +199,13 @@ function QuarterRow({ summary, onApprove, onMarkPaid, onView, i }) {
         </Badge>
       </div>
 
-      <div className="mono quarter-row__num">{summary.n_campaigns || 0}</div>
-      <div className="mono quarter-row__num">{fmt.brl(Number(summary.total_bonus_brl) || 0)}</div>
+      <div className="mono quarter-row__num">{summary.campaigns_count || 0}</div>
+      <div className="mono quarter-row__num">{fmt.brl(Number(summary.bonus_gross_brl) || 0)}</div>
       <div className="mono quarter-row__num quarter-row__num--dim">
         −{fmt.brl(Number(summary.salary_deduction_brl) || 0)}
       </div>
       <div className="mono quarter-row__num quarter-row__num--cyan">
-        {fmt.brl(Number(summary.net_bonus_brl) || 0)}
+        {fmt.brl(Number(summary.bonus_net_brl) || 0)}
       </div>
 
       <div className="quarter-row__actions">
@@ -244,7 +244,7 @@ function ConfirmModal({ action, onClose, onConfirm }) {
     >
       <p>
         Você está prestes a {isApprove ? 'aprovar o bônus' : 'marcar como pago'}{' '}
-        <strong>{fmt.brl(Number(action.summary.net_bonus_brl) || 0)}</strong> para{' '}
+        <strong>{fmt.brl(Number(action.summary.bonus_net_brl) || 0)}</strong> para{' '}
         <strong>{action.summary.cs_name || action.summary.cs_email}</strong> referente a {action.summary.quarter}.
       </p>
       <p style={{ marginTop: 'var(--space-3)', color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>

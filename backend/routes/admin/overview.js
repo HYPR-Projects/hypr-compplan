@@ -40,8 +40,8 @@ router.get('/:q', async (req, res) => {
     // ── 2. Bônus total e evidências pendentes ──────────────────────────
     const [bonusRow] = await query(
       `SELECT
-         IFNULL(SUM(total_bonus_brl), 0) AS total_bonus_brl,
-         IFNULL(SUM(net_bonus_brl), 0)   AS net_bonus_brl
+         IFNULL(SUM(bonus_gross_brl), 0) AS bonus_gross_brl,
+         IFNULL(SUM(bonus_net_brl), 0)   AS bonus_net_brl
        FROM ${tableRef('commplan_quarter_summary')}
        WHERE quarter = @q`,
       { q: quarter }
@@ -80,7 +80,7 @@ router.get('/:q', async (req, res) => {
          tm.name                                  AS cs_name,
          IFNULL(ls.salary, 0)                     AS fixed_salary_brl,
          IFNULL(cc.n_camp, 0)                     AS n_camp,
-         IFNULL(qs.total_bonus_brl, 0)            AS bonus_brl,
+         IFNULL(qs.bonus_gross_brl, 0)            AS bonus_brl,
          qs.status                                AS status,
          IFNULL(pe.n_pending, 0)                  AS n_pending_evi
        FROM ${tableRef('compplan_team')} AS tm
@@ -139,8 +139,8 @@ router.get('/:q', async (req, res) => {
         n_camp: kpisRow.n_camp || 0,
         invest_total: Number(kpisRow.invest_total) || 0,
         n_cs: kpisRow.n_cs || 0,
-        total_bonus_brl: Number(bonusRow.total_bonus_brl) || 0,
-        net_bonus_brl: Number(bonusRow.net_bonus_brl) || 0,
+        total_bonus_brl: Number(bonusRow.bonus_gross_brl) || 0,
+        net_bonus_brl: Number(bonusRow.bonus_net_brl) || 0,
         n_pending_evi: pendingRow.n_pending || 0,
       },
       by_cs: byCs.map(r => ({

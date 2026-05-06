@@ -24,11 +24,13 @@ export default function CsDashboard() {
     let cancelled = false;
     Promise.all([
       endpoints.meQuarter(quarter).catch(() => null),
-      endpoints.meCampaigns(quarter).catch(() => ({ items: [] })),
+      endpoints.meCampaigns(quarter).catch(() => ({ campaigns: [] })),
     ]).then(([s, c]) => {
       if (cancelled) return;
-      setSummary(s);
-      setCampaigns(Array.isArray(c) ? c : (c.items || []));
+      // meQuarter retorna { summary, campaigns } — pegamos só summary
+      setSummary(s?.summary || null);
+      // meCampaigns retorna { campaigns: [...] }
+      setCampaigns(Array.isArray(c) ? c : (c.campaigns || c.items || []));
       setLoading(false);
     }).catch(e => { if (!cancelled) { setError(e.message); setLoading(false); } });
     return () => { cancelled = true; };
@@ -56,8 +58,8 @@ export default function CsDashboard() {
   }
 
   const totalPending = campaigns.reduce((s, c) => s + (c.has_pending_evidences || 0), 0);
-  const grossBrl = Number(summary?.total_bonus_brl) || 0;
-  const netBrl = Number(summary?.net_bonus_brl) || 0;
+  const grossBrl = Number(summary?.bonus_gross_brl) || 0;
+  const netBrl = Number(summary?.bonus_net_brl) || 0;
   const deduction = Number(summary?.salary_deduction_brl) || 0;
   const status = summary?.status || 'draft';
 

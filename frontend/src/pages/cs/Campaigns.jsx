@@ -18,7 +18,7 @@ export default function CsCampaigns() {
 
   useEffect(() => {
     endpoints.meCampaigns(quarter)
-      .then(d => setCampaigns(Array.isArray(d) ? d : (d.items || [])))
+      .then(d => setCampaigns(Array.isArray(d) ? d : (d.campaigns || d.items || [])))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [quarter]);

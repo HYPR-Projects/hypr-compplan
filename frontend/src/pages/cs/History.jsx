@@ -12,7 +12,7 @@ export default function CsHistory() {
 
   useEffect(() => {
     endpoints.meHistory()
-      .then(d => setHistory(Array.isArray(d) ? d : (d.items || [])))
+      .then(d => setHistory(Array.isArray(d) ? d : (d.history || d.items || [])))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
@@ -73,12 +73,12 @@ export default function CsHistory() {
                     : 'Em rascunho'}
                 </Badge>
               </div>
-              <div className="mono quarter-row__num">{fmt.brl(Number(q.total_bonus_brl) || 0)}</div>
+              <div className="mono quarter-row__num">{fmt.brl(Number(q.bonus_gross_brl) || 0)}</div>
               <div className="mono quarter-row__num quarter-row__num--dim">
                 −{fmt.brl(Number(q.salary_deduction_brl) || 0)}
               </div>
               <div className="mono quarter-row__num quarter-row__num--cyan">
-                {fmt.brl(Number(q.net_bonus_brl) || 0)}
+                {fmt.brl(Number(q.bonus_net_brl) || 0)}
               </div>
             </div>
           ))}
