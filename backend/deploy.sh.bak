@@ -3,7 +3,7 @@
 # Deploy da Cloud Function do HYPR Commplan.
 #
 # Mesmo padrão do Report Center (backend Python) — uniformidade de operação:
-#   - Cloud Functions Gen2 em southamerica-east1
+#   - Cloud Functions Gen2 em us-central1
 #   - min-instances=1 pra eliminar cold start
 #   - Captura secrets da revisão atual e re-passa via YAML temp
 #     (gcloud functions deploy NÃO preserva envvars existentes)
@@ -27,7 +27,7 @@
 set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:-site-hypr}"
-REGION="${REGION:-southamerica-east1}"
+REGION="${REGION:-us-central1}"
 FUNCTION_NAME="commplan_api"
 SERVICE_NAME="commplan-api"
 SERVICE_ACCOUNT="commplan-runner@${PROJECT_ID}.iam.gserviceaccount.com"
@@ -113,7 +113,7 @@ EMAIL_HOST: 'smtp.gmail.com'
 EMAIL_PORT: '587'
 EMAIL_USER: 'noreply@hypr.mobi'
 EMAIL_FROM: 'HYPR Commplan <noreply@hypr.mobi>'
-REPORT_CENTER_URL: 'https://report-data-453955675457.southamerica-east1.run.app'
+REPORT_CENTER_URL: 'https://report-data-453955675457.us-central1.run.app'
 JWT_SECRET: '${JWT_SECRET}'
 EOF
 

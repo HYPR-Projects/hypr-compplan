@@ -4,7 +4,7 @@
 
 import { Router } from 'express';
 import { verifyGoogleIdToken, issueJwt, extractBearerToken, decodeAndVerifyJwt } from '../lib/auth.js';
-import { query, tableRef } from '../lib/bigquery.js';
+import { query, tableRef, sourceTableRef } from '../lib/bigquery.js';
 
 export const router = Router();
 
@@ -30,7 +30,7 @@ router.post('/login', async (req, res) => {
   //         se cs_email aparece em pelo menos 1 checklist → cs
   //         senão → 403
   const teamRows = await query(
-    `SELECT role, active FROM ${tableRef('team_members')}
+    `SELECT role, active FROM ${sourceTableRef('team_members')}
      WHERE LOWER(email) = LOWER(@e) LIMIT 1`,
     { e: email }
   );
@@ -43,7 +43,7 @@ router.post('/login', async (req, res) => {
   if (!role) {
     // Tenta CS: aparece como cs_email em algum checklist?
     const csRows = await query(
-      `SELECT 1 FROM ${tableRef('checklists')}
+      `SELECT 1 FROM ${sourceTableRef('checklists')}
        WHERE LOWER(cs_email) = LOWER(@e) LIMIT 1`,
       { e: email }
     );

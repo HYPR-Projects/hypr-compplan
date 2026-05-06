@@ -70,9 +70,9 @@ else
   echo "  revisão ativa: $ACTIVE_REV"
 fi
 
-: "${JWT_SECRET:=$(extract_env JWT_SECRET)}"
-: "${GOOGLE_OAUTH_CLIENT_ID:=$(extract_env GOOGLE_OAUTH_CLIENT_ID)}"
-: "${EMAIL_PASS:=$(extract_env EMAIL_PASS)}"
+JWT_SECRET=$(extract_env "JWT_SECRET")
+GOOGLE_OAUTH_CLIENT_ID=$(extract_env "GOOGLE_OAUTH_CLIENT_ID")
+EMAIL_PASS=$(extract_env "EMAIL_PASS")
 
 if [ -z "$JWT_SECRET" ]; then
   echo ""

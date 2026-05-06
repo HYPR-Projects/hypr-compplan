@@ -8,7 +8,7 @@
  */
 
 import crypto from 'crypto';
-import { query, tableRef, escSql } from '../lib/bigquery.js';
+import { query, tableRef, sourceTableRef, escSql } from '../lib/bigquery.js';
 
 export async function getEvidencesByCampaign(shortToken, csEmail) {
   const sql = `
@@ -85,7 +85,7 @@ export async function createEvidence({ shortToken, csEmail, ruleId, evidencePayl
  */
 async function isQuarterPaid(shortToken, csEmail) {
   const checklistRows = await query(
-    `SELECT end_date FROM ${tableRef('checklists')}
+    `SELECT end_date FROM ${sourceTableRef('checklists')}
      WHERE short_token = @t ORDER BY created_at DESC LIMIT 1`,
     { t: shortToken }
   );
