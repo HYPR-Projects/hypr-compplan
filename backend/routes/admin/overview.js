@@ -72,7 +72,7 @@ router.get('/:q', async (req, res) => {
          SELECT cs_email, ANY_VALUE(fixed_salary_brl) AS salary
          FROM ${tableRef('commplan_cs_config')}
          WHERE effective_from <= @e
-           AND (effective_until IS NULL OR effective_until > @e)
+           AND (effective_to IS NULL OR effective_to > @e)
          GROUP BY cs_email
        )
        SELECT
