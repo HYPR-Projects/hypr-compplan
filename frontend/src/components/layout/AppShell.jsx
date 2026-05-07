@@ -24,19 +24,23 @@ const NAV_CS = [
 
 const NAV_ADMIN = [
   { to: '/admin',           label: 'Visão geral',  icon: Home },
+  { to: '/admin/pendentes', label: 'Pendentes',    icon: Sparkles, badge: 'pending' },
   { to: '/admin/campanhas', label: 'Campanhas',    icon: FileText },
 ];
 
-export default function AppShell({ children, pendingEvidences = 0 }) {
+export default function AppShell({ children, pendingEvidences = 0, pendingCount = 0 }) {
+  const navigate = useNavigate();
+  const { theme, toggle } = useTheme();
   const user = auth.getUser();
   const isAdmin = user?.role === 'admin';
+
+  // Aceita pendingCount (novo nome) ou pendingEvidences (legado)
+  const badgeCount = pendingCount || pendingEvidences || 0;
+
   const items = isAdmin ? NAV_ADMIN : NAV_CS;
-  const { theme, toggle } = useTheme();
-  const navigate = useNavigate();
 
   const handleLogout = () => {
-    auth.clearToken();
-    auth.clearUser();
+    auth.logout();
     navigate('/login', { replace: true });
   };
 
@@ -59,8 +63,8 @@ export default function AppShell({ children, pendingEvidences = 0 }) {
             >
               <item.icon size={16} />
               <span>{item.label}</span>
-              {item.badge === 'pending' && pendingEvidences > 0 && (
-                <span className="shell__nav-badge mono">{pendingEvidences}</span>
+              {item.badge === 'pending' && badgeCount > 0 && (
+                <span className="shell__nav-badge mono">{badgeCount}</span>
               )}
             </NavLink>
           ))}

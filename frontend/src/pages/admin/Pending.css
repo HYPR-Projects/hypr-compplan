@@ -1,0 +1,188 @@
+/**
+ * Pending.css — estilos da aba "Pendentes" (admin/pendentes).
+ */
+
+.pending-help {
+  background: var(--surface-card);
+  border-left: 3px solid var(--accent-yellow, #f5a524);
+}
+
+.pending-help__content {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.pending-help__icon {
+  color: var(--accent-yellow, #f5a524);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.pending-table {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pending-table__head {
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) minmax(140px, 1fr) minmax(120px, 0.7fr) minmax(280px, 1.4fr);
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 500;
+}
+
+.pending-table__row {
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) minmax(140px, 1fr) minmax(120px, 0.7fr) minmax(280px, 1.4fr);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  align-items: center;
+  background: var(--surface-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  transition: border-color 120ms ease;
+}
+
+.pending-table__row:hover {
+  border-color: var(--border-strong);
+}
+
+.pending-table__cell-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pending-table__client {
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.pending-table__campaign {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pending-table__meta {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.pending-table__period {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.pending-table__num {
+  text-align: right;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.pending-table__assign {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.pending-select {
+  flex: 1;
+  min-width: 140px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-input, var(--surface-card));
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+
+.pending-select:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.pending-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pending-assign-btn {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent-cyan);
+  background: var(--accent-cyan);
+  color: #001a1d;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+  white-space: nowrap;
+}
+
+.pending-assign-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.pending-assign-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pending-feedback {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.pending-feedback--ok {
+  color: var(--accent-green, #18bf6b);
+  background: rgba(24, 191, 107, 0.1);
+}
+
+.pending-feedback--err {
+  color: var(--accent-red, #f43f5e);
+  background: rgba(244, 63, 94, 0.1);
+}
+
+@media (max-width: 1100px) {
+  .pending-table__head {
+    display: none;
+  }
+
+  .pending-table__row {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2);
+  }
+
+  .pending-table__cell-main,
+  .pending-table__assign {
+    grid-column: 1 / -1;
+  }
+
+  .pending-table__num {
+    text-align: left;
+  }
+}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, AlertCircle } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card, KpiCard } from '../../components/ui/Card.jsx';
 import Avatar from '../../components/ui/Avatar.jsx';
@@ -45,9 +45,10 @@ export default function AdminOverview() {
   }
 
   const { kpis, by_cs: team } = data;
+  const hasPending = (kpis.n_pending || 0) > 0;
 
   return (
-    <AppShell>
+    <AppShell pendingCount={kpis.n_pending}>
       <header className="page-header fade-up">
         <div>
           <h1 className="page-title">Visão geral</h1>
@@ -56,10 +57,41 @@ export default function AdminOverview() {
             <span className="page-subtitle__sep">·</span>
             <span>{kpis.n_cs} CSs ativos</span>
             <span className="page-subtitle__sep">·</span>
-            <span>{kpis.n_camp} campanhas</span>
+            <span>{kpis.n_camp} campanhas atribuídas</span>
+            {hasPending && (
+              <>
+                <span className="page-subtitle__sep">·</span>
+                <span style={{ color: 'var(--accent-yellow, #f5a524)' }}>
+                  {kpis.n_pending} pendentes
+                </span>
+              </>
+            )}
           </div>
         </div>
       </header>
+
+      {hasPending && (
+        <Card
+          className="fade-up"
+          style={{
+            marginBottom: 'var(--space-4)',
+            borderLeft: '3px solid var(--accent-yellow, #f5a524)',
+            cursor: 'pointer',
+          }}
+          onClick={() => navigate('/admin/pendentes')}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            <AlertCircle size={20} style={{ color: 'var(--accent-yellow, #f5a524)' }} />
+            <div style={{ flex: 1 }}>
+              <strong>{kpis.n_pending} campanhas legadas sem CS atribuído</strong>
+              <div className="card__subtitle">
+                {fmt.brlCompact(kpis.pending_bruto)} bruto · {fmt.brlCompact(kpis.pending_liquido)} líquido — atribua um CS pra entrarem no cálculo
+              </div>
+            </div>
+            <ArrowRight size={16} />
+          </div>
+        </Card>
+      )}
 
       {/* ─── KPIs ────────────────────────────────────────────── */}
       <section className="kpi-row">
@@ -76,8 +108,12 @@ export default function AdminOverview() {
         </Card>
 
         <KpiCard label="Líquido total" value={fmt.brlCompact(kpis.liquido_total)} />
-        <KpiCard label="Campanhas" value={kpis.n_camp} />
-        <KpiCard label="CSs ativos" value={kpis.n_cs} />
+        <KpiCard label="Atribuídas" value={kpis.n_camp} />
+        <KpiCard
+          label="Pendentes"
+          value={kpis.n_pending || 0}
+          status={hasPending ? 'yellow' : 'green'}
+        />
       </section>
 
       {/* ─── Ranking por CS ──────────────────────────────────── */}

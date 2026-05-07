@@ -110,6 +110,11 @@ export const endpoints = {
   // Admin
   adminOverview(q)       { return api.get(`/commplan/admin/overview/${q}`); },
   adminCampaigns(q)      { return api.get(`/commplan/admin/campaigns/${q}`); },
+  adminPending(q)        { return api.get(`/commplan/admin/pending/${q}`); },
+  adminTeam()            { return api.get(`/commplan/admin/team`); },
+  adminAssignPending(token, cs_email) {
+    return api.post(`/commplan/admin/pending/${token}/assign`, { cs_email });
+  },
   adminQuarter(q)        { return api.get(`/commplan/admin/quarter/${q}`); },
   computeQuarter(q)      { return api.post(`/commplan/admin/quarter/${q}/compute`); },
   approveQuarter(q, cs)  { return api.put(`/commplan/admin/quarter/${q}/${encodeURIComponent(cs)}/approve`); },

@@ -6,6 +6,7 @@ import Login from './pages/Login.jsx';
 
 // Admin pages (versão simplificada — só 2 abas)
 import AdminOverview from './pages/admin/Overview.jsx';
+import AdminPending from './pages/admin/Pending.jsx';
 import AdminCampaigns from './pages/admin/Campaigns.jsx';
 
 /**
@@ -43,6 +44,10 @@ export default function App() {
         <Route
           path="/admin"
           element={<ProtectedRoute adminOnly><AdminOverview /></ProtectedRoute>}
+        />
+        <Route
+          path="/admin/pendentes"
+          element={<ProtectedRoute adminOnly><AdminPending /></ProtectedRoute>}
         />
         <Route
           path="/admin/campanhas"
