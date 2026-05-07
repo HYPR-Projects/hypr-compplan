@@ -1,170 +1,140 @@
 /**
- * routes/admin/overview.js — agrega dados pro Admin Visão Geral.
+ * routes/admin/overview.js — endpoints simples pra dashboard.
  *
- * GET /commplan/admin/overview/:q
+ * Versão minimalista: lê SÓ da view commplan_checklists.
+ * Não toca em evidências, bônus, mentorias, cs_config — eles entram depois.
  *
- * Retorna em uma única chamada:
- *   - kpis: investimento total, bonus total, qtd campanhas, evidências pendentes
- *   - by_cs: resumo por CS (campanhas, salário, bônus, status)
- *   - growth: últimos 6 meses (campanhas + investimento agregado)
- *   - top_studies: top 10 estudos mais usados no quarter
- *   - audiences_per_month: contagem de campanhas por mês
+ * Endpoints:
+ *   GET /commplan/admin/overview/:q  → KPIs + ranking por CS
+ *   GET /commplan/admin/campaigns/:q → lista detalhada de campanhas
  *
- * O frontend usa um único fetch pra renderizar a tela toda.
+ * :q é o quarter no formato Q1-2026, Q2-2026 etc.
  */
 
 import { Router } from 'express';
 import { authRequired, adminRequired } from '../../middleware/auth.js';
-import { query, tableRef, sourceTableRef } from '../../lib/bigquery.js';
+import { query, tableRef } from '../../lib/bigquery.js';
 import { parseQuarter } from '../../engine/quarter-resolver.js';
 
 export const router = Router();
 router.use(authRequired, adminRequired);
 
-router.get('/:q', async (req, res) => {
+const TAX_RATE = 0.1653; // 16.53% — alíquota Report Center
+const NET_FACTOR = 1 - TAX_RATE; // 0.8347
+
+// ─── GET /admin/overview/:q ────────────────────────────────────────────
+// Retorna KPIs agregados + ranking por CS.
+router.get('/overview/:q', async (req, res) => {
   try {
     const quarter = req.params.q;
     const { startDate, endDate } = parseQuarter(quarter);
 
-    // ── 1. KPIs do quarter ─────────────────────────────────────────────
-    const [kpisRow] = await query(
+    // 1. KPIs gerais
+    const [kpis] = await query(
       `SELECT
          COUNT(*) AS n_camp,
-         SUM(total_value) AS invest_total,
-         COUNT(DISTINCT cs_email) AS n_cs
+         COUNT(DISTINCT cs_email) AS n_cs,
+         IFNULL(SUM(total_value), 0) AS bruto_total
        FROM ${tableRef('commplan_checklists')}
        WHERE start_date >= @s AND start_date <= @e`,
       { s: startDate, e: endDate }
     );
 
-    // ── 2. Bônus total e evidências pendentes ──────────────────────────
-    const [bonusRow] = await query(
-      `SELECT
-         IFNULL(SUM(bonus_gross_brl), 0) AS bonus_gross_brl,
-         IFNULL(SUM(bonus_net_brl), 0)   AS bonus_net_brl
-       FROM ${tableRef('commplan_quarter_summary')}
-       WHERE quarter = @q`,
-      { q: quarter }
-    );
+    const bruto = Number(kpis.bruto_total) || 0;
+    const liquido = bruto * NET_FACTOR;
 
-    const [pendingRow] = await query(
-      `SELECT COUNT(*) AS n_pending
-       FROM ${tableRef('commplan_evidences')}
-       WHERE status = 'pending_review'`
-    );
-
-    // ── 3. Resumo por CS ───────────────────────────────────────────────
-    // Junta team (compplan_team), summary, e contagem de campanhas
+    // 2. Ranking por CS
     const byCs = await query(
-      `WITH camp_counts AS (
-         SELECT cs_email, COUNT(*) AS n_camp
-         FROM ${tableRef('commplan_checklists')}
-         WHERE start_date >= @s AND start_date <= @e
-         GROUP BY cs_email
-       ),
-       pending_evi AS (
-         SELECT cs_email, COUNT(*) AS n_pending
-         FROM ${tableRef('commplan_evidences')}
-         WHERE status = 'pending_review'
-         GROUP BY cs_email
-       ),
-       last_salary AS (
-         SELECT cs_email, ANY_VALUE(fixed_salary_brl) AS salary
-         FROM ${tableRef('commplan_cs_config')}
-         WHERE effective_from <= @e
-           AND (effective_to IS NULL OR effective_to > @e)
-         GROUP BY cs_email
-       )
-       SELECT
-         tm.email                                 AS cs_email,
-         tm.name                                  AS cs_name,
-         IFNULL(ls.salary, 0)                     AS fixed_salary_brl,
-         IFNULL(cc.n_camp, 0)                     AS n_camp,
-         IFNULL(qs.bonus_gross_brl, 0)            AS bonus_brl,
-         qs.status                                AS status,
-         IFNULL(pe.n_pending, 0)                  AS n_pending_evi
-       FROM ${tableRef('compplan_team')} AS tm
-       LEFT JOIN ${tableRef('commplan_quarter_summary')} AS qs
-         ON LOWER(qs.cs_email) = LOWER(tm.email) AND qs.quarter = @q
-       LEFT JOIN camp_counts cc        ON LOWER(cc.cs_email) = LOWER(tm.email)
-       LEFT JOIN pending_evi  pe       ON LOWER(pe.cs_email) = LOWER(tm.email)
-       LEFT JOIN last_salary  ls       ON LOWER(ls.cs_email) = LOWER(tm.email)
-       WHERE tm.role = 'cs' AND tm.active = TRUE
-       ORDER BY n_camp DESC, tm.name`,
-      { q: quarter, s: startDate, e: endDate }
-    );
-
-    // ── 4. Growth últimos 6 meses ──────────────────────────────────────
-    const growth = await query(
       `SELECT
-         FORMAT_DATE('%Y-%m', start_date) AS month,
+         cs_email,
+         ANY_VALUE(cs_name) AS cs_name,
          COUNT(*) AS n_camp,
-         SUM(total_value) AS invest_total
+         IFNULL(SUM(total_value), 0) AS bruto
        FROM ${tableRef('commplan_checklists')}
-       WHERE start_date >= DATE_SUB(@e, INTERVAL 6 MONTH)
-         AND start_date <= @e
-       GROUP BY month
-       ORDER BY month`,
-      { e: endDate }
-    );
-
-    // ── 5. Top studies do quarter ──────────────────────────────────────
-    const topStudies = await query(
-      `SELECT s AS study_id, COUNT(*) AS uses
-       FROM ${tableRef('commplan_checklists')}, UNNEST(studies_used) AS s
        WHERE start_date >= @s AND start_date <= @e
-       GROUP BY study_id
-       ORDER BY uses DESC
-       LIMIT 10`,
+         AND cs_email IS NOT NULL
+       GROUP BY cs_email
+       ORDER BY bruto DESC`,
       { s: startDate, e: endDate }
-    );
-
-    // ── 6. Audiences (= total de campanhas com audiences declaradas) por mês ──
-    const audiencesPerMonth = await query(
-      `SELECT
-         FORMAT_DATE('%Y-%m', start_date) AS month,
-         COUNT(*) AS n_camp_with_audiences
-       FROM ${tableRef('commplan_checklists')}
-       WHERE start_date >= DATE_SUB(@e, INTERVAL 6 MONTH)
-         AND start_date <= @e
-         AND audiences IS NOT NULL
-       GROUP BY month
-       ORDER BY month`,
-      { e: endDate }
     );
 
     res.json({
       quarter,
+      period: { start: startDate, end: endDate },
       kpis: {
-        n_camp: kpisRow.n_camp || 0,
-        invest_total: Number(kpisRow.invest_total) || 0,
-        n_cs: kpisRow.n_cs || 0,
-        total_bonus_brl: Number(bonusRow.bonus_gross_brl) || 0,
-        net_bonus_brl: Number(bonusRow.bonus_net_brl) || 0,
-        n_pending_evi: pendingRow.n_pending || 0,
+        n_camp: kpis.n_camp || 0,
+        n_cs: kpis.n_cs || 0,
+        bruto_total: bruto,
+        liquido_total: liquido,
+        tax_rate: TAX_RATE,
       },
-      by_cs: byCs.map(r => ({
-        cs_email: r.cs_email,
-        cs_name: r.cs_name,
-        fixed_salary_brl: Number(r.fixed_salary_brl) || 0,
-        n_camp: r.n_camp || 0,
-        bonus_brl: Number(r.bonus_brl) || 0,
-        status: r.status || 'no_data',
-        n_pending_evi: r.n_pending_evi || 0,
-      })),
-      growth: growth.map(r => ({
-        month: r.month,
-        n_camp: r.n_camp || 0,
-        invest_total: Number(r.invest_total) || 0,
-      })),
-      top_studies: topStudies.map(r => ({ study_id: r.study_id, uses: r.uses })),
-      audiences_per_month: audiencesPerMonth.map(r => ({
-        month: r.month,
-        n: r.n_camp_with_audiences || 0,
-      })),
+      by_cs: byCs.map(r => {
+        const b = Number(r.bruto) || 0;
+        return {
+          cs_email: r.cs_email,
+          cs_name: r.cs_name,
+          n_camp: r.n_camp || 0,
+          bruto: b,
+          liquido: b * NET_FACTOR,
+        };
+      }),
     });
   } catch (err) {
     console.error('GET /admin/overview/:q error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /admin/campaigns/:q ───────────────────────────────────────────
+// Lista detalhada de campanhas do quarter — alimenta a aba "Campanhas".
+router.get('/campaigns/:q', async (req, res) => {
+  try {
+    const quarter = req.params.q;
+    const { startDate, endDate } = parseQuarter(quarter);
+
+    const items = await query(
+      `SELECT
+         short_token,
+         client_name,
+         campaign_name,
+         cs_email,
+         cs_name,
+         cp_name,
+         agency,
+         start_date,
+         end_date,
+         is_legacy,
+         IFNULL(total_value, 0) AS bruto
+       FROM ${tableRef('commplan_checklists')}
+       WHERE start_date >= @s AND start_date <= @e
+       ORDER BY start_date DESC, total_value DESC`,
+      { s: startDate, e: endDate }
+    );
+
+    res.json({
+      quarter,
+      period: { start: startDate, end: endDate },
+      total: items.length,
+      items: items.map(r => {
+        const b = Number(r.bruto) || 0;
+        return {
+          short_token: r.short_token,
+          client_name: r.client_name,
+          campaign_name: r.campaign_name,
+          cs_email: r.cs_email,
+          cs_name: r.cs_name,
+          cp_name: r.cp_name,
+          agency: r.agency,
+          start_date: r.start_date?.value || r.start_date,
+          end_date: r.end_date?.value || r.end_date,
+          is_legacy: !!r.is_legacy,
+          bruto: b,
+          liquido: b * NET_FACTOR,
+        };
+      }),
+    });
+  } catch (err) {
+    console.error('GET /admin/campaigns/:q error:', err);
     res.status(500).json({ error: err.message });
   }
 });

@@ -81,7 +81,7 @@ app.use('/commplan/admin/audit', adminAudit);
 app.use('/commplan/admin/studies', adminStudies);
 app.use('/commplan/admin/team-members', adminTeamMembers);
 app.use('/commplan/admin/legacy', adminLegacyAssignments);
-app.use('/commplan/admin/overview', adminOverview);
+app.use('/commplan/admin', adminOverview);
 
 // ─── Error handler ───────────────────────────────────────────────────────
 app.use((err, req, res, next) => {

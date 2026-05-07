@@ -23,16 +23,8 @@ const NAV_CS = [
 ];
 
 const NAV_ADMIN = [
-  { to: '/admin',                label: 'Visão geral',  icon: Home },
-  { to: '/admin/quarter',        label: 'Quarter atual', icon: Calendar },
-  { to: '/admin/evidencias',     label: 'Evidências',    icon: Sparkles, badge: 'pending' },
-  { to: '/admin/legacy',         label: 'Campanhas legadas', icon: Archive, badge: 'pending' },
-  { to: '/admin/team',           label: 'Time',          icon: Users },
-  { to: '/admin/regras',         label: 'Regras',        icon: BookOpen },
-  { to: '/admin/estudos',        label: 'Estudos',       icon: BookOpen },
-  { to: '/admin/abs',            label: 'Clientes ABS',  icon: Shield },
-  { to: '/admin/mentorias',      label: 'Mentorias',     icon: Users },
-  { to: '/admin/auditoria',      label: 'Auditoria',     icon: History },
+  { to: '/admin',           label: 'Visão geral',  icon: Home },
+  { to: '/admin/campanhas', label: 'Campanhas',    icon: FileText },
 ];
 
 export default function AppShell({ children, pendingEvidences = 0 }) {
