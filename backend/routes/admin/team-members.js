@@ -46,7 +46,12 @@ router.get('/', async (req, res) => {
       const enriched = await Promise.all(members.map(async (m) => {
         if (m.role !== 'cs') return m;
         const salary = await getSalaryForCs({ csEmail: m.email });
-        return { ...m, current_salary: salary?.fixed_salary_brl || null };
+        const fixedSalary = salary?.fixed_salary_brl || null;
+        return {
+          ...m,
+          fixed_salary_brl: fixedSalary,  // ← nome que o frontend usa
+          current_salary: fixedSalary,    // ← compat com qualquer outro consumer
+        };
       }));
       return res.json({ count: enriched.length, items: enriched });
     }
