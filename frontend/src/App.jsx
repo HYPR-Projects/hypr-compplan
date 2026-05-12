@@ -8,6 +8,7 @@ import Login from './pages/Login.jsx';
 import AdminOverview from './pages/admin/Overview.jsx';
 import AdminPending from './pages/admin/Pending.jsx';
 import AdminCampaigns from './pages/admin/Campaigns.jsx';
+import AdminTeam from './pages/admin/Team.jsx';
 
 // CS pages (portal pessoal — também usado pelo admin via impersonação)
 import CsDashboard from './pages/cs/CSDashboard.jsx';
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/admin"           element={<ProtectedRoute adminOnly><AdminOverview /></ProtectedRoute>} />
         <Route path="/admin/pendentes" element={<ProtectedRoute adminOnly><AdminPending /></ProtectedRoute>} />
         <Route path="/admin/campanhas" element={<ProtectedRoute adminOnly><AdminCampaigns /></ProtectedRoute>} />
+        <Route path="/admin/time"      element={<ProtectedRoute adminOnly><AdminTeam /></ProtectedRoute>} />
 
         {/* Admin impersonando CS */}
         <Route path="/admin/cs/:csEmail"                       element={<ProtectedRoute adminOnly><CsDashboard /></ProtectedRoute>} />

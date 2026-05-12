@@ -110,22 +110,42 @@ export default function CsDashboard() {
 
       <section className="kpi-row">
         <Card className="kpi kpi--hero stagger" style={{ '--i': 0 }}>
-          <div className="kpi__label label">Bônus total acumulado — {quarter}</div>
+          <div className="kpi__label label">
+            {kpis.hit_floor
+              ? `Bônus a receber — ${quarter}`
+              : `Salário fixo — ${quarter} (piso ainda não atingido)`}
+          </div>
           <div className="kpi__value mono kpi__value--cyan">
-            {fmt.brl(kpis.bonus_total || 0)}
+            {fmt.brl(kpis.hit_floor ? kpis.bonus_liquido : (kpis.monthly_salary || 0) * 3)}
           </div>
-          <div className="kpi__hero-breakdown">
-            <span>{fmt.brlCompact(kpis.liquido_total)} líquido investido</span>
-            <span className="page-subtitle__sep">·</span>
-            <span>{fmt.brlCompact(kpis.bruto_total)} bruto</span>
-          </div>
+          {kpis.hit_floor ? (
+            <div className="kpi__hero-breakdown">
+              <span>{fmt.brl(kpis.bonus_mensal)}/mês de bônus</span>
+              {kpis.monthly_salary > 0 && (
+                <>
+                  <span className="page-subtitle__sep">·</span>
+                  <span>+ {fmt.brl(kpis.monthly_salary)}/mês fixo</span>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="kpi__hero-breakdown">
+              <span>Faltam {fmt.brl((kpis.floor_quarter || 0) - (kpis.bonus_total || 0))} pra atingir piso</span>
+            </div>
+          )}
         </Card>
 
-        <KpiCard label="Total campanhas" value={kpis.n_camp} />
-        <KpiCard label="Revisadas" value={kpis.n_reviewed} status="green" />
         <KpiCard
-          label="Pendentes"
-          value={kpis.n_pending}
+          label="Bônus acumulado (bruto)"
+          value={fmt.brl(kpis.bonus_total || 0)}
+        />
+        <KpiCard
+          label="Piso a abater (2× fixo)"
+          value={fmt.brl(kpis.floor_quarter || 0)}
+        />
+        <KpiCard
+          label="Campanhas"
+          value={kpis.n_camp}
           status={kpis.n_pending > 0 ? 'yellow' : 'green'}
         />
       </section>

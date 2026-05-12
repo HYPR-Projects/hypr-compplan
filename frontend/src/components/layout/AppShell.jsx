@@ -25,6 +25,7 @@ const NAV_ADMIN = [
   { to: '/admin',           label: 'Visão geral',  icon: Home },
   { to: '/admin/pendentes', label: 'Pendentes',    icon: Sparkles, badge: 'pending' },
   { to: '/admin/campanhas', label: 'Campanhas',    icon: FileText },
+  { to: '/admin/time',      label: 'Time',         icon: Users },
 ];
 
 export default function AppShell({ children, pendingEvidences = 0, pendingCount = 0 }) {

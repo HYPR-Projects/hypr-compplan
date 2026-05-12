@@ -13,6 +13,7 @@
 import { Router } from 'express';
 import { authRequired } from '../middleware/auth.js';
 import { query, tableRef } from '../lib/bigquery.js';
+import { getSalaryForCs } from '../data/cs-config.js';
 import { parseQuarter } from '../engine/quarter-resolver.js';
 import { computeBonus } from '../engine/compplan-engine.js';
 import { FEATURE_TIERS } from '../engine/compplan-catalog.js';
@@ -237,6 +238,22 @@ router.get('/dashboard/:q', async (req, res) => {
     const nReviewed = items.filter(i => i.reviewed).length;
     const bruto = items.reduce((s, i) => s + i.bruto, 0);
 
+    // Busca salário vigente do CS
+    let monthlySalary = 0;
+    try {
+      const salaryRow = await getSalaryForCs({ csEmail });
+      monthlySalary = Number(salaryRow?.fixed_salary_brl) || 0;
+    } catch (e) {
+      console.warn(`getSalaryForCs(${csEmail}): ${e.message}`);
+    }
+
+    // Piso do quarter = 2 × salário mensal
+    // (PDF: piso é 2 meses de fixo, não 3, pois 1 mês conta como antecipação)
+    const floorQuarter = monthlySalary * 2;
+    const bonusLiquido = Math.max(0, totalBonusBrl - floorQuarter);
+    const hitFloor = totalBonusBrl >= floorQuarter;
+    const bonusMensal = bonusLiquido / 3;
+
     // Se admin está impersonando, busca o nome do CS pra exibir no banner
     let csName = null;
     if (impersonating) {
@@ -262,6 +279,12 @@ router.get('/dashboard/:q', async (req, res) => {
         bruto_total: bruto,
         liquido_total: bruto * NET_FACTOR,
         bonus_total: totalBonusBrl,
+        // Novos campos: piso + cálculo final
+        monthly_salary: monthlySalary,
+        floor_quarter: floorQuarter,
+        bonus_liquido: bonusLiquido,
+        bonus_mensal: bonusMensal,
+        hit_floor: hitFloor,
         tax_rate: TAX_RATE,
       },
       items,
@@ -406,19 +429,6 @@ router.put('/campaign/:token', async (req, res) => {
     const manualChecksJson = JSON.stringify(manualChecks);
     const notes = body.notes || '';
     const reviewed = body.reviewed !== false;
-
-    // DEBUG
-    console.log('PUT /campaign params:', {
-      token,
-      csEmail,
-      byEmail,
-      mc_type: typeof manualChecksJson,
-      mc_len: manualChecksJson.length,
-      notes_type: typeof notes,
-      notes_len: notes.length,
-      reviewed_type: typeof reviewed,
-      reviewed,
-    });
 
     if (campaign.is_legacy) {
       // Legacy: salva em commplan_legacy_assignments (campo manual_checks JSON)
