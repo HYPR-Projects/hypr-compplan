@@ -57,45 +57,54 @@ router.get('/studies-catalog', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────
 async function fetchPerformanceMetrics(shortToken) {
   try {
-    const [row] = await query(
-      `WITH agg AS (
-         SELECT
-           short_token,
-           SUM(impressions)                                                AS total_impressions,
-           SUM(viewable_impressions)                                       AS total_viewable,
-           SUM(clicks)                                                     AS total_clicks,
-           SUM(effective_total_cost)                                       AS total_cost,
-           SUM(effective_cost_with_over)                                   AS total_cost_with_over,
-           SUM(IF(LOWER(media_type) = 'display', viewable_impressions, 0)) AS display_viewable
-         FROM \`site-hypr.prod_prod_hypr_reporthub.campaign_results\`
-         WHERE short_token = @t
-         GROUP BY short_token
-       ),
-       contracted AS (
-         SELECT
-           short_token,
-           IFNULL(o2o_display_impressions, 0) + IFNULL(ooh_display_impressions, 0) AS display_contracted
-         FROM ${tableRef('commplan_checklists')}
-         WHERE short_token = @t
-       )
-       SELECT
-         IFNULL(SAFE_DIVIDE(a.total_cost, a.total_impressions) * 1000, 0)  AS ecpm,
-         IFNULL(SAFE_DIVIDE(a.total_clicks, a.total_viewable), 0)          AS ctr,
-         IFNULL((SAFE_DIVIDE(a.display_viewable, c.display_contracted) - 1) * 100, 0) AS over_percent,
-         a.total_impressions,
-         a.total_viewable,
-         a.total_clicks,
-         a.total_cost,
-         a.total_cost_with_over,
-         a.display_viewable,
-         c.display_contracted,
-         -- Criative fee = diferença entre cost_with_over e total_cost (custo extra que entrou)
-         IFNULL(a.total_cost_with_over - a.total_cost, 0)                  AS creative_fee_estimate
-       FROM agg a
-       LEFT JOIN contracted c USING (short_token)`,
+    // 1. Busca métricas brutas da campanha em prod_prod_hypr_reporthub (US multi-region)
+    const [perfRow] = await query(
+      `SELECT
+         short_token,
+         SUM(impressions)                                                AS total_impressions,
+         SUM(viewable_impressions)                                       AS total_viewable,
+         SUM(clicks)                                                     AS total_clicks,
+         SUM(effective_total_cost)                                       AS total_cost,
+         SUM(IF(LOWER(media_type) = 'display', viewable_impressions, 0)) AS display_viewable
+       FROM \`site-hypr.prod_prod_hypr_reporthub.campaign_results\`
+       WHERE short_token = @t
+       GROUP BY short_token`,
+      { t: shortToken },
+      'US' // ← location correta pra esse dataset
+    );
+
+    if (!perfRow) return null;
+
+    // 2. Busca contratado de display do checklist (us-central1)
+    const [contractedRow] = await query(
+      `SELECT
+         IFNULL(o2o_display_impressions, 0) + IFNULL(ooh_display_impressions, 0) AS display_contracted
+       FROM ${tableRef('commplan_checklists')}
+       WHERE short_token = @t
+       LIMIT 1`,
       { t: shortToken }
     );
-    return row || null;
+
+    const displayContracted = Number(contractedRow?.display_contracted) || 0;
+    const displayViewable = Number(perfRow.display_viewable) || 0;
+    const totalImpressions = Number(perfRow.total_impressions) || 0;
+    const totalViewable = Number(perfRow.total_viewable) || 0;
+    const totalClicks = Number(perfRow.total_clicks) || 0;
+    const totalCost = Number(perfRow.total_cost) || 0;
+
+    return {
+      ecpm: totalImpressions > 0 ? (totalCost / totalImpressions) * 1000 : 0,
+      ctr: totalViewable > 0 ? totalClicks / totalViewable : 0,
+      over_percent: displayContracted > 0 ? ((displayViewable / displayContracted) - 1) * 100 : 0,
+      total_impressions: totalImpressions,
+      total_viewable: totalViewable,
+      total_clicks: totalClicks,
+      total_cost: totalCost,
+      display_viewable: displayViewable,
+      display_contracted: displayContracted,
+      // creative_fee fica null por enquanto — vamos popular de outra fonte depois
+      creative_fee_estimate: null,
+    };
   } catch (err) {
     console.warn(`fetchPerformanceMetrics(${shortToken}): ${err.message}`);
     return null;

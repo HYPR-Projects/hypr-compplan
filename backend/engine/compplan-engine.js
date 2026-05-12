@@ -29,22 +29,30 @@ function inferAutoItems(campaign) {
   const earned = new Set();
   const features = Array.isArray(campaign.features) ? campaign.features : [];
   const products = Array.isArray(campaign.products) ? campaign.products : [];
+  const formats = Array.isArray(campaign.formats) ? campaign.formats : [];
 
   // Pré Campanha — TUDO manual agora (CS marca o que fez).
   // (Removidos inferências automáticas de audiences e features.)
 
   // Setup — O2O / OOH (semi_auto)
-  const hasO2O = products.some(p => /o2o|ooh/i.test(p))
-              || (Array.isArray(campaign.formats) && campaign.formats.some(f => /o2o|ooh/i.test(f)));
+  // Detecta de: products, formats, ou se a campanha tem display/video impressions contratadas
+  const hasO2O = products.some(p => /o2o|ooh|display|video/i.test(p))
+              || formats.some(f => /o2o|ooh|display|video/i.test(f))
+              || (Number(campaign.o2o_display_impressions) > 0)
+              || (Number(campaign.o2o_video_completions) > 0)
+              || (Number(campaign.ooh_display_impressions) > 0)
+              || (Number(campaign.ooh_video_completions) > 0);
   if (hasO2O) earned.add('setup_o2o_ooh');
 
   // Setup — RMN Digital (semi_auto)
-  const hasRmnDig = products.some(p => /rmn\s*digital|rmnd/i.test(p));
+  const hasRmnDig = products.some(p => /rmn\s*digital|rmnd/i.test(p))
+                 || formats.some(f => /rmn\s*digital|rmnd/i.test(f));
   if (hasRmnDig) earned.add('setup_rmn_digital');
 
   // Setup — RMN Físico (semi_auto)
   const hasRmnFis = products.some(p => /rmn\s*f[ií]sico|rmnf/i.test(p))
-                  || (campaign.pracas_type && /f[ií]sico/i.test(campaign.pracas_type));
+                 || formats.some(f => /rmn\s*f[ií]sico|rmnf/i.test(f))
+                 || (campaign.pracas_type && /f[ií]sico/i.test(campaign.pracas_type));
   if (hasRmnFis) earned.add('setup_rmn_fisico');
 
   // Setup — tiers de features (semi_auto)
@@ -104,7 +112,6 @@ function validateSetup(metrics) {
   }
 
   const over = Number(metrics.over_percent) || 0;
-  const creativeFee = Number(metrics.creative_fee_estimate) || 0;
 
   // 1. Over > 50%
   if (over > 50) {
@@ -114,21 +121,15 @@ function validateSetup(metrics) {
     };
   }
 
-  // 2. Criative fee > R$ 1.000
-  if (creativeFee > 1000) {
-    return {
-      invalidated: true,
-      reason: `Setup anulado: criative fee de R$ ${creativeFee.toFixed(2)} excedeu limite de R$ 1.000.`,
-    };
-  }
-
-  // 3. Under: entregou menos que contratado
+  // 2. Under: entregou menos que contratado
   if (over < 0) {
     return {
       invalidated: true,
       reason: `Setup anulado: campanha em under (entregou ${(100 + over).toFixed(1)}% do contratado).`,
     };
   }
+
+  // NOTA: Creative fee > R$ 1.000 será implementado quando tivermos a fonte correta.
 
   return { invalidated: false, reason: null };
 }
