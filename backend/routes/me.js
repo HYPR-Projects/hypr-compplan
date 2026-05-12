@@ -89,10 +89,15 @@ async function fetchPerformanceMetrics(shortToken) {
 
     if (!perfRow) return null;
 
-    // 2. Busca contratado de display do checklist (us-central1)
+    // 2. Busca contratado de display da view commplan_checklists (us-central1).
+    // A view já une Command (checklists) e Legacy (checklist_info_snapshot) e expõe
+    // as 4 colunas separadas: contracted + bonus de O2O e OOH.
     const [contractedRow] = await query(
       `SELECT
-         IFNULL(o2o_display_impressions, 0) + IFNULL(ooh_display_impressions, 0) AS display_contracted
+         IFNULL(o2o_display_impressions, 0)
+       + IFNULL(bonus_o2o_display_impressions, 0)
+       + IFNULL(ooh_display_impressions, 0)
+       + IFNULL(bonus_ooh_display_impressions, 0) AS display_contracted
        FROM ${tableRef('commplan_checklists')}
        WHERE short_token = @t
        LIMIT 1`,

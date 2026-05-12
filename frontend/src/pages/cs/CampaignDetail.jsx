@@ -447,11 +447,13 @@ function formatMetricInfo(item, metrics, isABS) {
   const ecpm = Number(metrics.ecpm) || 0;
   const ctr = (Number(metrics.ctr) * 100).toFixed(2);
 
-  // Status emoji por critério
+  // Limites são intrínsecos a cada item (não dependem do toggle)
+  const isItemABS = item.id === 'opt_with_abs';
+  const ecpmLimit = isItemABS ? 1.50 : 0.70;
+  const ctrLimit = isItemABS ? 0.5 : 0.7;
+
   const overOK = over <= 25 ? '✓' : '✗';
-  const ecpmLimit = isABS ? 1.50 : 0.70;
   const ecpmOK = ecpm > 0 && ecpm <= ecpmLimit ? '✓' : '✗';
-  const ctrLimit = isABS ? 0.5 : 0.7;
   const ctrOK = Number(ctr) >= ctrLimit ? '✓' : '✗';
 
   return `Over: ${over.toFixed(1)}% ${overOK} (limite 25%) · eCPM: R$ ${ecpm.toFixed(2)} ${ecpmOK} (limite R$ ${ecpmLimit.toFixed(2)}) · CTR: ${ctr}% ${ctrOK} (mín ${ctrLimit}%)`;
