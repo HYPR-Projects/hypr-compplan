@@ -4,15 +4,20 @@ import { auth } from './lib/api.js';
 
 import Login from './pages/Login.jsx';
 
-// Admin pages (versão simplificada — só 2 abas)
+// Admin pages
 import AdminOverview from './pages/admin/Overview.jsx';
 import AdminPending from './pages/admin/Pending.jsx';
 import AdminCampaigns from './pages/admin/Campaigns.jsx';
 
+// CS pages (portal pessoal)
+import CsDashboard from './pages/cs/CSDashboard.jsx';
+import CsCampaignDetail from './pages/cs/CampaignDetail.jsx';
+import CsHistory from './pages/cs/History.jsx';
+
 /**
- * ProtectedRoute — exige token. Se admin-only, exige role admin.
+ * ProtectedRoute — exige token. Se adminOnly/csOnly, valida role.
  */
-function ProtectedRoute({ children, adminOnly = false }) {
+function ProtectedRoute({ children, adminOnly = false, csOnly = false }) {
   const location = useLocation();
   const token = auth.getToken();
   const user = auth.getUser();
@@ -20,17 +25,15 @@ function ProtectedRoute({ children, adminOnly = false }) {
   if (!token || !user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
-  if (adminOnly && user.role !== 'admin') {
-    return <Navigate to="/admin" replace />;
-  }
+  if (adminOnly && user.role !== 'admin') return <Navigate to="/cs" replace />;
+  if (csOnly && user.role === 'admin')    return <Navigate to="/admin" replace />;
   return children;
 }
 
 function RootRedirect() {
   const user = auth.getUser();
   if (!user) return <Navigate to="/login" replace />;
-  // Por enquanto, todo mundo vai pro /admin (CS dashboard ainda não foi reconstruído)
-  return <Navigate to="/admin" replace />;
+  return <Navigate to={user.role === 'admin' ? '/admin' : '/cs'} replace />;
 }
 
 export default function App() {
@@ -40,19 +43,15 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<RootRedirect />} />
 
-        {/* ─── Rotas Admin (apenas as 2 abas atuais) ──────────────── */}
-        <Route
-          path="/admin"
-          element={<ProtectedRoute adminOnly><AdminOverview /></ProtectedRoute>}
-        />
-        <Route
-          path="/admin/pendentes"
-          element={<ProtectedRoute adminOnly><AdminPending /></ProtectedRoute>}
-        />
-        <Route
-          path="/admin/campanhas"
-          element={<ProtectedRoute adminOnly><AdminCampaigns /></ProtectedRoute>}
-        />
+        {/* ── Admin ──────────────────────────────────────────────── */}
+        <Route path="/admin"           element={<ProtectedRoute adminOnly><AdminOverview /></ProtectedRoute>} />
+        <Route path="/admin/pendentes" element={<ProtectedRoute adminOnly><AdminPending /></ProtectedRoute>} />
+        <Route path="/admin/campanhas" element={<ProtectedRoute adminOnly><AdminCampaigns /></ProtectedRoute>} />
+
+        {/* ── CS (portal pessoal) ────────────────────────────────── */}
+        <Route path="/cs"                    element={<ProtectedRoute><CsDashboard /></ProtectedRoute>} />
+        <Route path="/cs/campanha/:token"    element={<ProtectedRoute><CsCampaignDetail /></ProtectedRoute>} />
+        <Route path="/cs/historico"          element={<ProtectedRoute><CsHistory /></ProtectedRoute>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

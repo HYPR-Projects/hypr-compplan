@@ -1,0 +1,106 @@
+/**
+ * CSDashboard.css — estilos do painel CS e lista de campanhas.
+ */
+
+.cs-campaign-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cs-campaign-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 2.5fr) minmax(110px, 0.7fr) minmax(110px, 0.7fr) auto;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  align-items: center;
+  background: var(--surface-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.cs-campaign-row:hover {
+  border-color: var(--accent-cyan);
+  transform: translateX(2px);
+}
+
+.cs-campaign-row__indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-icon--green { color: var(--accent-green, #18bf6b); }
+.status-icon--yellow { color: var(--accent-yellow, #f5a524); }
+.status-icon--red { color: var(--accent-red, #f43f5e); }
+
+.cs-campaign-row__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cs-campaign-row__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.cs-campaign-row__client {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cs-campaign-row__campaign {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cs-campaign-row__meta {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.cs-campaign-row__num {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: var(--text-sm);
+}
+
+.cs-campaign-row__num--cyan {
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
+
+.cs-campaign-row__cta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cs-campaign-row__arrow {
+  color: var(--text-tertiary);
+}
+
+@media (max-width: 900px) {
+  .cs-campaign-row {
+    grid-template-columns: auto 1fr auto;
+  }
+  .cs-campaign-row__num {
+    grid-column: 2;
+    align-items: flex-start;
+  }
+  .cs-campaign-row__cta {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}

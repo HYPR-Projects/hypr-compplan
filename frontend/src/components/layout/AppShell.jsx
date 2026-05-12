@@ -17,9 +17,8 @@ import './AppShell.css';
  */
 
 const NAV_CS = [
-  { to: '/dashboard',  label: 'Meu painel',  icon: Home },
-  { to: '/campanhas',  label: 'Campanhas',   icon: FileText },
-  { to: '/historico',  label: 'Histórico',   icon: History },
+  { to: '/cs',            label: 'Meu painel',  icon: Home },
+  { to: '/cs/historico',  label: 'Histórico',   icon: History },
 ];
 
 const NAV_ADMIN = [
@@ -56,7 +55,7 @@ export default function AppShell({ children, pendingEvidences = 0, pendingCount 
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === '/admin' || item.to === '/dashboard'}
+              end={item.to === '/admin' || item.to === '/cs'}
               className={({ isActive }) =>
                 `shell__nav-item ${isActive ? 'shell__nav-item--active' : ''}`
               }
