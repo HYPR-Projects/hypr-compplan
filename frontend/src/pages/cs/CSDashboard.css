@@ -104,3 +104,47 @@
     justify-content: flex-end;
   }
 }
+
+/* ── Impersonation banner ────────────────────────────────────────── */
+
+.impersonation-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(245, 165, 36, 0.08);
+  border: 1px solid var(--accent-yellow, #f5a524);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.impersonation-banner > svg {
+  color: var(--accent-yellow, #f5a524);
+  flex-shrink: 0;
+}
+
+.impersonation-banner > span {
+  flex: 1;
+}
+
+.impersonation-banner__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: border-color 120ms ease;
+  font-family: inherit;
+}
+
+.impersonation-banner__back:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}

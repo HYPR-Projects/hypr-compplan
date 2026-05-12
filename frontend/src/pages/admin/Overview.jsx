@@ -132,7 +132,13 @@ export default function AdminOverview() {
         ) : (
           <div className="cs-leaderboard">
             {team.map((cs, i) => (
-              <CsLeaderRow key={cs.cs_email} cs={cs} rank={i + 1} i={i} />
+              <CsLeaderRow
+                key={cs.cs_email}
+                cs={cs}
+                rank={i + 1}
+                i={i}
+                onClick={() => navigate(`/admin/cs/${encodeURIComponent(cs.cs_email)}`)}
+              />
             ))}
           </div>
         )}
@@ -141,9 +147,9 @@ export default function AdminOverview() {
   );
 }
 
-function CsLeaderRow({ cs, rank, i }) {
+function CsLeaderRow({ cs, rank, i, onClick }) {
   return (
-    <div className="cs-row stagger" style={{ '--i': i }}>
+    <div className="cs-row stagger cs-row--clickable" style={{ '--i': i }} onClick={onClick}>
       <div className="cs-row__rank">{rank}</div>
       <Avatar name={cs.cs_name || cs.cs_email} size="md" />
       <div className="cs-row__main">

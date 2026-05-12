@@ -77,3 +77,13 @@
   .cs-row__metric:nth-child(4),
   .cs-row__metric:nth-child(5) { display: none; }
 }
+
+.cs-row--clickable {
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.cs-row--clickable:hover {
+  border-color: var(--accent-cyan);
+  transform: translateX(2px);
+}

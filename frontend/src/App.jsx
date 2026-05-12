@@ -9,14 +9,11 @@ import AdminOverview from './pages/admin/Overview.jsx';
 import AdminPending from './pages/admin/Pending.jsx';
 import AdminCampaigns from './pages/admin/Campaigns.jsx';
 
-// CS pages (portal pessoal)
+// CS pages (portal pessoal — também usado pelo admin via impersonação)
 import CsDashboard from './pages/cs/CSDashboard.jsx';
 import CsCampaignDetail from './pages/cs/CampaignDetail.jsx';
 import CsHistory from './pages/cs/History.jsx';
 
-/**
- * ProtectedRoute — exige token. Se adminOnly/csOnly, valida role.
- */
 function ProtectedRoute({ children, adminOnly = false, csOnly = false }) {
   const location = useLocation();
   const token = auth.getToken();
@@ -48,12 +45,15 @@ export default function App() {
         <Route path="/admin/pendentes" element={<ProtectedRoute adminOnly><AdminPending /></ProtectedRoute>} />
         <Route path="/admin/campanhas" element={<ProtectedRoute adminOnly><AdminCampaigns /></ProtectedRoute>} />
 
+        {/* Admin impersonando CS */}
+        <Route path="/admin/cs/:csEmail"                       element={<ProtectedRoute adminOnly><CsDashboard /></ProtectedRoute>} />
+        <Route path="/admin/cs/:csEmail/campanha/:token"       element={<ProtectedRoute adminOnly><CsCampaignDetail /></ProtectedRoute>} />
+
         {/* ── CS (portal pessoal) ────────────────────────────────── */}
         <Route path="/cs"                    element={<ProtectedRoute><CsDashboard /></ProtectedRoute>} />
         <Route path="/cs/campanha/:token"    element={<ProtectedRoute><CsCampaignDetail /></ProtectedRoute>} />
         <Route path="/cs/historico"          element={<ProtectedRoute><CsHistory /></ProtectedRoute>} />
 
-        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </ThemeProvider>

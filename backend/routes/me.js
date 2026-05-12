@@ -99,6 +99,23 @@ async function fetchPerformanceMetrics(shortToken) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Helper: resolve qual CS estamos vendo.
+// - Se o user é admin E passou ?as=email, retorna esse email (impersonação).
+// - Senão, retorna o email do user logado.
+// Permite admin ver/editar campanhas de qualquer CS.
+// ─────────────────────────────────────────────────────────────────────
+function resolveTargetCs(req) {
+  const myEmail = (req.user?.email || '').toLowerCase();
+  const isAdmin = req.user?.role === 'admin';
+  const asParam = (req.query?.as || '').toLowerCase().trim();
+
+  if (isAdmin && asParam) {
+    return { csEmail: asParam, impersonating: true, byEmail: myEmail };
+  }
+  return { csEmail: myEmail, impersonating: false, byEmail: myEmail };
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Helper: pega manual_checks salvos (de overrides ou legacy_assignments)
 // ─────────────────────────────────────────────────────────────────────
 async function fetchManualChecks(shortToken, isLegacy) {
@@ -129,7 +146,7 @@ async function fetchManualChecks(shortToken, isLegacy) {
 // ── GET /me/dashboard/:q ───────────────────────────────────────────────
 router.get('/dashboard/:q', async (req, res) => {
   try {
-    const csEmail = (req.user?.email || '').toLowerCase();
+    const { csEmail, impersonating, byEmail } = resolveTargetCs(req);
     if (!csEmail) return res.status(401).json({ error: 'sem email no token' });
 
     const quarter = req.params.q;
@@ -181,9 +198,24 @@ router.get('/dashboard/:q', async (req, res) => {
     const nReviewed = items.filter(i => i.reviewed).length;
     const bruto = items.reduce((s, i) => s + i.bruto, 0);
 
+    // Se admin está impersonando, busca o nome do CS pra exibir no banner
+    let csName = null;
+    if (impersonating) {
+      try {
+        const [tm] = await query(
+          `SELECT name FROM ${tableRef('compplan_team')} WHERE LOWER(email) = @e LIMIT 1`,
+          { e: csEmail }
+        );
+        csName = tm?.name || null;
+      } catch (_) { /* silent */ }
+    }
+
     res.json({
       quarter,
       cs_email: csEmail,
+      cs_name: csName,
+      impersonating,
+      viewer_email: byEmail,
       kpis: {
         n_camp: items.length,
         n_reviewed: nReviewed,
@@ -204,7 +236,7 @@ router.get('/dashboard/:q', async (req, res) => {
 // ── GET /me/campaign/:token ────────────────────────────────────────────
 router.get('/campaign/:token', async (req, res) => {
   try {
-    const csEmail = (req.user?.email || '').toLowerCase();
+    const { csEmail, impersonating } = resolveTargetCs(req);
     const isAdmin = req.user?.role === 'admin';
     const { token } = req.params;
 
@@ -213,8 +245,10 @@ router.get('/campaign/:token', async (req, res) => {
          c.*,
          o.reviewed AS o_reviewed, o.reviewed_at AS o_reviewed_at,
          o.notes AS o_notes,
+         o.updated_by AS o_updated_by, o.updated_at AS o_updated_at,
          la.updated_at AS la_updated_at, la.attributed_at AS la_attributed_at,
-         la.notes AS la_notes
+         la.notes AS la_notes,
+         la.updated_by AS la_updated_by
        FROM ${tableRef('commplan_checklists')} c
        LEFT JOIN ${tableRef('commplan_command_overrides')} o ON c.short_token = o.short_token
        LEFT JOIN ${tableRef('commplan_legacy_assignments')} la ON c.short_token = la.short_token
@@ -257,6 +291,8 @@ router.get('/campaign/:token', async (req, res) => {
       is_legacy: isLegacy,
       reviewed,
       reviewed_at: reviewedAt,
+      last_edit_by: isLegacy ? campaign.la_updated_by : campaign.o_updated_by,
+      last_edit_at: isLegacy ? (campaign.la_updated_at?.value || campaign.la_updated_at) : (campaign.o_updated_at?.value || campaign.o_updated_at),
 
       // Read-only
       client_name: campaign.client_name,
@@ -303,7 +339,7 @@ router.get('/campaign/:token', async (req, res) => {
 // Body: { manual_checks: { itemId: bool }, notes?, reviewed? }
 router.put('/campaign/:token', async (req, res) => {
   try {
-    const csEmail = (req.user?.email || '').toLowerCase();
+    const { csEmail, byEmail } = resolveTargetCs(req);
     const isAdmin = req.user?.role === 'admin';
     const { token } = req.params;
     const body = req.body || {};
@@ -333,10 +369,10 @@ router.put('/campaign/:token', async (req, res) => {
         `UPDATE ${tableRef('commplan_legacy_assignments')}
          SET manual_checks = @mc,
              notes = @notes,
-             updated_by = @csEmail,
+             updated_by = @byEmail,
              updated_at = CURRENT_TIMESTAMP()
          WHERE short_token = @token`,
-        { mc: manualChecksJson, notes, csEmail, token }
+        { mc: manualChecksJson, notes, byEmail, token }
       );
     } else {
       // Command novo: MERGE em commplan_command_overrides
@@ -350,14 +386,14 @@ router.put('/campaign/:token', async (req, res) => {
            reviewed = @reviewed,
            reviewed_at = CURRENT_TIMESTAMP(),
            updated_at = CURRENT_TIMESTAMP(),
-           updated_by = @csEmail
+           updated_by = @byEmail
          WHEN NOT MATCHED THEN INSERT
            (short_token, cs_email, manual_checks, notes, reviewed, reviewed_at,
             created_at, updated_at, updated_by)
          VALUES
            (@token, @csEmail, @mc, @notes, @reviewed, CURRENT_TIMESTAMP(),
-            CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), @csEmail)`,
-        { token, csEmail, mc: manualChecksJson, notes, reviewed }
+            CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), @byEmail)`,
+        { token, csEmail, byEmail, mc: manualChecksJson, notes, reviewed }
       );
     }
 

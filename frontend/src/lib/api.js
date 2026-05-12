@@ -78,6 +78,13 @@ export const api = {
 };
 
 // ─── Endpoints tipados (atalhos) ──────────────────────────────────────
+
+// Helper: monta '?as=email' pra admin impersonar um CS.
+function asQuery(opts) {
+  if (!opts || !opts.as) return '';
+  return `?as=${encodeURIComponent(opts.as)}`;
+}
+
 export const endpoints = {
   // Auth
   login(googleIdToken) {
@@ -108,14 +115,14 @@ export const endpoints = {
   studiesAvailable(version='2026') { return api.get(`/commplan/studies/available?version=${version}`); },
 
   // CS (portal pessoal)
-  meDashboard(q)         { return api.get(`/commplan/me/dashboard/${q}`); },
-  meCampaign(token)      { return api.get(`/commplan/me/campaign/${token}`); },
-  meSaveCampaign(token, body) {
-    return api.put(`/commplan/me/campaign/${token}`, body);
+  meDashboard(q, opts = {})    { return api.get(`/commplan/me/dashboard/${q}${asQuery(opts)}`); },
+  meCampaign(token, opts = {}) { return api.get(`/commplan/me/campaign/${token}${asQuery(opts)}`); },
+  meSaveCampaign(token, body, opts = {}) {
+    return api.put(`/commplan/me/campaign/${token}${asQuery(opts)}`, body);
   },
-  meHistory()            { return api.get(`/commplan/me/history`); },
-  meFeaturesCatalog()    { return api.get(`/commplan/me/features-catalog`); },
-  meStudiesCatalog()     { return api.get(`/commplan/me/studies-catalog`); },
+  meHistory(opts = {})         { return api.get(`/commplan/me/history${asQuery(opts)}`); },
+  meFeaturesCatalog()          { return api.get(`/commplan/me/features-catalog`); },
+  meStudiesCatalog()           { return api.get(`/commplan/me/studies-catalog`); },
 
   // Admin
   adminOverview(q)       { return api.get(`/commplan/admin/overview/${q}`); },

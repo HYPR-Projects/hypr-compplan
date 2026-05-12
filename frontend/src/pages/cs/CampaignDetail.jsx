@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle2, AlertCircle, Save, Info,
-  ChevronDown, ChevronRight, Sparkles, Zap,
+  ChevronDown, ChevronRight, Sparkles, Zap, Eye,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
@@ -15,7 +15,7 @@ import './CampaignDetail.css';
 const CATEGORY_ORDER = ['pre_campaign', 'setup', 'optimization', 'account_mgmt', 'extras', 'onboarding'];
 
 export default function CsCampaignDetail() {
-  const { token } = useParams();
+  const { token, csEmail: impersonateEmail } = useParams();
   const navigate = useNavigate();
   const [campaign, setCampaign] = useState(null);
   const [error, setError] = useState(null);
@@ -24,10 +24,16 @@ export default function CsCampaignDetail() {
   const [manualChecks, setManualChecks] = useState({});
   const [expandedCategories, setExpandedCategories] = useState(new Set(CATEGORY_ORDER));
 
+  // Helpers de impersonação
+  const opts = impersonateEmail ? { as: impersonateEmail } : {};
+  const backUrl = impersonateEmail
+    ? `/admin/cs/${encodeURIComponent(impersonateEmail)}`
+    : '/cs';
+
   async function load() {
     try {
       setError(null);
-      const c = await endpoints.meCampaign(token);
+      const c = await endpoints.meCampaign(token, opts);
       setCampaign(c);
       setManualChecks(c.manual_checks || {});
     } catch (e) {
@@ -35,7 +41,7 @@ export default function CsCampaignDetail() {
     }
   }
 
-  useEffect(() => { load(); }, [token]);
+  useEffect(() => { load(); }, [token, impersonateEmail]);
 
   function toggleCheck(itemId) {
     setManualChecks(prev => ({
@@ -59,9 +65,8 @@ export default function CsCampaignDetail() {
       const result = await endpoints.meSaveCampaign(token, {
         manual_checks: manualChecks,
         reviewed: markReviewed,
-      });
+      }, opts);
       setSavedAt(new Date());
-      // Atualiza breakdown com novo retorno
       setCampaign(prev => prev ? { ...prev, breakdown: result.breakdown, reviewed: result.reviewed } : prev);
     } catch (e) {
       setError(`Erro ao salvar: ${e.message}`);
@@ -101,7 +106,19 @@ export default function CsCampaignDetail() {
 
   return (
     <AppShell>
-      <button className="back-link fade-up" onClick={() => navigate('/cs')}>
+      {impersonateEmail && (
+        <div className="impersonation-banner">
+          <Eye size={16} />
+          <span>
+            Visualizando campanha de <strong>{campaign.cs_name || campaign.cs_email}</strong>. Edições serão registradas em seu nome.
+          </span>
+          <button className="impersonation-banner__back" onClick={() => navigate(backUrl)}>
+            <ArrowLeft size={14} /> Voltar
+          </button>
+        </div>
+      )}
+
+      <button className="back-link fade-up" onClick={() => navigate(backUrl)}>
         <ArrowLeft size={14} /> Voltar ao painel
       </button>
 
@@ -120,6 +137,12 @@ export default function CsCampaignDetail() {
             {campaign.agency && <> · {campaign.agency}</>}
             {campaign.cp_name && <> · CP: {campaign.cp_name}</>}
           </div>
+          {campaign.last_edit_by && (
+            <div className="page-subtitle" style={{ marginTop: 6, fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>
+              Última edição: {campaign.last_edit_by}
+              {campaign.last_edit_at && <> · {new Date(campaign.last_edit_at).toLocaleString('pt-BR')}</>}
+            </div>
+          )}
         </div>
       </header>
 

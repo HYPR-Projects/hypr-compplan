@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, Clock, Search, ArrowRight } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { CheckCircle2, Clock, Search, ArrowRight, ArrowLeft, Eye } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card, KpiCard } from '../../components/ui/Card.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
@@ -11,19 +11,25 @@ import './CSDashboard.css';
 
 export default function CsDashboard() {
   const navigate = useNavigate();
+  const params = useParams();
   const user = auth.getUser();
   const quarter = currentQuarter();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
 
+  // Se a URL é /admin/cs/:csEmail, admin está impersonando
+  const impersonateEmail = params.csEmail || null;
+  const isAdmin = user?.role === 'admin';
+
   useEffect(() => {
     let cancelled = false;
-    endpoints.meDashboard(quarter)
+    const opts = impersonateEmail ? { as: impersonateEmail } : {};
+    endpoints.meDashboard(quarter, opts)
       .then(d => { if (!cancelled) setData(d); })
       .catch(e => { if (!cancelled) setError(e.message); });
     return () => { cancelled = true; };
-  }, [quarter]);
+  }, [quarter, impersonateEmail]);
 
   const items = data?.items || [];
   const filtered = useMemo(() => {
@@ -39,6 +45,7 @@ export default function CsDashboard() {
   if (error) {
     return (
       <AppShell pendingCount={data?.kpis?.n_pending || 0}>
+        {impersonateEmail && <ImpersonationBanner emailOrName={impersonateEmail} onBack={() => navigate('/admin')} />}
         <Card>
           <h2 className="page-title">Erro ao carregar painel</h2>
           <p className="card__subtitle">{error}</p>
@@ -50,6 +57,7 @@ export default function CsDashboard() {
   if (!data) {
     return (
       <AppShell>
+        {impersonateEmail && <ImpersonationBanner emailOrName={impersonateEmail} onBack={() => navigate('/admin')} />}
         <header className="page-header">
           <h1 className="page-title">Meu painel</h1>
           <div className="page-subtitle">Carregando…</div>
@@ -59,13 +67,31 @@ export default function CsDashboard() {
   }
 
   const { kpis } = data;
-  const firstName = (user?.name || user?.email || 'CS').split(' ')[0].split('.')[0];
+  const displayName = impersonateEmail
+    ? (data.cs_name || data.cs_email || impersonateEmail)
+    : (user?.name || user?.email || 'CS');
+  const firstName = displayName.split(' ')[0].split('.')[0];
+
+  function getCampaignUrl(token) {
+    return impersonateEmail
+      ? `/admin/cs/${encodeURIComponent(impersonateEmail)}/campanha/${token}`
+      : `/cs/campanha/${token}`;
+  }
 
   return (
     <AppShell pendingCount={kpis.n_pending}>
+      {data.impersonating && (
+        <ImpersonationBanner
+          emailOrName={data.cs_name || data.cs_email}
+          onBack={() => navigate('/admin')}
+        />
+      )}
+
       <header className="page-header fade-up">
         <div>
-          <h1 className="page-title">Olá, {firstName}!</h1>
+          <h1 className="page-title">
+            {impersonateEmail ? `Painel de ${firstName}` : `Olá, ${firstName}!`}
+          </h1>
           <div className="page-subtitle">
             <span className="page-subtitle__highlight">{quarter}</span>
             <span className="page-subtitle__sep">·</span>
@@ -106,7 +132,7 @@ export default function CsDashboard() {
 
       <section className="fade-up" style={{ '--i': 3 }}>
         <header className="section-header">
-          <h2 className="section-title">Minhas campanhas</h2>
+          <h2 className="section-title">{impersonateEmail ? `Campanhas de ${firstName}` : 'Minhas campanhas'}</h2>
         </header>
 
         <div style={{ marginBottom: 'var(--space-3)' }}>
@@ -122,7 +148,7 @@ export default function CsDashboard() {
           <Card>
             <p className="card__subtitle">
               {items.length === 0
-                ? `Você ainda não tem campanhas atribuídas no ${quarter}.`
+                ? `${impersonateEmail ? `${firstName} ainda não tem campanhas` : 'Você ainda não tem campanhas atribuídas'} no ${quarter}.`
                 : 'Nenhuma campanha encontrada com essa busca.'}
             </p>
           </Card>
@@ -132,7 +158,7 @@ export default function CsDashboard() {
               <CampaignRow
                 key={c.short_token}
                 campaign={c}
-                onClick={() => navigate(`/cs/campanha/${c.short_token}`)}
+                onClick={() => navigate(getCampaignUrl(c.short_token))}
                 i={i}
               />
             ))}
@@ -140,6 +166,20 @@ export default function CsDashboard() {
         )}
       </section>
     </AppShell>
+  );
+}
+
+function ImpersonationBanner({ emailOrName, onBack }) {
+  return (
+    <div className="impersonation-banner">
+      <Eye size={16} />
+      <span>
+        <strong>Visualizando como {emailOrName}.</strong> Edições serão registradas em seu nome.
+      </span>
+      <button className="impersonation-banner__back" onClick={onBack}>
+        <ArrowLeft size={14} /> Voltar pra visão admin
+      </button>
+    </div>
   );
 }
 
