@@ -161,13 +161,15 @@ router.post('/', async (req, res) => {
   }
 });
 
-/** PUT /commplan/admin/team-members/:email — edita nome */
+/** PUT /commplan/admin/team-members/:email — edita nome/role/salário */
 router.put('/:email', async (req, res) => {
   try {
     const before = await getMemberByEmail(req.params.email);
     if (!before) return res.status(404).json({ error: 'membro não encontrado' });
 
-    const { name, role } = req.body;
+    const { name, role, fixed_salary_brl, effective_from, notes } = req.body;
+
+    // 1. Atualiza nome/role
     await upsertMember({
       email: req.params.email,
       name: name || before.name,
@@ -184,8 +186,40 @@ router.put('/:email', async (req, res) => {
       before, after,
     });
 
-    res.json({ ok: true, item: after });
+    // 2. Se for CS e veio salário, atualiza/cria em commplan_cs_config
+    let salaryUpdated = false;
+    const effectiveRole = role || before.role;
+    if (effectiveRole === 'cs' && fixed_salary_brl != null && fixed_salary_brl !== '') {
+      const fromDate = effective_from || new Date().toISOString().slice(0, 10);
+      const beforeSalary = await getSalaryForCs({ csEmail: req.params.email, asOfDate: fromDate });
+
+      // Só atualiza se o valor mudou
+      const newValue = Number(fixed_salary_brl);
+      const oldValue = Number(beforeSalary?.fixed_salary_brl) || 0;
+      if (oldValue !== newValue) {
+        await setSalary({
+          csEmail: req.params.email,
+          fixedSalaryBrl: newValue,
+          effectiveFrom: fromDate,
+          notes: notes || `Atualizado via /admin/time por ${req.user.email}`,
+          updatedBy: req.user.email,
+        });
+        const afterSalary = await getSalaryForCs({ csEmail: req.params.email, asOfDate: fromDate });
+
+        await logAudit({
+          entityType: 'cs_config',
+          entityId: req.params.email.toLowerCase(),
+          action: beforeSalary ? 'update' : 'create',
+          changedBy: req.user.email,
+          before: beforeSalary, after: afterSalary,
+        });
+        salaryUpdated = true;
+      }
+    }
+
+    res.json({ ok: true, item: after, salary_updated: salaryUpdated });
   } catch (err) {
+    console.error('PUT /admin/team-members error:', err);
     res.status(400).json({ error: err.message });
   }
 });
