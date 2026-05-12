@@ -67,18 +67,18 @@ export const COMPPLAN_CATALOG = {
   setup: {
     label: 'Setup',
     items: [
-      { id: 'setup_o2o_ooh',     label: 'O2O / OOH',                       pct: 0.0045, source: 'auto', help: 'Atinge se a campanha tem produtos O2O ou OOH.' },
-      { id: 'setup_rmn_digital', label: 'RMN Digital',                     pct: 0.0015, source: 'auto', help: 'Atinge se a campanha tem RMN Digital.' },
-      { id: 'setup_rmn_fisico',  label: 'RMN Físico',                      pct: 0.0055, source: 'auto', help: 'Atinge se a campanha tem RMN Físico.' },
+      { id: 'setup_o2o_ooh',     label: 'O2O / OOH',                       pct: 0.0045, source: 'semi_auto', help: 'Pré-marcado se a campanha tem produtos O2O ou OOH. Você pode editar.' },
+      { id: 'setup_rmn_digital', label: 'RMN Digital',                     pct: 0.0015, source: 'semi_auto', help: 'Pré-marcado se RMN Digital detectado. Você pode editar.' },
+      { id: 'setup_rmn_fisico',  label: 'RMN Físico',                      pct: 0.0055, source: 'semi_auto', help: 'Pré-marcado se RMN Físico detectado. Você pode editar.' },
       // Tier 1: até 3 features cumulativas
-      { id: 'setup_tier1_1',     label: 'Tier 1 — 1ª implementação',       pct: 0.0025, source: 'auto', help: 'Atinge se ≥ 1 feature Tier 1 implementada.' },
-      { id: 'setup_tier1_2',     label: 'Tier 1 — 2ª implementação',       pct: 0.0020, source: 'auto', help: 'Atinge se ≥ 2 features Tier 1 implementadas.' },
-      { id: 'setup_tier1_3',     label: 'Tier 1 — 3ª implementação',       pct: 0.0015, source: 'auto', help: 'Atinge se ≥ 3 features Tier 1 implementadas.' },
+      { id: 'setup_tier1_1',     label: 'Tier 1 — 1ª implementação',       pct: 0.0025, source: 'semi_auto', help: 'Pré-marcado se ≥ 1 feature Tier 1. Você pode editar.' },
+      { id: 'setup_tier1_2',     label: 'Tier 1 — 2ª implementação',       pct: 0.0020, source: 'semi_auto', help: 'Pré-marcado se ≥ 2 features Tier 1. Você pode editar.' },
+      { id: 'setup_tier1_3',     label: 'Tier 1 — 3ª implementação',       pct: 0.0015, source: 'semi_auto', help: 'Pré-marcado se ≥ 3 features Tier 1. Você pode editar.' },
       // Tier 2: até 2 features
-      { id: 'setup_tier2_1',     label: 'Tier 2 — 1ª implementação',       pct: 0.0020, source: 'auto', help: 'Atinge se ≥ 1 feature Tier 2 implementada.' },
-      { id: 'setup_tier2_2',     label: 'Tier 2 — 2ª implementação',       pct: 0.0015, source: 'auto', help: 'Atinge se ≥ 2 features Tier 2 implementadas.' },
+      { id: 'setup_tier2_1',     label: 'Tier 2 — 1ª implementação',       pct: 0.0020, source: 'semi_auto', help: 'Pré-marcado se ≥ 1 feature Tier 2. Você pode editar.' },
+      { id: 'setup_tier2_2',     label: 'Tier 2 — 2ª implementação',       pct: 0.0015, source: 'semi_auto', help: 'Pré-marcado se ≥ 2 features Tier 2. Você pode editar.' },
       // Tier 3: 1 só
-      { id: 'setup_tier3_1',     label: 'Tier 3 — Implementação única',    pct: 0.0020, source: 'auto', help: 'Atinge se ≥ 1 feature Tier 3 implementada.' },
+      { id: 'setup_tier3_1',     label: 'Tier 3 — Implementação única',    pct: 0.0020, source: 'semi_auto', help: 'Pré-marcado se ≥ 1 feature Tier 3. Você pode editar.' },
     ],
     notes: 'Custo de criative fee > R$ 1.000, over > 50% (sem justificativa) ou under = perde 100% do setup.',
   },

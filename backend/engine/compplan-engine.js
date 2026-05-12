@@ -1,23 +1,19 @@
 /**
  * engine/compplan-engine.js — calcula bônus de uma campanha.
  *
- * INPUT:
- *   - campaign:   dados da campanha (do view commplan_checklists)
- *   - manualChecks: { [itemId]: true } — items que o CS marcou manualmente
- *   - metrics:    dados de unified_performance_metrics (opcional)
+ * SOURCES:
+ *   - 'auto':      inferido do checklist, NÃO editável (audiences, estudos)
+ *   - 'semi_auto': inferido do checklist, MAS editável pelo CS (setup items)
+ *                  Em manualChecks, se ausente, usa o inferido. Se presente, usa o do CS.
+ *   - 'manual':    sempre vem do CS marcando manualmente
+ *   - 'metrics':   calculado das métricas reais (Otimizações)
  *
- * OUTPUT:
- *   {
- *     bruto, liquido, tax_rate,
- *     by_category: {
- *       pre_campaign: { label, items: [...], subtotal_pct, subtotal_brl },
- *       ...
- *     },
- *     total_pct, total_brl,
- *   }
- *
- * Cada item.items[i] contém:
- *   { id, label, pct, source, earned, locked_reason, value_brl, help }
+ * SETUP VALIDATION:
+ *   Se a campanha tem dados de performance e bate alguma condição abaixo,
+ *   TODO o setup é zerado e mostra a justificativa:
+ *     - Over > 50%
+ *     - Criative fee > R$ 1.000
+ *     - Under (entregou menos que contratado)
  */
 
 import { COMPPLAN_CATALOG, getFeatureTier } from './compplan-catalog.js';
@@ -26,8 +22,8 @@ const TAX_RATE = 0.1653;
 const NET_FACTOR = 1 - TAX_RATE;
 
 /**
- * Infere quais items AUTOMÁTICOS estão atingidos baseado no checklist.
- * Não toca em items manuais ou metrics — só os 'auto'.
+ * Infere quais items AUTOMÁTICOS e SEMI_AUTO estão atingidos baseado no checklist.
+ * Retorna Set de ids inferidos.
  */
 function inferAutoItems(campaign) {
   const earned = new Set();
@@ -45,24 +41,25 @@ function inferAutoItems(campaign) {
   if (totalFeatures >= 2) earned.add('pre_feat_2');
   if (totalFeatures >= 3) earned.add('pre_feat_3');
 
-  // Pré Campanha — RMN Físico em features (regra especial: precisaria audiência inédita, mas inferimos otimisticamente)
+  // Pré Campanha — RMN Físico em features
   const hasRmnFisicoFeature = features.some(f => /rmn\s*f[ií]sico|rmnf/i.test(f));
   if (hasRmnFisicoFeature) earned.add('pre_feat_rmnf');
 
-  // Setup — O2O / OOH
-  const hasO2O = products.some(p => /o2o|ooh/i.test(p)) || (Array.isArray(campaign.formats) && campaign.formats.some(f => /o2o|ooh/i.test(f)));
+  // Setup — O2O / OOH (semi_auto)
+  const hasO2O = products.some(p => /o2o|ooh/i.test(p))
+              || (Array.isArray(campaign.formats) && campaign.formats.some(f => /o2o|ooh/i.test(f)));
   if (hasO2O) earned.add('setup_o2o_ooh');
 
-  // Setup — RMN Digital
+  // Setup — RMN Digital (semi_auto)
   const hasRmnDig = products.some(p => /rmn\s*digital|rmnd/i.test(p));
   if (hasRmnDig) earned.add('setup_rmn_digital');
 
-  // Setup — RMN Físico
+  // Setup — RMN Físico (semi_auto)
   const hasRmnFis = products.some(p => /rmn\s*f[ií]sico|rmnf/i.test(p))
                   || (campaign.pracas_type && /f[ií]sico/i.test(campaign.pracas_type));
   if (hasRmnFis) earned.add('setup_rmn_fisico');
 
-  // Setup — tiers de features (conta cada tier)
+  // Setup — tiers de features (semi_auto)
   let nT1 = 0, nT2 = 0, nT3 = 0;
   for (const f of features) {
     const tier = getFeatureTier(f);
@@ -77,7 +74,7 @@ function inferAutoItems(campaign) {
   if (nT2 >= 2) earned.add('setup_tier2_2');
   if (nT3 >= 1) earned.add('setup_tier3_1');
 
-  // Extras — Estudos (puxa de studies_used)
+  // Extras — Estudos (auto)
   const studies = Array.isArray(campaign.studies_used) ? campaign.studies_used : [];
   if (studies.length > 0) earned.add('ex_estudos');
 
@@ -85,25 +82,22 @@ function inferAutoItems(campaign) {
 }
 
 /**
- * Resolve items dependentes de métricas (Otimizações).
- * Retorna Set com ids atingidos.
+ * Items dependentes de métricas (Otimizações).
  */
 function inferMetricItems(campaign, metrics) {
   const earned = new Set();
   if (!metrics) return earned;
 
   const isABS = !!campaign.is_abs;
-  const over = Number(metrics.over_percent ?? metrics.over) || 0;
+  const over = Number(metrics.over_percent) || 0;
   const ecpm = Number(metrics.ecpm) || 0;
-  const ctr = Number(metrics.ctr) || 0; // como decimal (0.005 = 0.5%)
+  const ctr = Number(metrics.ctr) || 0;
 
   if (isABS) {
-    // Com ABS: over≤25, ecpm≤1.50, ctr≥0.5%
     if (over <= 25 && ecpm > 0 && ecpm <= 1.50 && ctr >= 0.005) {
       earned.add('opt_with_abs');
     }
   } else {
-    // Sem ABS: over≤25, ecpm≤0.70, ctr≥0.7%
     if (over <= 25 && ecpm > 0 && ecpm <= 0.70 && ctr >= 0.007) {
       earned.add('opt_without_abs');
     }
@@ -113,14 +107,46 @@ function inferMetricItems(campaign, metrics) {
 }
 
 /**
- * Aplica constraints (non_cumulative_group, oneof_group) — escolhe o maior
- * dentre os items marcados do mesmo grupo, descarta os outros.
- *
- * Mutates earnedItems removendo perdedores.
+ * Verifica se o setup deve ser zerado.
+ * Retorna { invalidated: bool, reason: string|null } baseado nas métricas.
  */
+function validateSetup(metrics) {
+  if (!metrics) {
+    return { invalidated: false, reason: null };
+  }
+
+  const over = Number(metrics.over_percent) || 0;
+  const creativeFee = Number(metrics.creative_fee_estimate) || 0;
+
+  // 1. Over > 50%
+  if (over > 50) {
+    return {
+      invalidated: true,
+      reason: `Setup anulado: campanha entregou ${over.toFixed(1)}% de over (limite 50%).`,
+    };
+  }
+
+  // 2. Criative fee > R$ 1.000
+  if (creativeFee > 1000) {
+    return {
+      invalidated: true,
+      reason: `Setup anulado: criative fee de R$ ${creativeFee.toFixed(2)} excedeu limite de R$ 1.000.`,
+    };
+  }
+
+  // 3. Under: entregou menos que contratado
+  if (over < 0) {
+    return {
+      invalidated: true,
+      reason: `Setup anulado: campanha em under (entregou ${(100 + over).toFixed(1)}% do contratado).`,
+    };
+  }
+
+  return { invalidated: false, reason: null };
+}
+
 function applyConstraints(earnedItems, allItems) {
-  // Agrupa por constraint group
-  const groups = {}; // { groupName: [items] }
+  const groups = {};
   for (const item of allItems) {
     if (!earnedItems.has(item.id)) continue;
     if (!item.constraint) continue;
@@ -132,11 +158,9 @@ function applyConstraints(earnedItems, allItems) {
     }
   }
 
-  // Pra cada grupo, mantém só o de maior pct
   for (const items of Object.values(groups)) {
     if (items.length <= 1) continue;
     items.sort((a, b) => b.pct - a.pct);
-    // Remove todos exceto o primeiro (maior pct)
     for (let i = 1; i < items.length; i++) {
       earnedItems.delete(items[i].id);
     }
@@ -144,59 +168,79 @@ function applyConstraints(earnedItems, allItems) {
 }
 
 /**
- * Calcula o breakdown completo de bônus de uma campanha.
- *
- * @param {Object} campaign       - row da view commplan_checklists
- * @param {Object} manualChecks   - { [itemId]: true } — overrides do CS
- * @param {Object|null} metrics   - row de unified_performance_metrics (opcional)
- * @returns {Object} breakdown
+ * Calcula o breakdown completo de bônus.
  */
 export function computeBonus(campaign, manualChecks = {}, metrics = null) {
   const bruto = Number(campaign.total_value) || 0;
   const liquido = bruto * NET_FACTOR;
 
-  // 1. Auto items (do checklist)
-  const earned = inferAutoItems(campaign);
+  // 1. Items inferidos do checklist (auto + semi_auto)
+  const inferred = inferAutoItems(campaign);
 
-  // 2. Metric items (Otimizações)
+  // 2. Items de métricas (Otimizações)
   const metricEarned = inferMetricItems(campaign, metrics);
-  for (const id of metricEarned) earned.add(id);
 
-  // 3. Manual items (o que o CS marcou)
-  for (const [id, val] of Object.entries(manualChecks)) {
-    if (val === true || val === 'true') earned.add(id);
-  }
-
-  // 4. Flatten lista de items pra aplicar constraints
+  // 3. Constrói earned final por item:
+  //    - 'auto':      sempre o inferido
+  //    - 'semi_auto': se manualChecks tem chave, usa esse valor; senão, usa inferido
+  //    - 'manual':    só se manualChecks.x === true
+  //    - 'metrics':   o que o metricEarned disser
+  const earned = new Set();
   const allItems = [];
   for (const [catKey, cat] of Object.entries(COMPPLAN_CATALOG)) {
     for (const item of cat.items) {
       allItems.push({ ...item, category: catKey });
+
+      const explicitlySet = Object.prototype.hasOwnProperty.call(manualChecks, item.id);
+      const manualVal = manualChecks[item.id] === true;
+
+      if (item.source === 'auto') {
+        if (inferred.has(item.id)) earned.add(item.id);
+      } else if (item.source === 'semi_auto') {
+        // Se CS explicitamente marcou/desmarcou, usa esse valor.
+        // Senão, usa o inferido.
+        if (explicitlySet) {
+          if (manualVal) earned.add(item.id);
+        } else {
+          if (inferred.has(item.id)) earned.add(item.id);
+        }
+      } else if (item.source === 'manual') {
+        if (manualVal) earned.add(item.id);
+      } else if (item.source === 'metrics') {
+        if (metricEarned.has(item.id)) earned.add(item.id);
+      }
     }
   }
 
-  // 5. Aplica constraints (non_cumulative + oneof)
+  // 4. Aplica constraints (non_cumulative, oneof)
   applyConstraints(earned, allItems);
+
+  // 5. Valida setup (over > 50%, criative fee, under)
+  const setupValidation = validateSetup(metrics);
 
   // 6. Monta breakdown por categoria
   const byCategory = {};
   let totalPct = 0;
 
   for (const [catKey, cat] of Object.entries(COMPPLAN_CATALOG)) {
+    const isSetupInvalidated = catKey === 'setup' && setupValidation.invalidated;
+
     const items = cat.items.map(item => {
-      const isEarned = earned.has(item.id);
-      const valueBrl = isEarned ? liquido * item.pct : 0;
-      const itemRet = {
+      const wasEarned = earned.has(item.id);
+      const effectivelyEarned = wasEarned && !isSetupInvalidated;
+      return {
         id: item.id,
         label: item.label,
         pct: item.pct,
         source: item.source,
         constraint: item.constraint || null,
         help: item.help || null,
-        earned: isEarned,
-        value_brl: valueBrl,
+        earned: effectivelyEarned,
+        // Pra UI: se setup foi anulado, mantém o checkbox visualmente mas não conta
+        was_earned: wasEarned,
+        invalidated: isSetupInvalidated && wasEarned,
+        value_brl: effectivelyEarned ? liquido * item.pct : 0,
       };
-      return itemRet;
     });
 
     const subtotalPct = items.filter(i => i.earned).reduce((s, i) => s + i.pct, 0);
@@ -208,6 +252,8 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null) {
       items,
       subtotal_pct: subtotalPct,
       subtotal_brl: subtotalBrl,
+      invalidated: isSetupInvalidated,
+      invalidation_reason: isSetupInvalidated ? setupValidation.reason : null,
     };
 
     totalPct += subtotalPct;
@@ -220,5 +266,6 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null) {
     by_category: byCategory,
     total_pct: totalPct,
     total_brl: liquido * totalPct,
+    setup_validation: setupValidation,
   };
 }

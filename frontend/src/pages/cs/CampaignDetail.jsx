@@ -261,7 +261,9 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
         <div className="category-block__title">
           {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
           <span>{cat.label}</span>
-          <Badge variant="neutral">{earnedCount}/{cat.items.length}</Badge>
+          <Badge variant={cat.invalidated ? 'red' : 'neutral'}>
+            {cat.invalidated ? `0/${cat.items.length} (anulado)` : `${earnedCount}/${cat.items.length}`}
+          </Badge>
         </div>
         <div className="category-block__total">
           <span className="mono">{(cat.subtotal_pct * 100).toFixed(2)}%</span>
@@ -271,6 +273,12 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
 
       {expanded && (
         <div className="category-block__items">
+          {cat.invalidated && cat.invalidation_reason && (
+            <div className="category-block__invalidation">
+              <AlertCircle size={16} />
+              <span>{cat.invalidation_reason}</span>
+            </div>
+          )}
           {cat.items.map(item => (
             <ItemRow
               key={item.id}
@@ -279,6 +287,7 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
               onCheck={onCheck}
               metrics={metrics}
               isABS={isABS}
+              invalidated={cat.invalidated}
             />
           ))}
           {cat.notes && (
@@ -292,26 +301,44 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
   );
 }
 
-function ItemRow({ item, manualChecks, onCheck, metrics, isABS }) {
-  const earned = isEffectivelyEarned(item, manualChecks);
+function ItemRow({ item, manualChecks, onCheck, metrics, isABS, invalidated }) {
   const isManual = item.source === 'manual';
+  const isSemiAuto = item.source === 'semi_auto';
   const isAuto = item.source === 'auto';
   const isMetric = item.source === 'metrics';
 
-  // Pra items de otimização: explica regra
+  // Determina se está "checado" no UI:
+  // - manual: depende do manualChecks
+  // - semi_auto: usa o que veio do server (item.earned) OU override do CS
+  // - auto/metric: usa item.earned do server
+  let isChecked;
+  if (isManual) {
+    isChecked = !!manualChecks[item.id];
+  } else if (isSemiAuto) {
+    // Se CS já interagiu (chave presente), usa esse valor.
+    // Senão usa o earned do server (que reflete o inferido).
+    isChecked = Object.prototype.hasOwnProperty.call(manualChecks, item.id)
+      ? !!manualChecks[item.id]
+      : item.was_earned || item.earned;
+  } else {
+    isChecked = item.earned;
+  }
+
+  const editable = isManual || isSemiAuto;
   const metricInfo = isMetric ? formatMetricInfo(item, metrics, isABS) : null;
 
   return (
-    <div className={`item-row ${earned ? 'item-row--earned' : ''}`}>
+    <div className={`item-row ${item.earned ? 'item-row--earned' : ''} ${invalidated && item.was_earned ? 'item-row--invalidated' : ''}`}>
       <div className="item-row__check">
-        {isManual ? (
+        {editable ? (
           <input
             type="checkbox"
-            checked={!!manualChecks[item.id]}
+            checked={isChecked}
             onChange={() => onCheck(item.id)}
             className="item-row__checkbox"
+            disabled={invalidated}
           />
-        ) : earned ? (
+        ) : item.earned ? (
           <CheckCircle2 size={18} className="item-row__icon item-row__icon--earned" />
         ) : (
           <div className="item-row__icon item-row__icon--empty" />
@@ -322,6 +349,7 @@ function ItemRow({ item, manualChecks, onCheck, metrics, isABS }) {
         <div className="item-row__label">
           {item.label}
           {isAuto && <span className="item-row__badge item-row__badge--auto"><Zap size={10} /> Auto</span>}
+          {isSemiAuto && <span className="item-row__badge item-row__badge--semi"><Zap size={10} /> Semi auto</span>}
           {isMetric && <span className="item-row__badge item-row__badge--metric"><Sparkles size={10} /> Métrica</span>}
         </div>
         {item.help && <div className="item-row__help">{item.help}</div>}
@@ -329,8 +357,15 @@ function ItemRow({ item, manualChecks, onCheck, metrics, isABS }) {
       </div>
 
       <div className="item-row__values">
-        <span className="mono item-row__pct">{(item.pct * 100).toFixed(2)}%</span>
-        {earned && <span className="mono item-row__brl">{fmt.brl(item.value_brl)}</span>}
+        <span className={`mono item-row__pct ${invalidated && item.was_earned ? 'item-row__pct--strike' : ''}`}>
+          {(item.pct * 100).toFixed(2)}%
+        </span>
+        {item.earned && <span className="mono item-row__brl">{fmt.brl(item.value_brl)}</span>}
+        {invalidated && item.was_earned && (
+          <span className="mono item-row__brl item-row__brl--strike">
+            ~{fmt.brl(item.pct * (item.value_brl || 0))}~
+          </span>
+        )}
       </div>
     </div>
   );
@@ -359,9 +394,13 @@ function RoTags({ label, items, variant = 'neutral' }) {
 // ─── Helpers ───────────────────────────────────────────────────────
 
 function isEffectivelyEarned(item, manualChecks) {
-  // Para items manuais, depende do checkbox local
   if (item.source === 'manual') return !!manualChecks[item.id];
-  // Para auto e metrics, vem do server (campo earned)
+  if (item.source === 'semi_auto') {
+    if (Object.prototype.hasOwnProperty.call(manualChecks, item.id)) {
+      return !!manualChecks[item.id];
+    }
+    return !!(item.was_earned || item.earned);
+  }
   return !!item.earned;
 }
 
@@ -388,18 +427,21 @@ function formatMetricInfo(item, metrics, isABS) {
 function recomputeLocally(serverBreakdown, manualChecks) {
   if (!serverBreakdown) return null;
 
-  const NET_FACTOR = 1 - (serverBreakdown.tax_rate || 0.1653);
   const liquido = serverBreakdown.liquido;
   let totalPct = 0;
 
   const newByCategory = {};
   for (const [catKey, cat] of Object.entries(serverBreakdown.by_category)) {
+    const invalidated = !!cat.invalidated;
     const newItems = cat.items.map(item => {
-      const earned = isEffectivelyEarned(item, manualChecks);
+      const wouldEarn = isEffectivelyEarned(item, manualChecks);
+      const effectivelyEarned = wouldEarn && !invalidated;
       return {
         ...item,
-        earned,
-        value_brl: earned ? liquido * item.pct : 0,
+        earned: effectivelyEarned,
+        was_earned: wouldEarn,
+        invalidated: invalidated && wouldEarn,
+        value_brl: effectivelyEarned ? liquido * item.pct : 0,
       };
     });
     const subtotalPct = newItems.filter(i => i.earned).reduce((s, i) => s + i.pct, 0);

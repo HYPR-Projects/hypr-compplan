@@ -65,6 +65,7 @@ async function fetchPerformanceMetrics(shortToken) {
            SUM(viewable_impressions)                                       AS total_viewable,
            SUM(clicks)                                                     AS total_clicks,
            SUM(effective_total_cost)                                       AS total_cost,
+           SUM(effective_cost_with_over)                                   AS total_cost_with_over,
            SUM(IF(LOWER(media_type) = 'display', viewable_impressions, 0)) AS display_viewable
          FROM \`site-hypr.prod_prod_hypr_reporthub.campaign_results\`
          WHERE short_token = @t
@@ -85,8 +86,11 @@ async function fetchPerformanceMetrics(shortToken) {
          a.total_viewable,
          a.total_clicks,
          a.total_cost,
+         a.total_cost_with_over,
          a.display_viewable,
-         c.display_contracted
+         c.display_contracted,
+         -- Criative fee = diferença entre cost_with_over e total_cost (custo extra que entrou)
+         IFNULL(a.total_cost_with_over - a.total_cost, 0)                  AS creative_fee_estimate
        FROM agg a
        LEFT JOIN contracted c USING (short_token)`,
       { t: shortToken }
