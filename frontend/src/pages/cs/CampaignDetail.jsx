@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, CheckCircle2, Save, AlertCircle,
+  ArrowLeft, CheckCircle2, AlertCircle, Save, Info,
+  ChevronDown, ChevronRight, Sparkles, Zap,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
@@ -11,47 +12,24 @@ import { fmt } from '../../lib/format.js';
 import { endpoints } from '../../lib/api.js';
 import './CampaignDetail.css';
 
+const CATEGORY_ORDER = ['pre_campaign', 'setup', 'optimization', 'account_mgmt', 'extras', 'onboarding'];
+
 export default function CsCampaignDetail() {
   const { token } = useParams();
   const navigate = useNavigate();
   const [campaign, setCampaign] = useState(null);
-  const [features, setFeatures] = useState({ tier1: [], tier2: [], tier3: [] });
-  const [studies, setStudies] = useState([]);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
-
-  // Form state
-  const [form, setForm] = useState({
-    features: [],
-    products: [],
-    studies_used: [],
-    audiences_count: '',
-    had_cs_meeting: false,
-    notes: '',
-  });
+  const [manualChecks, setManualChecks] = useState({});
+  const [expandedCategories, setExpandedCategories] = useState(new Set(CATEGORY_ORDER));
 
   async function load() {
     try {
       setError(null);
-      const [c, feat, std] = await Promise.all([
-        endpoints.meCampaign(token),
-        endpoints.meFeaturesCatalog(),
-        endpoints.meStudiesCatalog(),
-      ]);
+      const c = await endpoints.meCampaign(token);
       setCampaign(c);
-      setFeatures(feat.catalog || { tier1: [], tier2: [], tier3: [] });
-      setStudies(std.items || []);
-
-      // Inicializa form com valores atuais
-      setForm({
-        features: Array.isArray(c.features) ? c.features : [],
-        products: Array.isArray(c.products) ? c.products : [],
-        studies_used: Array.isArray(c.studies_used) ? c.studies_used : [],
-        audiences_count: c.audiences_count ?? '',
-        had_cs_meeting: !!c.had_cs_meeting,
-        notes: c.notes || '',
-      });
+      setManualChecks(c.manual_checks || {});
     } catch (e) {
       setError(e.message);
     }
@@ -59,31 +37,32 @@ export default function CsCampaignDetail() {
 
   useEffect(() => { load(); }, [token]);
 
-  function toggleArrayValue(field, value) {
-    setForm(prev => ({
+  function toggleCheck(itemId) {
+    setManualChecks(prev => ({
       ...prev,
-      [field]: prev[field].includes(value)
-        ? prev[field].filter(v => v !== value)
-        : [...prev[field], value],
+      [itemId]: !prev[itemId],
     }));
+  }
+
+  function toggleCategory(catKey) {
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(catKey)) next.delete(catKey); else next.add(catKey);
+      return next;
+    });
   }
 
   async function handleSave(markReviewed = true) {
     try {
       setSaving(true);
       setError(null);
-      await endpoints.meSaveCampaign(token, {
-        features: form.features,
-        products: form.products,
-        studies_used: form.studies_used,
-        audiences_count: form.audiences_count === '' ? null : Number(form.audiences_count),
-        had_cs_meeting: form.had_cs_meeting,
-        notes: form.notes || null,
+      const result = await endpoints.meSaveCampaign(token, {
+        manual_checks: manualChecks,
         reviewed: markReviewed,
       });
       setSavedAt(new Date());
-      // Recarrega pra refletir status
-      await load();
+      // Atualiza breakdown com novo retorno
+      setCampaign(prev => prev ? { ...prev, breakdown: result.breakdown, reviewed: result.reviewed } : prev);
     } catch (e) {
       setError(`Erro ao salvar: ${e.message}`);
     } finally {
@@ -116,6 +95,10 @@ export default function CsCampaignDetail() {
     );
   }
 
+  // Re-calcula localmente: aplica manualChecks atual em cima dos earned automáticos
+  // (Para feedback imediato sem esperar o backend)
+  const breakdown = recomputeLocally(campaign.breakdown, manualChecks);
+
   return (
     <AppShell>
       <button className="back-link fade-up" onClick={() => navigate('/cs')}>
@@ -140,22 +123,33 @@ export default function CsCampaignDetail() {
         </div>
       </header>
 
-      {/* ── KPIs read-only ───────────────────────────────────────── */}
-      <section className="kpi-row">
-        <Card className="kpi kpi--hero">
-          <div className="kpi__label label">Investimento bruto</div>
-          <div className="kpi__value mono kpi__value--cyan">
-            {fmt.brl(campaign.bruto)}
+      {/* ── HERO: bônus total ─────────────────────────────────────── */}
+      <section className="bonus-hero fade-up">
+        <div className="bonus-hero__main">
+          <div className="bonus-hero__label">Bônus desta campanha</div>
+          <div className="bonus-hero__value mono">{fmt.brl(breakdown.total_brl)}</div>
+          <div className="bonus-hero__subtitle">
+            {(breakdown.total_pct * 100).toFixed(2)}% do líquido ({fmt.brl(campaign.liquido)})
           </div>
-          <div className="kpi__hero-breakdown">
-            <span className="mono">{fmt.brl(campaign.liquido)} líquido</span>
-            <span className="page-subtitle__sep">·</span>
-            <span>imposto {(campaign.tax_rate * 100).toFixed(2)}%</span>
+        </div>
+        <div className="bonus-hero__divider"></div>
+        <div className="bonus-hero__stats">
+          <div className="bonus-hero__stat">
+            <span className="label">Bruto da campanha</span>
+            <span className="mono">{fmt.brl(campaign.bruto)}</span>
           </div>
-        </Card>
+          <div className="bonus-hero__stat">
+            <span className="label">Imposto</span>
+            <span className="mono">{(campaign.tax_rate * 100).toFixed(2)}%</span>
+          </div>
+          <div className="bonus-hero__stat">
+            <span className="label">Líquido</span>
+            <span className="mono">{fmt.brl(campaign.liquido)}</span>
+          </div>
+        </div>
       </section>
 
-      {/* ── Read-only: dados do checklist ─────────────────────────── */}
+      {/* ── Dados read-only (do checklist) ──────────────────────────── */}
       <Card className="fade-up" style={{ '--i': 1, marginBottom: 'var(--space-4)' }}>
         <header className="card__header">
           <h3 className="card__title">Dados do checklist</h3>
@@ -163,31 +157,21 @@ export default function CsCampaignDetail() {
         </header>
 
         <div className="ro-grid">
-          {campaign.cp_name && (
-            <div className="ro-field">
-              <span className="label">Salesman</span>
-              <span>{campaign.cp_name}</span>
-            </div>
-          )}
-          {campaign.agency && (
-            <div className="ro-field">
-              <span className="label">Agência</span>
-              <span>{campaign.agency}</span>
-            </div>
-          )}
-          {campaign.industry && (
-            <div className="ro-field">
-              <span className="label">Setor</span>
-              <span>{campaign.industry}</span>
-            </div>
+          {campaign.cp_name && <RoField label="Salesman" value={campaign.cp_name} />}
+          {campaign.agency && <RoField label="Agência" value={campaign.agency} />}
+          {campaign.industry && <RoField label="Setor" value={campaign.industry} />}
+
+          {Array.isArray(campaign.products) && campaign.products.length > 0 && (
+            <RoTags label="Produtos" items={campaign.products} variant="cyan" />
           )}
           {Array.isArray(campaign.formats) && campaign.formats.length > 0 && (
-            <div className="ro-field ro-field--wide">
-              <span className="label">Formatos contratados</span>
-              <div className="ro-tags">
-                {campaign.formats.map(f => <Badge key={f} variant="neutral">{f}</Badge>)}
-              </div>
-            </div>
+            <RoTags label="Formatos" items={campaign.formats} />
+          )}
+          {Array.isArray(campaign.features) && campaign.features.length > 0 && (
+            <RoTags label={`Features (${campaign.features.length})`} items={campaign.features} variant="cyan" />
+          )}
+          {Array.isArray(campaign.studies_used) && campaign.studies_used.length > 0 && (
+            <RoTags label="Estudos usados" items={campaign.studies_used} />
           )}
           {campaign.audiences && (
             <div className="ro-field ro-field--wide">
@@ -198,154 +182,213 @@ export default function CsCampaignDetail() {
         </div>
       </Card>
 
-      {/* ── Form: double-check do CS ──────────────────────────────── */}
-      <Card className="fade-up" style={{ '--i': 2, marginBottom: 'var(--space-4)' }}>
-        <header className="card__header">
-          <h3 className="card__title">Double-check do CS</h3>
-          <p className="card__subtitle">
-            Confirme ou corrija os campos abaixo. Se já vieram preenchidos do checklist, só revise.
-          </p>
-        </header>
+      {/* ── Breakdown por categoria ──────────────────────────────── */}
+      <h2 className="section-title fade-up" style={{ marginBottom: 'var(--space-3)' }}>
+        Detalhamento do bônus
+      </h2>
 
-        <div className="form-grid">
-          {/* ── Produtos ── */}
-          <div className="form-field form-field--wide">
-            <label className="form-label">Produtos utilizados</label>
-            <p className="form-help">
-              {form.products.length === 0
-                ? 'Nenhum produto registrado — adicione clicando abaixo.'
-                : `${form.products.length} produto(s) registrado(s).`}
-            </p>
-            <div className="ro-tags">
-              {form.products.length === 0 ? (
-                <span className="form-empty">—</span>
-              ) : (
-                form.products.map(p => (
-                  <Badge key={p} variant="cyan">{p}</Badge>
-                ))
-              )}
-            </div>
-          </div>
+      {CATEGORY_ORDER.map(catKey => {
+        const cat = breakdown.by_category[catKey];
+        if (!cat) return null;
+        return (
+          <CategoryBlock
+            key={catKey}
+            catKey={catKey}
+            cat={cat}
+            expanded={expandedCategories.has(catKey)}
+            onToggleExpand={() => toggleCategory(catKey)}
+            manualChecks={manualChecks}
+            onCheck={toggleCheck}
+            metrics={campaign.metrics}
+            isABS={campaign.is_abs}
+          />
+        );
+      })}
 
-          {/* ── Features 3 tiers ── */}
-          <div className="form-field form-field--wide">
-            <label className="form-label">Features utilizadas</label>
-            <p className="form-help">Marque as features usadas nesta campanha (organizadas por tier).</p>
-
-            {['tier1', 'tier2', 'tier3'].map((tier, idx) => (
-              <div key={tier} className="features-tier">
-                <span className="features-tier__label">Tier {idx + 1}</span>
-                <div className="features-tier__list">
-                  {(features[tier] || []).map(f => (
-                    <label key={f} className={`feature-chip ${form.features.includes(f) ? 'feature-chip--on' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={form.features.includes(f)}
-                        onChange={() => toggleArrayValue('features', f)}
-                      />
-                      <span>{f}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* ── Audiences count ── */}
-          <div className="form-field">
-            <label className="form-label" htmlFor="audCount">Quantas audiências foram usadas?</label>
-            <input
-              id="audCount"
-              type="number"
-              min="0"
-              className="form-input"
-              value={form.audiences_count}
-              onChange={(e) => setForm({ ...form, audiences_count: e.target.value })}
-              placeholder="0"
-            />
-          </div>
-
-          {/* ── Reunião CS ── */}
-          <div className="form-field">
-            <label className="form-label">Houve reunião com cliente?</label>
-            <div className="toggle-row">
-              <button
-                type="button"
-                className={`toggle-btn ${!form.had_cs_meeting ? 'toggle-btn--active' : ''}`}
-                onClick={() => setForm({ ...form, had_cs_meeting: false })}
-              >
-                Não
-              </button>
-              <button
-                type="button"
-                className={`toggle-btn ${form.had_cs_meeting ? 'toggle-btn--active' : ''}`}
-                onClick={() => setForm({ ...form, had_cs_meeting: true })}
-              >
-                Sim
-              </button>
-            </div>
-          </div>
-
-          {/* ── Estudos ── */}
-          <div className="form-field form-field--wide">
-            <label className="form-label">Estudos usados</label>
-            <p className="form-help">
-              {studies.length === 0
-                ? 'Nenhum estudo cadastrado no catálogo.'
-                : 'Marque os estudos relevantes desta campanha.'}
-            </p>
-            <div className="features-tier__list">
-              {studies.map(s => (
-                <label
-                  key={s.id}
-                  className={`feature-chip ${form.studies_used.includes(s.id) ? 'feature-chip--on' : ''}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={form.studies_used.includes(s.id)}
-                    onChange={() => toggleArrayValue('studies_used', s.id)}
-                  />
-                  <span>{s.display_name}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* ── Observações ── */}
-          <div className="form-field form-field--wide">
-            <label className="form-label" htmlFor="notes">Observações</label>
-            <textarea
-              id="notes"
-              className="form-input form-textarea"
-              rows={3}
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              placeholder="Anotações livres sobre esta campanha…"
-            />
-          </div>
+      {error && (
+        <div className="form-error">
+          <AlertCircle size={14} /> {error}
         </div>
+      )}
 
-        {error && (
-          <div className="form-error">
-            <AlertCircle size={14} /> {error}
-          </div>
-        )}
-
-        {savedAt && (
-          <div className="form-success">
-            <CheckCircle2 size={14} /> Salvo às {savedAt.toLocaleTimeString('pt-BR')}
-          </div>
-        )}
-
-        <div className="form-actions">
-          <Button variant="ghost" onClick={() => handleSave(false)} disabled={saving}>
-            Salvar rascunho
-          </Button>
-          <Button variant="primary" icon={Save} onClick={() => handleSave(true)} loading={saving}>
-            {campaign.reviewed ? 'Atualizar revisão' : 'Confirmar revisão'}
-          </Button>
+      {savedAt && (
+        <div className="form-success">
+          <CheckCircle2 size={14} /> Salvo às {savedAt.toLocaleTimeString('pt-BR')}
         </div>
-      </Card>
+      )}
+
+      <div className="form-actions">
+        <Button variant="ghost" onClick={() => handleSave(false)} disabled={saving}>
+          Salvar rascunho
+        </Button>
+        <Button variant="primary" icon={Save} onClick={() => handleSave(true)} loading={saving}>
+          {campaign.reviewed ? 'Atualizar revisão' : 'Confirmar revisão'}
+        </Button>
+      </div>
     </AppShell>
   );
+}
+
+function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, metrics, isABS }) {
+  const earnedCount = cat.items.filter(i => isEffectivelyEarned(i, manualChecks)).length;
+
+  return (
+    <Card className="category-block fade-up" style={{ marginBottom: 'var(--space-3)' }}>
+      <button className="category-block__header" onClick={onToggleExpand}>
+        <div className="category-block__title">
+          {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+          <span>{cat.label}</span>
+          <Badge variant="neutral">{earnedCount}/{cat.items.length}</Badge>
+        </div>
+        <div className="category-block__total">
+          <span className="mono">{(cat.subtotal_pct * 100).toFixed(2)}%</span>
+          <span className="mono category-block__brl">{fmt.brl(cat.subtotal_brl)}</span>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="category-block__items">
+          {cat.items.map(item => (
+            <ItemRow
+              key={item.id}
+              item={item}
+              manualChecks={manualChecks}
+              onCheck={onCheck}
+              metrics={metrics}
+              isABS={isABS}
+            />
+          ))}
+          {cat.notes && (
+            <div className="category-block__notes">
+              <Info size={12} /> {cat.notes}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function ItemRow({ item, manualChecks, onCheck, metrics, isABS }) {
+  const earned = isEffectivelyEarned(item, manualChecks);
+  const isManual = item.source === 'manual';
+  const isAuto = item.source === 'auto';
+  const isMetric = item.source === 'metrics';
+
+  // Pra items de otimização: explica regra
+  const metricInfo = isMetric ? formatMetricInfo(item, metrics, isABS) : null;
+
+  return (
+    <div className={`item-row ${earned ? 'item-row--earned' : ''}`}>
+      <div className="item-row__check">
+        {isManual ? (
+          <input
+            type="checkbox"
+            checked={!!manualChecks[item.id]}
+            onChange={() => onCheck(item.id)}
+            className="item-row__checkbox"
+          />
+        ) : earned ? (
+          <CheckCircle2 size={18} className="item-row__icon item-row__icon--earned" />
+        ) : (
+          <div className="item-row__icon item-row__icon--empty" />
+        )}
+      </div>
+
+      <div className="item-row__content">
+        <div className="item-row__label">
+          {item.label}
+          {isAuto && <span className="item-row__badge item-row__badge--auto"><Zap size={10} /> Auto</span>}
+          {isMetric && <span className="item-row__badge item-row__badge--metric"><Sparkles size={10} /> Métrica</span>}
+        </div>
+        {item.help && <div className="item-row__help">{item.help}</div>}
+        {metricInfo && <div className="item-row__help item-row__help--metric">{metricInfo}</div>}
+      </div>
+
+      <div className="item-row__values">
+        <span className="mono item-row__pct">{(item.pct * 100).toFixed(2)}%</span>
+        {earned && <span className="mono item-row__brl">{fmt.brl(item.value_brl)}</span>}
+      </div>
+    </div>
+  );
+}
+
+function RoField({ label, value }) {
+  return (
+    <div className="ro-field">
+      <span className="label">{label}</span>
+      <span>{value}</span>
+    </div>
+  );
+}
+
+function RoTags({ label, items, variant = 'neutral' }) {
+  return (
+    <div className="ro-field ro-field--wide">
+      <span className="label">{label}</span>
+      <div className="ro-tags">
+        {items.map((it, idx) => <Badge key={idx} variant={variant}>{it}</Badge>)}
+      </div>
+    </div>
+  );
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────
+
+function isEffectivelyEarned(item, manualChecks) {
+  // Para items manuais, depende do checkbox local
+  if (item.source === 'manual') return !!manualChecks[item.id];
+  // Para auto e metrics, vem do server (campo earned)
+  return !!item.earned;
+}
+
+function formatMetricInfo(item, metrics, isABS) {
+  if (!metrics) {
+    return 'Aguardando dados de performance (calcula automaticamente após campanha fechar).';
+  }
+  const over = Number(metrics.over_percent) || 0;
+  const ecpm = Number(metrics.ecpm) || 0;
+  const ctr = (Number(metrics.ctr) * 100).toFixed(2);
+
+  // Status emoji por critério
+  const overOK = over <= 25 ? '✓' : '✗';
+  const ecpmLimit = isABS ? 1.50 : 0.70;
+  const ecpmOK = ecpm > 0 && ecpm <= ecpmLimit ? '✓' : '✗';
+  const ctrLimit = isABS ? 0.5 : 0.7;
+  const ctrOK = Number(ctr) >= ctrLimit ? '✓' : '✗';
+
+  return `Over: ${over.toFixed(1)}% ${overOK} (limite 25%) · eCPM: R$ ${ecpm.toFixed(2)} ${ecpmOK} (limite R$ ${ecpmLimit.toFixed(2)}) · CTR: ${ctr}% ${ctrOK} (mín ${ctrLimit}%)`;
+}
+
+// Recalcula localmente o subtotal pra dar feedback imediato sem chamar backend.
+// Recomputa só o que muda com manual checks; o restante mantém do server.
+function recomputeLocally(serverBreakdown, manualChecks) {
+  if (!serverBreakdown) return null;
+
+  const NET_FACTOR = 1 - (serverBreakdown.tax_rate || 0.1653);
+  const liquido = serverBreakdown.liquido;
+  let totalPct = 0;
+
+  const newByCategory = {};
+  for (const [catKey, cat] of Object.entries(serverBreakdown.by_category)) {
+    const newItems = cat.items.map(item => {
+      const earned = isEffectivelyEarned(item, manualChecks);
+      return {
+        ...item,
+        earned,
+        value_brl: earned ? liquido * item.pct : 0,
+      };
+    });
+    const subtotalPct = newItems.filter(i => i.earned).reduce((s, i) => s + i.pct, 0);
+    const subtotalBrl = newItems.filter(i => i.earned).reduce((s, i) => s + i.value_brl, 0);
+    newByCategory[catKey] = { ...cat, items: newItems, subtotal_pct: subtotalPct, subtotal_brl: subtotalBrl };
+    totalPct += subtotalPct;
+  }
+
+  return {
+    ...serverBreakdown,
+    by_category: newByCategory,
+    total_pct: totalPct,
+    total_brl: liquido * totalPct,
+  };
 }

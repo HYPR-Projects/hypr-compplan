@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, Clock, AlertCircle, Search, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Clock, Search, ArrowRight } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card, KpiCard } from '../../components/ui/Card.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
@@ -84,23 +84,19 @@ export default function CsDashboard() {
 
       <section className="kpi-row">
         <Card className="kpi kpi--hero stagger" style={{ '--i': 0 }}>
-          <div className="kpi__label label">Investimento bruto — {quarter}</div>
+          <div className="kpi__label label">Bônus total acumulado — {quarter}</div>
           <div className="kpi__value mono kpi__value--cyan">
-            {fmt.brlCompact(kpis.bruto_total)}
+            {fmt.brl(kpis.bonus_total || 0)}
           </div>
           <div className="kpi__hero-breakdown">
-            <span className="mono">{fmt.brlCompact(kpis.liquido_total)} líquido</span>
+            <span>{fmt.brlCompact(kpis.liquido_total)} líquido investido</span>
             <span className="page-subtitle__sep">·</span>
-            <span>imposto {(kpis.tax_rate * 100).toFixed(2)}%</span>
+            <span>{fmt.brlCompact(kpis.bruto_total)} bruto</span>
           </div>
         </Card>
 
         <KpiCard label="Total campanhas" value={kpis.n_camp} />
-        <KpiCard
-          label="Revisadas"
-          value={kpis.n_reviewed}
-          status="green"
-        />
+        <KpiCard label="Revisadas" value={kpis.n_reviewed} status="green" />
         <KpiCard
           label="Pendentes"
           value={kpis.n_pending}
@@ -183,8 +179,10 @@ function CampaignRow({ campaign, onClick, i }) {
       </div>
 
       <div className="cs-campaign-row__num">
-        <span className="label">Líquido</span>
-        <span className="mono cs-campaign-row__num--cyan">{fmt.brl(campaign.liquido)}</span>
+        <span className="label">Bônus</span>
+        <span className="mono cs-campaign-row__num--cyan">
+          {fmt.brl(campaign.bonus_brl || 0)}
+        </span>
       </div>
 
       <div className="cs-campaign-row__cta">
