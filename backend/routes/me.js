@@ -57,20 +57,34 @@ router.get('/studies-catalog', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────
 async function fetchPerformanceMetrics(shortToken) {
   try {
-    // 1. Busca métricas brutas da campanha em prod_prod_hypr_reporthub (US multi-region)
+    // 1. Busca métricas brutas da campanha em prod_assets.unified_daily_performance_metrics (US).
+    //
+    // total_cost = custo REAL de plataforma (vs effective_total_cost de campaign_results,
+    // que é o cobrado do cliente). Usar total_cost dá o eCPM real.
+    //
+    // Excluímos lines com 'survey', 'controle' ou 'exposto' no nome — não fazem parte
+    // do cálculo de mídia/performance.
     const [perfRow] = await query(
       `SELECT
          short_token,
-         SUM(impressions)                                                AS total_impressions,
-         SUM(viewable_impressions)                                       AS total_viewable,
-         SUM(clicks)                                                     AS total_clicks,
-         SUM(effective_total_cost)                                       AS total_cost,
-         SUM(IF(LOWER(media_type) = 'display', viewable_impressions, 0)) AS display_viewable
-       FROM \`site-hypr.prod_prod_hypr_reporthub.campaign_results\`
+         -- Display (relevante pras regras de Otimização)
+         SUM(IF(LOWER(media_type) = 'display', impressions, 0))           AS display_impressions,
+         SUM(IF(LOWER(media_type) = 'display', viewable_impressions, 0))  AS display_viewable,
+         SUM(IF(LOWER(media_type) = 'display', clicks, 0))                AS display_clicks,
+         SUM(IF(LOWER(media_type) = 'display', total_cost, 0))            AS display_cost,
+         -- Totais (display + video) pra contexto
+         SUM(impressions)            AS total_impressions,
+         SUM(viewable_impressions)   AS total_viewable,
+         SUM(clicks)                 AS total_clicks,
+         SUM(total_cost)             AS total_cost
+       FROM \`site-hypr.prod_assets.unified_daily_performance_metrics\`
        WHERE short_token = @t
+         AND LOWER(IFNULL(line_name, '')) NOT LIKE '%survey%'
+         AND LOWER(IFNULL(line_name, '')) NOT LIKE '%controle%'
+         AND LOWER(IFNULL(line_name, '')) NOT LIKE '%exposto%'
        GROUP BY short_token`,
       { t: shortToken },
-      'US' // ← location correta pra esse dataset
+      'US'
     );
 
     if (!perfRow) return null;
@@ -85,24 +99,31 @@ async function fetchPerformanceMetrics(shortToken) {
       { t: shortToken }
     );
 
-    const displayContracted = Number(contractedRow?.display_contracted) || 0;
-    const displayViewable = Number(perfRow.display_viewable) || 0;
-    const totalImpressions = Number(perfRow.total_impressions) || 0;
-    const totalViewable = Number(perfRow.total_viewable) || 0;
-    const totalClicks = Number(perfRow.total_clicks) || 0;
-    const totalCost = Number(perfRow.total_cost) || 0;
+    const displayContracted  = Number(contractedRow?.display_contracted) || 0;
+    const displayImpressions = Number(perfRow.display_impressions) || 0;
+    const displayViewable    = Number(perfRow.display_viewable) || 0;
+    const displayClicks      = Number(perfRow.display_clicks) || 0;
+    const displayCost        = Number(perfRow.display_cost) || 0;
 
     return {
-      ecpm: totalImpressions > 0 ? (totalCost / totalImpressions) * 1000 : 0,
-      ctr: totalViewable > 0 ? totalClicks / totalViewable : 0,
+      // Métricas que entram nas regras (todas baseadas em DISPLAY)
+      ecpm: displayImpressions > 0 ? (displayCost / displayImpressions) * 1000 : 0,
+      ctr: displayViewable > 0 ? displayClicks / displayViewable : 0,
       over_percent: displayContracted > 0 ? ((displayViewable / displayContracted) - 1) * 100 : 0,
-      total_impressions: totalImpressions,
-      total_viewable: totalViewable,
-      total_clicks: totalClicks,
-      total_cost: totalCost,
+
+      // Detalhes pra UI
+      display_impressions: displayImpressions,
       display_viewable: displayViewable,
+      display_clicks: displayClicks,
+      display_cost: displayCost,
       display_contracted: displayContracted,
-      // creative_fee fica null por enquanto — vamos popular de outra fonte depois
+
+      // Totais (display + video) — só pra contexto
+      total_impressions: Number(perfRow.total_impressions) || 0,
+      total_viewable: Number(perfRow.total_viewable) || 0,
+      total_clicks: Number(perfRow.total_clicks) || 0,
+      total_cost: Number(perfRow.total_cost) || 0,
+
       creative_fee_estimate: null,
     };
   } catch (err) {
@@ -313,7 +334,12 @@ router.get('/campaign/:token', async (req, res) => {
       cp_name: campaign.cp_name,
       agency: campaign.agency,
       industry: campaign.industry,
-      is_abs: !!campaign.is_abs,
+      // is_abs efetivo: prioriza override do CS, depois fallback pro checklist
+      is_abs: Object.prototype.hasOwnProperty.call(manualChecks, '__is_abs')
+        ? !!manualChecks.__is_abs
+        : !!campaign.is_abs,
+      is_abs_overridden: Object.prototype.hasOwnProperty.call(manualChecks, '__is_abs'),
+      is_abs_default: !!campaign.is_abs,
       cs_email: campaign.cs_email,
       cs_name: campaign.cs_name,
       start_date: campaign.start_date?.value || campaign.start_date,

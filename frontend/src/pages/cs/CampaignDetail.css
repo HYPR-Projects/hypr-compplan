@@ -450,3 +450,69 @@
   text-decoration: line-through;
   color: var(--text-tertiary);
 }
+
+/* ── Toggle Com ABS / Sem ABS ───────────────────────────────────── */
+
+.abs-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(0, 212, 255, 0.04);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
+}
+
+.abs-toggle__label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.abs-toggle__buttons {
+  display: flex;
+  gap: 0;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.abs-toggle__btn {
+  padding: 6px 14px;
+  background: transparent;
+  border: none;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+  font-family: inherit;
+  font-weight: 500;
+}
+
+.abs-toggle__btn:hover {
+  color: var(--text-primary);
+}
+
+.abs-toggle__btn--active {
+  background: var(--accent-cyan);
+  color: var(--bg-primary, #000);
+}
+
+.abs-toggle__btn--active:hover {
+  color: var(--bg-primary, #000);
+}
+
+.abs-toggle__hint {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 600px) {
+  .abs-toggle__hint {
+    margin-left: 0;
+    width: 100%;
+  }
+}

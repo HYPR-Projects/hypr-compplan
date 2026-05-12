@@ -100,9 +100,14 @@ export default function CsCampaignDetail() {
     );
   }
 
+  // is_abs efetivo: prioriza override do CS
+  const effectiveIsAbs = Object.prototype.hasOwnProperty.call(manualChecks, '__is_abs')
+    ? !!manualChecks.__is_abs
+    : !!campaign.is_abs;
+
   // Re-calcula localmente: aplica manualChecks atual em cima dos earned automáticos
-  // (Para feedback imediato sem esperar o backend)
-  const breakdown = recomputeLocally(campaign.breakdown, manualChecks);
+  // E também recalcula Otimização quando is_abs muda (Para feedback imediato sem esperar o backend)
+  const breakdown = recomputeLocally(campaign.breakdown, manualChecks, campaign.metrics, effectiveIsAbs);
 
   return (
     <AppShell>
@@ -223,7 +228,8 @@ export default function CsCampaignDetail() {
             manualChecks={manualChecks}
             onCheck={toggleCheck}
             metrics={campaign.metrics}
-            isABS={campaign.is_abs}
+            isABS={effectiveIsAbs}
+            onAbsChange={(newAbs) => setManualChecks(prev => ({ ...prev, __is_abs: newAbs }))}
           />
         );
       })}
@@ -252,8 +258,9 @@ export default function CsCampaignDetail() {
   );
 }
 
-function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, metrics, isABS }) {
+function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, metrics, isABS, onAbsChange }) {
   const earnedCount = cat.items.filter(i => isEffectivelyEarned(i, manualChecks)).length;
+  const isOptimization = catKey === 'optimization';
 
   return (
     <Card className="category-block fade-up" style={{ marginBottom: 'var(--space-3)' }}>
@@ -277,6 +284,34 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
             <div className="category-block__invalidation">
               <AlertCircle size={16} />
               <span>{cat.invalidation_reason}</span>
+            </div>
+          )}
+          {isOptimization && onAbsChange && (
+            <div className="abs-toggle">
+              <div className="abs-toggle__label">
+                <span>Esta campanha é</span>
+              </div>
+              <div className="abs-toggle__buttons">
+                <button
+                  type="button"
+                  className={`abs-toggle__btn ${isABS ? 'abs-toggle__btn--active' : ''}`}
+                  onClick={() => onAbsChange(true)}
+                >
+                  Com ABS
+                </button>
+                <button
+                  type="button"
+                  className={`abs-toggle__btn ${!isABS ? 'abs-toggle__btn--active' : ''}`}
+                  onClick={() => onAbsChange(false)}
+                >
+                  Sem ABS
+                </button>
+              </div>
+              <div className="abs-toggle__hint">
+                {isABS
+                  ? 'Limites: eCPM ≤ R$ 1,50 · CTR ≥ 0,5%'
+                  : 'Limites: eCPM ≤ R$ 0,70 · CTR ≥ 0,7%'}
+              </div>
             </div>
           )}
           {cat.items.map(item => (
@@ -423,18 +458,29 @@ function formatMetricInfo(item, metrics, isABS) {
 }
 
 // Recalcula localmente o subtotal pra dar feedback imediato sem chamar backend.
-// Recomputa só o que muda com manual checks; o restante mantém do server.
-function recomputeLocally(serverBreakdown, manualChecks) {
+// Recomputa items manuais, semi_auto, E métricas (quando is_abs muda).
+function recomputeLocally(serverBreakdown, manualChecks, metrics, effectiveIsAbs) {
   if (!serverBreakdown) return null;
 
   const liquido = serverBreakdown.liquido;
   let totalPct = 0;
 
+  // Recalcula items de Otimização baseado no is_abs efetivo
+  const optMetricEarned = computeOptimizationEarned(metrics, effectiveIsAbs);
+
   const newByCategory = {};
   for (const [catKey, cat] of Object.entries(serverBreakdown.by_category)) {
     const invalidated = !!cat.invalidated;
     const newItems = cat.items.map(item => {
-      const wouldEarn = isEffectivelyEarned(item, manualChecks);
+      let wouldEarn;
+
+      if (item.source === 'metrics') {
+        // Otimização: usa o cálculo local baseado no is_abs atual
+        wouldEarn = optMetricEarned.has(item.id);
+      } else {
+        wouldEarn = isEffectivelyEarned(item, manualChecks);
+      }
+
       const effectivelyEarned = wouldEarn && !invalidated;
       return {
         ...item,
@@ -456,4 +502,25 @@ function recomputeLocally(serverBreakdown, manualChecks) {
     total_pct: totalPct,
     total_brl: liquido * totalPct,
   };
+}
+
+// Espelho local da função do backend pra Otimizações
+function computeOptimizationEarned(metrics, isABS) {
+  const earned = new Set();
+  if (!metrics) return earned;
+
+  const over = Number(metrics.over_percent) || 0;
+  const ecpm = Number(metrics.ecpm) || 0;
+  const ctr = Number(metrics.ctr) || 0;
+
+  if (isABS) {
+    if (over <= 25 && ecpm > 0 && ecpm <= 1.50 && ctr >= 0.005) {
+      earned.add('opt_with_abs');
+    }
+  } else {
+    if (over <= 25 && ecpm > 0 && ecpm <= 0.70 && ctr >= 0.007) {
+      earned.add('opt_without_abs');
+    }
+  }
+  return earned;
 }

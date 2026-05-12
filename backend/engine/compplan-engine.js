@@ -80,11 +80,14 @@ function inferAutoItems(campaign) {
 /**
  * Items dependentes de métricas (Otimizações).
  */
-function inferMetricItems(campaign, metrics) {
+function inferMetricItems(campaign, metrics, manualChecks = {}) {
   const earned = new Set();
   if (!metrics) return earned;
 
-  const isABS = !!campaign.is_abs;
+  // is_abs: prioriza override manual do CS. Se não, fallback pro campo do checklist.
+  const hasOverride = Object.prototype.hasOwnProperty.call(manualChecks, '__is_abs');
+  const isABS = hasOverride ? !!manualChecks.__is_abs : !!campaign.is_abs;
+
   const over = Number(metrics.over_percent) || 0;
   const ecpm = Number(metrics.ecpm) || 0;
   const ctr = Number(metrics.ctr) || 0;
@@ -167,7 +170,7 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null) {
   const inferred = inferAutoItems(campaign);
 
   // 2. Items de métricas (Otimizações)
-  const metricEarned = inferMetricItems(campaign, metrics);
+  const metricEarned = inferMetricItems(campaign, metrics, manualChecks);
 
   // 3. Constrói earned final por item:
   //    - 'auto':      sempre o inferido
