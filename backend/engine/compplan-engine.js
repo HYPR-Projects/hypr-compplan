@@ -30,20 +30,8 @@ function inferAutoItems(campaign) {
   const features = Array.isArray(campaign.features) ? campaign.features : [];
   const products = Array.isArray(campaign.products) ? campaign.products : [];
 
-  // Pré Campanha — audiences
-  if (campaign.audiences && String(campaign.audiences).trim().length > 0) {
-    earned.add('pre_audiences');
-  }
-
-  // Pré Campanha — features (Feature 1/2/3 baseado na CONTAGEM total)
-  const totalFeatures = features.length;
-  if (totalFeatures >= 1) earned.add('pre_feat_1');
-  if (totalFeatures >= 2) earned.add('pre_feat_2');
-  if (totalFeatures >= 3) earned.add('pre_feat_3');
-
-  // Pré Campanha — RMN Físico em features
-  const hasRmnFisicoFeature = features.some(f => /rmn\s*f[ií]sico|rmnf/i.test(f));
-  if (hasRmnFisicoFeature) earned.add('pre_feat_rmnf');
+  // Pré Campanha — TUDO manual agora (CS marca o que fez).
+  // (Removidos inferências automáticas de audiences e features.)
 
   // Setup — O2O / OOH (semi_auto)
   const hasO2O = products.some(p => /o2o|ooh/i.test(p))
@@ -74,7 +62,7 @@ function inferAutoItems(campaign) {
   if (nT2 >= 2) earned.add('setup_tier2_2');
   if (nT3 >= 1) earned.add('setup_tier3_1');
 
-  // Extras — Estudos (auto)
+  // Extras — Estudos (auto — vem do studies_used)
   const studies = Array.isArray(campaign.studies_used) ? campaign.studies_used : [];
   if (studies.length > 0) earned.add('ex_estudos');
 
