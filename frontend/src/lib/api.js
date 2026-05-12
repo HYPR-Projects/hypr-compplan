@@ -44,6 +44,8 @@ async function request(method, path, body) {
 
   const opts = { method, headers };
   if (body != null) opts.body = JSON.stringify(body);
+  // Anti-cache: força bypass do 304 do browser pra GETs (especialmente após mutations)
+  if (method === 'GET') opts.cache = 'no-store';
 
   let res;
   try {
