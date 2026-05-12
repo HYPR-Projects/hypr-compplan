@@ -213,10 +213,110 @@ router.get('/dashboard/:q', async (req, res) => {
       { cs: csEmail, s: startDate, e: endDate }
     );
 
-    // Pra cada campanha, calcula bônus (sem métricas/manual aqui pra performance)
+    // Pra cada campanha, busca manual_checks + métricas em batch pra calcular bônus completo
+    const tokens = campaigns.map(c => c.short_token);
+    let manualChecksByToken = {};
+    let metricsByToken = {};
+
+    if (tokens.length > 0) {
+      // Batch 1: manual_checks de overrides + assignments
+      try {
+        const [overrideRows, legacyRows] = await Promise.all([
+          query(
+            `SELECT short_token, manual_checks
+             FROM ${tableRef('commplan_command_overrides')}
+             WHERE short_token IN UNNEST(@toks)`,
+            { toks: tokens }
+          ),
+          query(
+            `SELECT short_token, manual_checks
+             FROM ${tableRef('commplan_legacy_assignments')}
+             WHERE short_token IN UNNEST(@toks)`,
+            { toks: tokens }
+          ),
+        ]);
+        for (const r of overrideRows) {
+          if (r.manual_checks) {
+            try { manualChecksByToken[r.short_token] = JSON.parse(r.manual_checks); }
+            catch (_) { /* ignore */ }
+          }
+        }
+        for (const r of legacyRows) {
+          if (r.manual_checks) {
+            try { manualChecksByToken[r.short_token] = JSON.parse(r.manual_checks); }
+            catch (_) { /* ignore */ }
+          }
+        }
+      } catch (e) {
+        console.warn('batch manual_checks:', e.message);
+      }
+
+      // Batch 2: métricas (precisa do contratado também, faz JOIN)
+      try {
+        const perfRows = await query(
+          `WITH agg AS (
+             SELECT
+               short_token,
+               SUM(IF(LOWER(media_type) = 'display', impressions, 0))           AS display_imps,
+               SUM(IF(LOWER(media_type) = 'display', viewable_impressions, 0))  AS display_viewable,
+               SUM(IF(LOWER(media_type) = 'display', clicks, 0))                AS display_clicks,
+               SUM(IF(LOWER(media_type) = 'display', total_cost, 0))            AS display_cost
+             FROM \`site-hypr.prod_assets.unified_daily_performance_metrics\`
+             WHERE short_token IN UNNEST(@toks)
+               AND LOWER(IFNULL(line_name, '')) NOT LIKE '%survey%'
+               AND LOWER(IFNULL(line_name, '')) NOT LIKE '%controle%'
+               AND LOWER(IFNULL(line_name, '')) NOT LIKE '%exposto%'
+             GROUP BY short_token
+           )
+           SELECT * FROM agg`,
+          { toks: tokens },
+          'US'
+        );
+
+        const contractedRows = await query(
+          `SELECT short_token,
+             IFNULL(o2o_display_impressions, 0)
+           + IFNULL(bonus_o2o_display_impressions, 0)
+           + IFNULL(ooh_display_impressions, 0)
+           + IFNULL(bonus_ooh_display_impressions, 0) AS display_contracted
+           FROM ${tableRef('commplan_checklists')}
+           WHERE short_token IN UNNEST(@toks)`,
+          { toks: tokens }
+        );
+
+        const contractedMap = {};
+        for (const r of contractedRows) contractedMap[r.short_token] = Number(r.display_contracted) || 0;
+
+        for (const r of perfRows) {
+          const displayContracted = contractedMap[r.short_token] || 0;
+          const displayImps = Number(r.display_imps) || 0;
+          const displayViewable = Number(r.display_viewable) || 0;
+          const displayClicks = Number(r.display_clicks) || 0;
+          const displayCost = Number(r.display_cost) || 0;
+
+          metricsByToken[r.short_token] = {
+            ecpm: displayImps > 0 ? (displayCost / displayImps) * 1000 : 0,
+            ctr: displayViewable > 0 ? displayClicks / displayViewable : 0,
+            over_percent: displayContracted > 0 ? ((displayViewable / displayContracted) - 1) * 100 : 0,
+            display_impressions: displayImps,
+            display_viewable: displayViewable,
+            display_clicks: displayClicks,
+            display_cost: displayCost,
+            display_contracted: displayContracted,
+            creative_fee_estimate: null,
+          };
+        }
+      } catch (e) {
+        console.warn('batch metrics:', e.message);
+      }
+    }
+
+    // Agora calcula bônus de cada campanha com TODOS os dados
     let totalBonusBrl = 0;
     const items = campaigns.map(c => {
-      const breakdown = computeBonus(c, {}, null);
+      const mc = manualChecksByToken[c.short_token] || {};
+      const metrics = metricsByToken[c.short_token] || null;
+      const breakdown = computeBonus(c, mc, metrics);
       totalBonusBrl += breakdown.total_brl;
       return {
         short_token: c.short_token,
