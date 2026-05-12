@@ -404,8 +404,21 @@ router.put('/campaign/:token', async (req, res) => {
       ? body.manual_checks
       : {};
     const manualChecksJson = JSON.stringify(manualChecks);
-    const notes = body.notes || null;
+    const notes = body.notes || '';
     const reviewed = body.reviewed !== false;
+
+    // DEBUG
+    console.log('PUT /campaign params:', {
+      token,
+      csEmail,
+      byEmail,
+      mc_type: typeof manualChecksJson,
+      mc_len: manualChecksJson.length,
+      notes_type: typeof notes,
+      notes_len: notes.length,
+      reviewed_type: typeof reviewed,
+      reviewed,
+    });
 
     if (campaign.is_legacy) {
       // Legacy: salva em commplan_legacy_assignments (campo manual_checks JSON)
