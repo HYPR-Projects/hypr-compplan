@@ -847,7 +847,7 @@ function ReplicateModal({ token, opts, campaign, onClose, onSuccess }) {
   }
 
   return (
-    <Modal title={`Replicar checkup — ${campaign.client_name}`} onClose={onClose}>
+    <Modal open={true} title={`Replicar checkup — ${campaign.client_name}`} onClose={onClose}>
       <div className="form-stack">
         <Card variant="info" style={{ padding: 'var(--space-3)' }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>

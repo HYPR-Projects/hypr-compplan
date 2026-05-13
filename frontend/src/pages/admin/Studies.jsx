@@ -185,7 +185,7 @@ function StudyModal({ study, onClose, onSave }) {
   }
 
   return (
-    <Modal title={isEdit ? `Editar: ${study.display_name}` : 'Cadastrar estudo'} onClose={onClose}>
+    <Modal open={true} title={isEdit ? `Editar: ${study.display_name}` : 'Cadastrar estudo'} onClose={onClose}>
       <div className="form-stack">
         {!isEdit && (
           <div>

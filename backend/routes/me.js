@@ -158,9 +158,9 @@ function resolveTargetCs(req) {
   const asParam = (req.query?.as || '').toLowerCase().trim();
 
   if (isAdmin && asParam) {
-    return { csEmail: asParam, impersonating: true, byEmail: myEmail };
+    return { csEmail: asParam, impersonating: true, byEmail: myEmail, isAdmin };
   }
-  return { csEmail: myEmail, impersonating: false, byEmail: myEmail };
+  return { csEmail: myEmail, impersonating: false, byEmail: myEmail, isAdmin };
 }
 
 // ─────────────────────────────────────────────────────────────────────

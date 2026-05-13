@@ -136,7 +136,7 @@ export default function OverExceptionsPage() {
       )}
 
       {toDelete && (
-        <Modal
+        <Modal open={true}
           title="Remover exceção?"
           onClose={() => setToDelete(null)}
         >
@@ -178,7 +178,7 @@ function AddModal({ onClose, onSave }) {
   }
 
   return (
-    <Modal title="Adicionar exceção de OVER" onClose={onClose}>
+    <Modal open={true} title="Adicionar exceção de OVER" onClose={onClose}>
       <div className="form-stack">
         <div>
           <label className="form-label">
