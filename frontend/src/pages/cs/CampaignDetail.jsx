@@ -636,6 +636,46 @@ function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS
           </div>
         )}
 
+        {item.detected_features && item.detected_features.length > 0 && (
+          <div className="item-row__detected-features">
+            <Sparkles size={12} />
+            <span>
+              <strong>Detectadas:</strong>{' '}
+              {item.detected_features.map((f, idx) => (
+                <span key={idx} className="item-row__feature-chip">{f}</span>
+              ))}
+            </span>
+          </div>
+        )}
+
+        {item.tier_catalog && (
+          <details className="item-row__tier-catalog">
+            <summary>
+              <Info size={11} /> Ver features que contam pra esse bônus
+            </summary>
+            <div className="item-row__tier-catalog-content">
+              <div className="item-row__tier-group">
+                <strong className="item-row__tier-label tier1">Tier 1:</strong>
+                {item.tier_catalog.tier1.map((f, idx) => (
+                  <span key={idx} className="item-row__feature-chip">{f}</span>
+                ))}
+              </div>
+              <div className="item-row__tier-group">
+                <strong className="item-row__tier-label tier2">Tier 2:</strong>
+                {item.tier_catalog.tier2.map((f, idx) => (
+                  <span key={idx} className="item-row__feature-chip">{f}</span>
+                ))}
+              </div>
+              <div className="item-row__tier-group">
+                <strong className="item-row__tier-label tier3">Tier 3:</strong>
+                {item.tier_catalog.tier3.map((f, idx) => (
+                  <span key={idx} className="item-row__feature-chip">{f}</span>
+                ))}
+              </div>
+            </div>
+          </details>
+        )}
+
         {item.study_goes_to_other && item.studies_info && item.studies_info.length > 0 && (
           <div className="item-row__pre-assigned-note">
             <Info size={12} /> Bônus deste estudo vai pro autor, não pra você

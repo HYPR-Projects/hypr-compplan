@@ -16,7 +16,7 @@
  *     - Under (entregou menos que contratado)
  */
 
-import { COMPPLAN_CATALOG, getFeatureTier } from './compplan-catalog.js';
+import { COMPPLAN_CATALOG, getFeatureTier, FEATURE_TIERS } from './compplan-catalog.js';
 
 const TAX_RATE = 0.1653;
 const NET_FACTOR = 1 - TAX_RATE;
@@ -56,19 +56,27 @@ function inferAutoItems(campaign) {
   if (hasRmnFis) earned.add('setup_rmn_fisico');
 
   // Setup — tiers de features (semi_auto)
-  let nT1 = 0, nT2 = 0, nT3 = 0;
+  // Coleta features por tier pra UI mostrar quais foram detectadas
+  const featuresByTier = { tier1: [], tier2: [], tier3: [], unknown: [] };
   for (const f of features) {
     const tier = getFeatureTier(f);
-    if (tier === 'tier1') nT1++;
-    else if (tier === 'tier2') nT2++;
-    else if (tier === 'tier3') nT3++;
+    if (tier === 'tier1') featuresByTier.tier1.push(f);
+    else if (tier === 'tier2') featuresByTier.tier2.push(f);
+    else if (tier === 'tier3') featuresByTier.tier3.push(f);
+    else if (f) featuresByTier.unknown.push(f);
   }
+  const nT1 = featuresByTier.tier1.length;
+  const nT2 = featuresByTier.tier2.length;
+  const nT3 = featuresByTier.tier3.length;
   if (nT1 >= 1) earned.add('setup_tier1_1');
   if (nT1 >= 2) earned.add('setup_tier1_2');
   if (nT1 >= 3) earned.add('setup_tier1_3');
   if (nT2 >= 1) earned.add('setup_tier2_1');
   if (nT2 >= 2) earned.add('setup_tier2_2');
   if (nT3 >= 1) earned.add('setup_tier3_1');
+
+  // Anexa pra ser usado lá fora (return value-like)
+  earned.__featuresByTier = featuresByTier;
 
   // Extras — Estudos: marca ex_estudos como earned se há algum estudo usado.
   // O bônus VAI ser zero pro CS dono (ele NÃO recebe — vai pro autor via orchestrator),
@@ -201,6 +209,8 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
 
   // 1. Items inferidos do checklist (auto + semi_auto)
   const inferred = inferAutoItems(campaign);
+  // Captura features por tier (anexado pelo inferAutoItems)
+  const featuresByTier = inferred.__featuresByTier || { tier1: [], tier2: [], tier3: [], unknown: [] };
 
   // 2. Items de métricas (Otimizações)
   const metricEarned = inferMetricItems(campaign, metrics, manualChecks);
@@ -295,6 +305,30 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
       const studiesAttachment = (isStudyItem && studiesInfo.length > 0)
         ? studiesInfo
         : null;
+
+      // Setup tier items: anexa as features detectadas dessa campanha
+      let detectedFeatures = null;
+      if (item.id.startsWith('setup_tier')) {
+        const tierKey = item.id.includes('tier1') ? 'tier1'
+                      : item.id.includes('tier2') ? 'tier2'
+                      : item.id.includes('tier3') ? 'tier3' : null;
+        if (tierKey && featuresByTier[tierKey] && featuresByTier[tierKey].length > 0) {
+          detectedFeatures = featuresByTier[tierKey];
+        }
+      }
+
+      // Pre Campanha pre_feat_*: anexa o catálogo completo de features do tier
+      // pre_feat_rmnf não tem tier específico (só RMNF, regra à parte)
+      // pre_feat_1/2/3 mostram features de TODOS os tiers (CS marca se sugeriu)
+      let tierCatalog = null;
+      if (item.id === 'pre_feat_1' || item.id === 'pre_feat_2' || item.id === 'pre_feat_3') {
+        tierCatalog = {
+          tier1: Array.from(FEATURE_TIERS.tier1),
+          tier2: Array.from(FEATURE_TIERS.tier2),
+          tier3: Array.from(FEATURE_TIERS.tier3),
+        };
+      }
+
       return {
         id: item.id,
         label: item.label,
@@ -313,6 +347,8 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
         admin_overridden: !!adminOv,
         admin_override: adminOv || null,
         studies_info: studiesAttachment,
+        detected_features: detectedFeatures,
+        tier_catalog: tierCatalog,
       };
     });
 

@@ -995,3 +995,115 @@
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
+
+/* ── Detected features no setup_tier ──────────────────────────── */
+
+.item-row__detected-features {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 10px;
+  background: rgba(24, 191, 107, 0.06);
+  border: 1px solid rgba(24, 191, 107, 0.2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.item-row__detected-features > svg {
+  color: var(--accent-green, #18bf6b);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.item-row__detected-features strong {
+  color: var(--text-primary);
+}
+
+.item-row__feature-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  margin: 1px 3px 1px 0;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* ── Tier catalog (details/summary) na Pré Campanha ─────────── */
+
+.item-row__tier-catalog {
+  margin-top: 6px;
+  font-size: var(--text-xs);
+}
+
+.item-row__tier-catalog > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: rgba(8, 145, 178, 0.05);
+  border: 1px dashed rgba(8, 145, 178, 0.3);
+  border-radius: var(--radius-sm);
+  color: var(--accent-cyan, #0891b2);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  font-weight: 500;
+}
+
+.item-row__tier-catalog > summary::-webkit-details-marker {
+  display: none;
+}
+
+.item-row__tier-catalog > summary:hover {
+  background: rgba(8, 145, 178, 0.1);
+}
+
+.item-row__tier-catalog[open] > summary {
+  margin-bottom: 6px;
+}
+
+.item-row__tier-catalog-content {
+  padding: 8px 12px;
+  background: var(--surface-card-elevated, #f9fafb);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item-row__tier-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.item-row__tier-label {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+.item-row__tier-label.tier1 {
+  background: rgba(168, 85, 247, 0.12);
+  color: #a855f7;
+}
+
+.item-row__tier-label.tier2 {
+  background: rgba(8, 145, 178, 0.12);
+  color: #0891b2;
+}
+
+.item-row__tier-label.tier3 {
+  background: rgba(24, 191, 107, 0.12);
+  color: var(--accent-green, #18bf6b);
+}
