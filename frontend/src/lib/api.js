@@ -1,5 +1,5 @@
 /**
- * lib/api.js — cliente HTTP do Commplan backend.
+ * lib/api.js — cliente HTTP do Compplan backend.
  *
  * Convenções:
  *   - Token JWT armazenado em sessionStorage (some no fechar de aba)

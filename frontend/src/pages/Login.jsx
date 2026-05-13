@@ -93,7 +93,7 @@ export default function Login() {
       <div className="login__bg" aria-hidden />
       <div className="login__panel fade-up">
         <div className="login__brand">
-          <Logo subtitle="Commplan" size="lg" />
+          <Logo subtitle="Compplan" size="lg" />
         </div>
 
         <div className="login__intro">
@@ -103,7 +103,7 @@ export default function Login() {
           </span>
           <h1 className="login__title">
             Bem-vindo ao<br />
-            <span className="login__title-accent">HYPR Commplan</span>
+            <span className="login__title-accent">HYPR Compplan</span>
           </h1>
           <p className="login__description">
             Cálculo automático de bônus dos Customer Success baseado nas

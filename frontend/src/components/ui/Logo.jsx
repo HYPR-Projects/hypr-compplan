@@ -1,20 +1,24 @@
 import './Logo.css';
 
 /**
- * Logo HYPR° — replica o estilo "HYPR Report Center" das screenshots.
- * O degree symbol "°" é parte da identidade visual.
+ * Logo HYPR° — usa a imagem oficial preta (PNG sem fundo).
+ *
+ * No dark theme, aplicamos CSS filter pra inverter pra branco.
+ * No light theme, fica preto natural.
+ *
+ * Props:
+ *   subtitle: texto secundário (default 'Compplan')
+ *   size:     sm | md | lg
  */
-export default function Logo({ subtitle = 'Commplan', size = 'md' }) {
+export default function Logo({ subtitle = 'Compplan', size = 'md' }) {
   const cls = `hypr-logo hypr-logo--${size}`;
   return (
     <div className={cls}>
-      <span className="hypr-logo__main">
-        <span className="hypr-logo__h">H</span>
-        <span className="hypr-logo__y">Y</span>
-        <span className="hypr-logo__p">P</span>
-        <span className="hypr-logo__r">R</span>
-        <span className="hypr-logo__deg">°</span>
-      </span>
+      <img
+        src="/hypr-logo.png"
+        alt="HYPR"
+        className="hypr-logo__img"
+      />
       {subtitle && (
         <span className="hypr-logo__sub">{subtitle}</span>
       )}

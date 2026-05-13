@@ -51,7 +51,7 @@ export default function AppShell({ children, pendingEvidences = 0, pendingCount 
     <div className="shell">
       <aside className="shell__sidebar">
         <div className="shell__brand">
-          <Logo subtitle="Commplan" size="sm" />
+          <Logo subtitle="Compplan" size="sm" />
         </div>
 
         <nav className="shell__nav">
