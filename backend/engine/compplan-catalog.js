@@ -52,15 +52,20 @@ export function getFeatureTier(featureName) {
 export const COMPPLAN_CATALOG = {
   pre_campaign: {
     label: 'Pré Campanha',
+    shared_evidence: {
+      key: 'pre_campaign',
+      label: 'Link da evidência da Pré Campanha',
+      help: 'Cole um único link (Drive, Loom, doc) que cubra os items marcados desta seção.',
+    },
     items: [
-      { id: 'pre_audiences',       label: 'Definição de audiências (OOH, O2O ou RMN)', pct: 0.0015, source: 'manual', needs_evidence: true, evidence_type: 'link', help: 'Marque se você fez a definição de audiências da campanha.' },
-      { id: 'pre_feat_rmnf',       label: 'Definição de features — RMN Físico',         pct: 0.0025, source: 'manual', needs_evidence: true, evidence_type: 'link', help: 'Só ganha se a criação de audiência usar dados de RMNF INÉDITAS por AD.' },
-      { id: 'pre_feat_1',          label: 'Definição de features — Feature 1',          pct: 0.0020, source: 'manual', needs_evidence: true, evidence_type: 'link', help: 'Marque se sugeriu e implementou pelo menos 1 feature.' },
-      { id: 'pre_feat_2',          label: 'Definição de features — Feature 2',          pct: 0.0015, source: 'manual', needs_evidence: true, evidence_type: 'link', help: 'Marque se sugeriu e implementou 2+ features.' },
-      { id: 'pre_feat_3',          label: 'Definição de features — Feature 3',          pct: 0.0010, source: 'manual', needs_evidence: true, evidence_type: 'link', help: 'Marque se sugeriu e implementou 3+ features.' },
-      { id: 'pre_enrich_bench',    label: 'Enriquecimento — Bench/case/estudo/Explorer/Map Intelligence', pct: 0.0010, source: 'manual', needs_evidence: true, evidence_type: 'link', help: 'Se feature Map Intelligence já estiver no setup, não conta como enriquecimento.' },
-      { id: 'pre_enrich_kepler',   label: 'Enriquecimento — Uso de dados de venda RMNF / Mapa no Kepler', pct: 0.0020, source: 'manual', needs_evidence: true, evidence_type: 'link' },
-      { id: 'pre_seasonal_plan',   label: 'Criação de plano sazonal',                   pct: 0.0020, source: 'manual', needs_evidence: true, evidence_type: 'link' },
+      { id: 'pre_audiences',       label: 'Definição de audiências (OOH, O2O ou RMN)', pct: 0.0015, source: 'manual', help: 'Marque se você fez a definição de audiências da campanha.' },
+      { id: 'pre_feat_rmnf',       label: 'Definição de features — RMN Físico',         pct: 0.0025, source: 'manual', help: 'Só ganha se a criação de audiência usar dados de RMNF INÉDITAS por AD.' },
+      { id: 'pre_feat_1',          label: 'Definição de features — Feature 1',          pct: 0.0020, source: 'manual', help: 'Marque se sugeriu e implementou pelo menos 1 feature.' },
+      { id: 'pre_feat_2',          label: 'Definição de features — Feature 2',          pct: 0.0015, source: 'manual', help: 'Marque se sugeriu e implementou 2+ features.' },
+      { id: 'pre_feat_3',          label: 'Definição de features — Feature 3',          pct: 0.0010, source: 'manual', help: 'Marque se sugeriu e implementou 3+ features.' },
+      { id: 'pre_enrich_bench',    label: 'Enriquecimento — Bench/case/estudo/Explorer/Map Intelligence', pct: 0.0010, source: 'manual', help: 'Se feature Map Intelligence já estiver no setup, não conta como enriquecimento.' },
+      { id: 'pre_enrich_kepler',   label: 'Enriquecimento — Uso de dados de venda RMNF / Mapa no Kepler', pct: 0.0020, source: 'manual' },
+      { id: 'pre_seasonal_plan',   label: 'Criação de plano sazonal',                   pct: 0.0020, source: 'manual' },
     ],
   },
 

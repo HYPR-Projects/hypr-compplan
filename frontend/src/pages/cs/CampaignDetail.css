@@ -579,3 +579,51 @@
   background: rgba(24, 191, 107, 0.12);
   color: var(--accent-green, #18bf6b);
 }
+
+/* ── Shared evidence (link único da categoria) ─────────────────────── */
+
+.category-block__shared-evidence {
+  padding: var(--space-3) var(--space-4);
+  background: rgba(0, 212, 255, 0.03);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.category-block__shared-evidence--warn {
+  background: rgba(245, 165, 36, 0.04);
+}
+
+.shared-evidence__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.shared-evidence__header > svg {
+  color: var(--accent-cyan);
+}
+
+.shared-evidence__label {
+  font-weight: 500;
+  flex: 1;
+  color: var(--text-primary);
+}
+
+.shared-evidence__input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--surface-card-elevated, rgba(0, 0, 0, 0.03));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.shared-evidence__help {
+  margin-top: 6px;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}

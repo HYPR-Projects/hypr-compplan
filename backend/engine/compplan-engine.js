@@ -243,6 +243,7 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null) {
     byCategory[catKey] = {
       label: cat.label,
       notes: cat.notes || null,
+      shared_evidence: cat.shared_evidence || null,
       items,
       subtotal_pct: subtotalPct,
       subtotal_brl: subtotalBrl,

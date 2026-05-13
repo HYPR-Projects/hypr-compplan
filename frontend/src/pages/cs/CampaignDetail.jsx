@@ -275,6 +275,15 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
   const earnedCount = cat.items.filter(i => isEffectivelyEarned(i, manualChecks)).length;
   const isOptimization = catKey === 'optimization';
 
+  // Shared evidence: link único da categoria. Aparece quando há item marcado.
+  const evidenceMap = manualChecks.__evidence || {};
+  const sharedEv = cat.shared_evidence;
+  const sharedKey = sharedEv?.key || null;
+  const sharedLink = sharedKey ? (evidenceMap[sharedKey] || '') : '';
+  const hasAnyEarned = earnedCount > 0;
+  const showSharedEvidence = !!sharedEv && hasAnyEarned && !cat.invalidated;
+  const sharedMissing = showSharedEvidence && !sharedLink.trim();
+
   return (
     <Card className="category-block fade-up" style={{ marginBottom: 'var(--space-3)' }}>
       <button className="category-block__header" onClick={onToggleExpand}>
@@ -325,6 +334,46 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
                   ? 'Limites: eCPM ≤ R$ 1,50 · CTR ≥ 0,5%'
                   : 'Limites: eCPM ≤ R$ 0,70 · CTR ≥ 0,7%'}
               </div>
+            </div>
+          )}
+          {showSharedEvidence && (
+            <div className={`category-block__shared-evidence ${sharedMissing ? 'category-block__shared-evidence--warn' : ''}`}>
+              <div className="shared-evidence__header">
+                <Link2 size={14} />
+                <span className="shared-evidence__label">{sharedEv.label}</span>
+                {sharedMissing && (
+                  <span className="item-row__badge item-row__badge--warn">
+                    <AlertTriangle size={10} /> Recomendado
+                  </span>
+                )}
+                {!sharedMissing && (
+                  <span className="item-row__badge item-row__badge--ok">
+                    <Link2 size={10} /> Com link
+                  </span>
+                )}
+              </div>
+              <div className="shared-evidence__input-row">
+                <input
+                  type="url"
+                  className="item-row__evidence-input"
+                  placeholder="Cole o link da evidência (Drive, Loom, doc)…"
+                  value={sharedLink}
+                  onChange={(e) => onEvidenceChange(sharedKey, e.target.value)}
+                />
+                {sharedLink && (
+                  <a
+                    href={sharedLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="item-row__evidence-open"
+                  >
+                    Abrir ↗
+                  </a>
+                )}
+              </div>
+              {sharedEv.help && (
+                <div className="shared-evidence__help">{sharedEv.help}</div>
+              )}
             </div>
           )}
           {cat.items.map(item => (
