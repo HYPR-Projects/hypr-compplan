@@ -470,37 +470,44 @@
 }
 
 .abs-toggle__buttons {
-  display: flex;
-  gap: 0;
-  background: var(--surface-card);
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-elevated, rgba(0, 0, 0, 0.05));
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
+  border-radius: 999px;
 }
 
 .abs-toggle__btn {
-  padding: 6px 14px;
+  padding: 6px 18px;
   background: transparent;
   border: none;
   font-size: var(--text-sm);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
   font-family: inherit;
   font-weight: 500;
+  border-radius: 999px;
+  min-width: 90px;
+  text-align: center;
 }
 
-.abs-toggle__btn:hover {
+.abs-toggle__btn:hover:not(.abs-toggle__btn--active) {
   color: var(--text-primary);
+  background: rgba(0, 212, 255, 0.06);
 }
 
 .abs-toggle__btn--active {
   background: var(--accent-cyan);
-  color: var(--bg-primary, #000);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 212, 255, 0.35);
 }
 
 .abs-toggle__btn--active:hover {
-  color: var(--bg-primary, #000);
+  background: var(--accent-cyan);
+  color: #fff;
 }
 
 .abs-toggle__hint {
