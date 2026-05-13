@@ -17,10 +17,10 @@ export const FEATURE_TIERS = {
     'Tap to Carousel', 'Tap to Scratch', 'Tap to Map', 'Tap to Experience',
     'Purchase Context', 'HYPR Signals',
   ]),
-  // Tier 2 — 7 features
+  // Tier 2 — 8 features
   tier2: new Set([
     'Spotify', 'Seat', 'Map Intelligence', 'Downloaded apps',
-    'Click to Calendar', 'Carbon Neutral', 'Attention Ad',
+    'Click to Calendar', 'Carbon Neutral', 'Attention Ad', 'Footfall',
   ]),
   // Tier 3 — 6 features
   tier3: new Set([

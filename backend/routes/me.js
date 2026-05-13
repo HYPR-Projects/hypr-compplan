@@ -441,12 +441,9 @@ router.get('/dashboard/:q', async (req, res) => {
     let preAssignedItems = [];
     let preAssignedBonusBrl = 0;
     try {
-      // Filtro de datas do quarter
-      const [qy, qq] = quarter.split('-Q');
-      const qStartMonth = (parseInt(qq) - 1) * 3;
-      const qStart = `${qy}-${String(qStartMonth + 1).padStart(2, '0')}-01`;
-      const qEndMonth = qStartMonth + 3;
-      const qEnd = `${qy}-${String(qEndMonth).padStart(2, '0')}-01`;
+      const qInfo = parseQuarter(quarter);
+      if (!qInfo) throw new Error(`Quarter inválido: ${quarter}`);
+      const { startDate: qStart, endDate: qEnd } = qInfo;
 
       const preCampaigns = await query(
         `SELECT
@@ -460,7 +457,7 @@ router.get('/dashboard/:q', async (req, res) => {
          LEFT JOIN ${tableRef('commplan_legacy_assignments')} la ON c.short_token = la.short_token
          WHERE LOWER(IFNULL(o.pre_campaign_assignee_email, la.pre_campaign_assignee_email)) = @cs
            AND LOWER(IFNULL(c.cs_email, '')) != @cs
-           AND c.start_date >= @qStart AND c.start_date < @qEnd`,
+           AND c.start_date >= @qStart AND c.start_date <= @qEnd`,
         { cs: csEmail, qStart, qEnd }
       );
 
@@ -495,12 +492,10 @@ router.get('/dashboard/:q', async (req, res) => {
     let studyAuthoredItems = [];
     let studyAuthoredBonusBrl = 0;
     try {
-      // Filtro de datas do quarter (reutiliza o de pre-assigned)
-      const [qy2, qq2] = quarter.split('-Q');
-      const qStartMonth2 = (parseInt(qq2) - 1) * 3;
-      const qStart2 = `${qy2}-${String(qStartMonth2 + 1).padStart(2, '0')}-01`;
-      const qEndMonth2 = qStartMonth2 + 3;
-      const qEnd2 = `${qy2}-${String(qEndMonth2).padStart(2, '0')}-01`;
+      const qInfo2 = parseQuarter(quarter);
+      if (!qInfo2) throw new Error(`Quarter inválido: ${quarter}`);
+      const qStart2 = qInfo2.startDate;
+      const qEnd2 = qInfo2.endDate;
 
       // 1) Pega todos os estudos do catálogo cujo autor é o CS
       const myStudies = await query(
@@ -520,7 +515,7 @@ router.get('/dashboard/:q', async (req, res) => {
              c.start_date, c.end_date, c.is_legacy, c.total_value, c.studies_used
            FROM ${tableRef('commplan_checklists')} c
            WHERE LOWER(IFNULL(c.cs_email, '')) != @cs
-             AND c.start_date >= @qStart AND c.start_date < @qEnd
+             AND c.start_date >= @qStart AND c.start_date <= @qEnd
              AND EXISTS (
                SELECT 1 FROM UNNEST(c.studies_used) AS s
                WHERE LOWER(s) IN UNNEST(@names)
