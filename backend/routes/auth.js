@@ -24,11 +24,10 @@ router.post('/login', async (req, res) => {
   }
 
   const email = verified.email;
+  const pictureUrl = verified.picture || null; // URL da foto do Google Workspace
+  const fullName = verified.name || null;
 
   // Determina o role consultando team_members
-  // Padrão: se está em team_members com role='admin' → admin
-  //         se cs_email aparece em pelo menos 1 checklist → cs
-  //         senão → 403
   const teamRows = await query(
     `SELECT role, active FROM ${tableRef('compplan_team')}
      WHERE LOWER(email) = LOWER(@e) LIMIT 1`,
@@ -56,8 +55,26 @@ router.post('/login', async (req, res) => {
     });
   }
 
+  // Salva photo_url em compplan_team (UPSERT pelo email).
+  // Best effort — se a tabela não tem a coluna ainda, ignora o erro silenciosamente.
+  if (pictureUrl) {
+    try {
+      await query(
+        `MERGE ${tableRef('compplan_team')} T
+         USING (SELECT @e AS email, @p AS photo_url, @n AS name) S
+         ON LOWER(T.email) = LOWER(S.email)
+         WHEN MATCHED THEN UPDATE SET photo_url = S.photo_url
+         WHEN NOT MATCHED THEN INSERT (email, name, role, photo_url, active)
+           VALUES (S.email, S.name, @r, S.photo_url, TRUE)`,
+        { e: email, p: pictureUrl, n: fullName, r: role }
+      );
+    } catch (e) {
+      console.warn(`[auth/login] falha ao salvar photo_url: ${e.message}`);
+    }
+  }
+
   const jwt = issueJwt({ email, role });
-  return res.json({ jwt, email, role });
+  return res.json({ jwt, email, role, photoUrl: pictureUrl });
 });
 
 /**

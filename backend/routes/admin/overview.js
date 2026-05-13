@@ -61,12 +61,14 @@ router.get('/overview/:q', async (req, res) => {
       `SELECT
          c.cs_email,
          ANY_VALUE(c.cs_name) AS cs_name,
+         ANY_VALUE(tm.photo_url) AS photo_url,
          COUNT(*) AS n_camp,
          COUNTIF(IFNULL(o.reviewed, FALSE) = TRUE OR (la.updated_at IS NOT NULL AND la.updated_at > la.attributed_at)) AS n_reviewed,
          IFNULL(SUM(c.total_value), 0) AS bruto
        FROM ${tableRef('commplan_checklists')} c
        LEFT JOIN ${tableRef('commplan_command_overrides')} o ON c.short_token = o.short_token
        LEFT JOIN ${tableRef('commplan_legacy_assignments')} la ON c.short_token = la.short_token
+       LEFT JOIN ${tableRef('compplan_team')} tm ON LOWER(tm.email) = LOWER(c.cs_email)
        WHERE c.start_date >= @s AND c.start_date <= @e
          AND c.cs_email IS NOT NULL
        GROUP BY c.cs_email
@@ -171,6 +173,7 @@ router.get('/overview/:q', async (req, res) => {
       return {
         cs_email: csRow.cs_email,
         cs_name: csRow.cs_name,
+        photo_url: csRow.photo_url || null,
         n_camp: csRow.n_camp || 0,
         n_reviewed: csRow.n_reviewed || 0,
         bruto: b,
@@ -307,11 +310,11 @@ router.get('/pending/:q', async (req, res) => {
 });
 
 // ─── GET /admin/team ───────────────────────────────────────────────────
-// Lista CSs ativos (pra alimentar dropdown de atribuição).
+// Lista CSs ativos (pra alimentar dropdown de atribuição + avatares).
 router.get('/team', async (req, res) => {
   try {
     const items = await query(
-      `SELECT email, name
+      `SELECT email, name, photo_url
        FROM ${tableRef('compplan_team')}
        WHERE role = 'cs' AND active = TRUE
        ORDER BY name`

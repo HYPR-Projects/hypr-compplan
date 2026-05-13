@@ -27,7 +27,23 @@
   --hypr-red-700:     #B11C1F;
   --hypr-red-500:     #F5272B;
   --hypr-red-200:     #FFBEBF;
-  --hypr-green-500:   #4CB050;   /* Verde HYPR */
+  --hypr-green-500:   #4CB050;   /* Verde HYPR clássico */
+
+  /* ── Cores Suporte (do brand guide secundário) ─────────────────────
+     Usadas pra estados específicos: success-positive, info, warning. */
+  --hypr-support-green:    #057D8D;   /* Verde escuro sofisticado — bônus > 0 */
+  --hypr-support-green-bg: rgba(5, 125, 141, 0.08);
+  --hypr-support-green-bd: rgba(5, 125, 141, 0.24);
+  --hypr-support-teal:     #018376;
+  --hypr-support-blue:     #0767B3;
+  --hypr-support-amber:    #FFC300;
+  --hypr-support-red:      #C32E07;
+  --hypr-support-purple:   #4E1E9C;
+
+  /* Alias semântico pra bônus positivo (atingiu o piso) */
+  --bonus-positive:        var(--hypr-support-green);
+  --bonus-positive-bg:     var(--hypr-support-green-bg);
+  --bonus-positive-border: var(--hypr-support-green-bd);
 
   /* ── Aliases semânticos (referenciar SEMPRE estes nos componentes) ── */
   --brand:            var(--hypr-teal-700);
@@ -54,7 +70,7 @@
   --avatar-6: #246C84;   /* HYPR teal dark */
 
   /* ── Tipografia ─────────────────────────────────────────────────── */
-  --font-sans:  'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans:  'Urbanist', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono:  'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
 
   --text-xs:    11px;
@@ -96,10 +112,10 @@
   --content-padding:  48px;
   --sidebar-width:    240px;
   --header-height:    72px;
-  --radius-sm:        6px;
-  --radius:           10px;
-  --radius-lg:        14px;
-  --radius-xl:        20px;
+  --radius-sm:        8px;
+  --radius:           12px;
+  --radius-lg:        16px;
+  --radius-xl:        24px;
   --radius-pill:      999px;
 
   /* ── Animation curves ───────────────────────────────────────────── */
@@ -151,6 +167,15 @@
     rgba(36, 108, 132, 0.05),
     transparent 60%
   );
+
+  /* ── Aliases retrocompat — tokens antigos referenciados em vários CSS ── */
+  --surface-card:          var(--bg-surface);
+  --surface-card-elevated: var(--bg-elevated);
+  --radius-md:             var(--radius);
+  --accent-cyan:           var(--brand-strong);
+  --accent-green:          var(--bonus-positive);
+  --accent-yellow:         var(--hypr-yellow-500);
+  --accent-red:            var(--hypr-red-500);
 }
 
 /* ╔══ LIGHT THEME ════════════════════════════════════════════════════╗ */
@@ -196,4 +221,13 @@
     rgba(36, 108, 132, 0.06),
     transparent 60%
   );
+
+  /* ── Aliases retrocompat (light overrides) ─────────────────────── */
+  --surface-card:          var(--bg-surface);
+  --surface-card-elevated: var(--bg-elevated);
+  --radius-md:             var(--radius);
+  --accent-cyan:           var(--brand);
+  --accent-green:          var(--bonus-positive);
+  --accent-yellow:         var(--hypr-yellow-700);
+  --accent-red:            var(--hypr-red-700);
 }

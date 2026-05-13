@@ -5,6 +5,7 @@ import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
 import { Input } from '../../components/ui/Input.jsx';
+import Avatar from '../../components/ui/Avatar.jsx';
 import { fmt, currentQuarter } from '../../lib/format.js';
 import { endpoints } from '../../lib/api.js';
 import './Overview.css';
@@ -201,19 +202,21 @@ function CsCard({ cs, i, onClick }) {
   const fixoBrl = cs.fixo_quarter || 0;
   const bonusLiquido = cs.bonus_liquido || 0;
   const monthly = cs.monthly_salary || 0;
+  const hasPositive = bonusLiquido > 0;
 
   return (
     <div
-      className="admin-cs-card stagger"
+      className={`admin-cs-card stagger ${hasPositive ? 'has-positive-bonus' : ''}`}
       style={{ '--i': Math.min(i, 20) }}
       onClick={onClick}
     >
-      <div className={`admin-cs-card__stripe ${hitFloor ? 'is-green' : (fixoBrl > 0 ? 'is-warn' : 'is-neutral')}`}></div>
-
       <div className="admin-cs-card__header">
-        <div className="admin-cs-card__avatar" data-color={fmt.avatarColor(cs.cs_name)}>
-          {fmt.initials(cs.cs_name)}
-        </div>
+        <Avatar
+          name={cs.cs_name}
+          email={cs.cs_email}
+          photoUrl={cs.photo_url}
+          size="lg"
+        />
         <div className="admin-cs-card__identity">
           <div className="admin-cs-card__name">{cs.cs_name || cs.cs_email}</div>
           <div className="admin-cs-card__email">{cs.cs_email}</div>
@@ -243,7 +246,7 @@ function CsCard({ cs, i, onClick }) {
         </div>
         <div className="admin-cs-card__bonus-block admin-cs-card__bonus-block--final">
           <span className="label">Bônus líquido</span>
-          <span className={`mono ${hitFloor ? 'admin-cs-card__green' : 'admin-cs-card__warn'}`}>
+          <span className={`mono ${hasPositive ? 'admin-cs-card__positive' : 'admin-cs-card__warn'}`}>
             {fmt.brl(bonusLiquido)}
           </span>
         </div>
