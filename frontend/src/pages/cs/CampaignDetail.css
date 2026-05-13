@@ -516,3 +516,66 @@
     width: 100%;
   }
 }
+
+/* ── Evidence input ────────────────────────────────────────── */
+
+.item-row__evidence {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: var(--surface-card-elevated, rgba(0, 0, 0, 0.02));
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.item-row__evidence-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.item-row__evidence-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  padding: 2px 4px;
+  min-width: 0;
+}
+
+.item-row__evidence-input::placeholder {
+  color: var(--text-tertiary);
+  font-family: inherit;
+  font-size: var(--text-xs);
+}
+
+.item-row__evidence-open {
+  font-size: var(--text-xs);
+  color: var(--accent-cyan);
+  text-decoration: none;
+  font-weight: 500;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs, 4px);
+  transition: background 120ms ease;
+}
+
+.item-row__evidence-open:hover {
+  background: rgba(0, 212, 255, 0.1);
+}
+
+/* Badges adicionais */
+
+.item-row__badge--warn {
+  background: rgba(245, 165, 36, 0.12);
+  color: var(--accent-yellow, #f5a524);
+}
+
+.item-row__badge--ok {
+  background: rgba(24, 191, 107, 0.12);
+  color: var(--accent-green, #18bf6b);
+}

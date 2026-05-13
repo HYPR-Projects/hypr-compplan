@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle2, AlertCircle, Save, Info,
-  ChevronDown, ChevronRight, Sparkles, Zap, Eye,
+  ChevronDown, ChevronRight, Sparkles, Zap, Eye, Link2, AlertTriangle,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
@@ -48,6 +48,18 @@ export default function CsCampaignDetail() {
       ...prev,
       [itemId]: !prev[itemId],
     }));
+  }
+
+  function setEvidence(itemId, value) {
+    setManualChecks(prev => {
+      const evidence = { ...(prev.__evidence || {}) };
+      if (!value || value.trim() === '') {
+        delete evidence[itemId];
+      } else {
+        evidence[itemId] = value.trim();
+      }
+      return { ...prev, __evidence: evidence };
+    });
   }
 
   function toggleCategory(catKey) {
@@ -227,6 +239,7 @@ export default function CsCampaignDetail() {
             onToggleExpand={() => toggleCategory(catKey)}
             manualChecks={manualChecks}
             onCheck={toggleCheck}
+            onEvidenceChange={setEvidence}
             metrics={campaign.metrics}
             isABS={effectiveIsAbs}
             onAbsChange={(newAbs) => setManualChecks(prev => ({ ...prev, __is_abs: newAbs }))}
@@ -258,7 +271,7 @@ export default function CsCampaignDetail() {
   );
 }
 
-function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, metrics, isABS, onAbsChange }) {
+function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, onEvidenceChange, metrics, isABS, onAbsChange }) {
   const earnedCount = cat.items.filter(i => isEffectivelyEarned(i, manualChecks)).length;
   const isOptimization = catKey === 'optimization';
 
@@ -320,6 +333,7 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
               item={item}
               manualChecks={manualChecks}
               onCheck={onCheck}
+              onEvidenceChange={onEvidenceChange}
               metrics={metrics}
               isABS={isABS}
               invalidated={cat.invalidated}
@@ -336,7 +350,7 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
   );
 }
 
-function ItemRow({ item, manualChecks, onCheck, metrics, isABS, invalidated }) {
+function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS, invalidated }) {
   const isManual = item.source === 'manual';
   const isSemiAuto = item.source === 'semi_auto';
   const isAuto = item.source === 'auto';
@@ -350,8 +364,6 @@ function ItemRow({ item, manualChecks, onCheck, metrics, isABS, invalidated }) {
   if (isManual) {
     isChecked = !!manualChecks[item.id];
   } else if (isSemiAuto) {
-    // Se CS já interagiu (chave presente), usa esse valor.
-    // Senão usa o earned do server (que reflete o inferido).
     isChecked = Object.prototype.hasOwnProperty.call(manualChecks, item.id)
       ? !!manualChecks[item.id]
       : item.was_earned || item.earned;
@@ -361,6 +373,13 @@ function ItemRow({ item, manualChecks, onCheck, metrics, isABS, invalidated }) {
 
   const editable = isManual || isSemiAuto;
   const metricInfo = isMetric ? formatMetricInfo(item, metrics, isABS) : null;
+
+  // Evidência: link salvo, e flag se precisa
+  const evidenceMap = (manualChecks.__evidence || {});
+  const evidenceLink = evidenceMap[item.id] || '';
+  const needsEvidence = item.needs_evidence && isChecked && !invalidated;
+  const hasEvidence = !!evidenceLink.trim();
+  const showEvidenceWarn = needsEvidence && !hasEvidence;
 
   return (
     <div className={`item-row ${item.earned ? 'item-row--earned' : ''} ${invalidated && item.was_earned ? 'item-row--invalidated' : ''}`}>
@@ -386,9 +405,45 @@ function ItemRow({ item, manualChecks, onCheck, metrics, isABS, invalidated }) {
           {isAuto && <span className="item-row__badge item-row__badge--auto"><Zap size={10} /> Auto</span>}
           {isSemiAuto && <span className="item-row__badge item-row__badge--semi"><Zap size={10} /> Semi auto</span>}
           {isMetric && <span className="item-row__badge item-row__badge--metric"><Sparkles size={10} /> Métrica</span>}
+          {showEvidenceWarn && (
+            <span className="item-row__badge item-row__badge--warn">
+              <AlertTriangle size={10} /> Sem evidência
+            </span>
+          )}
+          {hasEvidence && needsEvidence && (
+            <span className="item-row__badge item-row__badge--ok">
+              <Link2 size={10} /> Com link
+            </span>
+          )}
         </div>
         {item.help && <div className="item-row__help">{item.help}</div>}
         {metricInfo && <div className="item-row__help item-row__help--metric">{metricInfo}</div>}
+
+        {needsEvidence && (
+          <div className="item-row__evidence">
+            <Link2 size={12} className="item-row__evidence-icon" />
+            <input
+              type="url"
+              className="item-row__evidence-input"
+              placeholder={item.evidence_type === 'link_or_file'
+                ? 'Cole o link da evidência (Loom, Drive, Imgur, etc)…'
+                : 'Cole o link da evidência (Loom, Drive, etc)…'}
+              value={evidenceLink}
+              onChange={(e) => onEvidenceChange(item.id, e.target.value)}
+            />
+            {evidenceLink && (
+              <a
+                href={evidenceLink}
+                target="_blank"
+                rel="noreferrer"
+                className="item-row__evidence-open"
+                title="Abrir em nova aba"
+              >
+                Abrir ↗
+              </a>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="item-row__values">

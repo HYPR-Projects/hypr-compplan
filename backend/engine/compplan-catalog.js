@@ -53,14 +53,14 @@ export const COMPPLAN_CATALOG = {
   pre_campaign: {
     label: 'Pré Campanha',
     items: [
-      { id: 'pre_audiences',       label: 'Definição de audiências (OOH, O2O ou RMN)', pct: 0.0015, source: 'manual', help: 'Marque se você fez a definição de audiências da campanha.' },
-      { id: 'pre_feat_rmnf',       label: 'Definição de features — RMN Físico',         pct: 0.0025, source: 'manual', help: 'Só ganha se a criação de audiência usar dados de RMNF INÉDITAS por AD.' },
-      { id: 'pre_feat_1',          label: 'Definição de features — Feature 1',          pct: 0.0020, source: 'manual', help: 'Marque se sugeriu e implementou pelo menos 1 feature.' },
-      { id: 'pre_feat_2',          label: 'Definição de features — Feature 2',          pct: 0.0015, source: 'manual', help: 'Marque se sugeriu e implementou 2+ features.' },
-      { id: 'pre_feat_3',          label: 'Definição de features — Feature 3',          pct: 0.0010, source: 'manual', help: 'Marque se sugeriu e implementou 3+ features.' },
-      { id: 'pre_enrich_bench',    label: 'Enriquecimento — Bench/case/estudo/Explorer/Map Intelligence', pct: 0.0010, source: 'manual', help: 'Se feature Map Intelligence já estiver no setup, não conta como enriquecimento.' },
-      { id: 'pre_enrich_kepler',   label: 'Enriquecimento — Uso de dados de venda RMNF / Mapa no Kepler', pct: 0.0020, source: 'manual' },
-      { id: 'pre_seasonal_plan',   label: 'Criação de plano sazonal',                   pct: 0.0020, source: 'manual' },
+      { id: 'pre_audiences',       label: 'Definição de audiências (OOH, O2O ou RMN)', pct: 0.0015, source: 'manual', needs_evidence: true, evidence_type: 'link', help: 'Marque se você fez a definição de audiências da campanha.' },
+      { id: 'pre_feat_rmnf',       label: 'Definição de features — RMN Físico',         pct: 0.0025, source: 'manual', needs_evidence: true, evidence_type: 'link', help: 'Só ganha se a criação de audiência usar dados de RMNF INÉDITAS por AD.' },
+      { id: 'pre_feat_1',          label: 'Definição de features — Feature 1',          pct: 0.0020, source: 'manual', needs_evidence: true, evidence_type: 'link', help: 'Marque se sugeriu e implementou pelo menos 1 feature.' },
+      { id: 'pre_feat_2',          label: 'Definição de features — Feature 2',          pct: 0.0015, source: 'manual', needs_evidence: true, evidence_type: 'link', help: 'Marque se sugeriu e implementou 2+ features.' },
+      { id: 'pre_feat_3',          label: 'Definição de features — Feature 3',          pct: 0.0010, source: 'manual', needs_evidence: true, evidence_type: 'link', help: 'Marque se sugeriu e implementou 3+ features.' },
+      { id: 'pre_enrich_bench',    label: 'Enriquecimento — Bench/case/estudo/Explorer/Map Intelligence', pct: 0.0010, source: 'manual', needs_evidence: true, evidence_type: 'link', help: 'Se feature Map Intelligence já estiver no setup, não conta como enriquecimento.' },
+      { id: 'pre_enrich_kepler',   label: 'Enriquecimento — Uso de dados de venda RMNF / Mapa no Kepler', pct: 0.0020, source: 'manual', needs_evidence: true, evidence_type: 'link' },
+      { id: 'pre_seasonal_plan',   label: 'Criação de plano sazonal',                   pct: 0.0020, source: 'manual', needs_evidence: true, evidence_type: 'link' },
     ],
   },
 
@@ -96,12 +96,12 @@ export const COMPPLAN_CATALOG = {
     label: 'Account Management',
     items: [
       { id: 'am_analytics',  label: 'Visão analytics',                        pct: 0.0020, source: 'manual' },
-      { id: 'am_reports',    label: 'Relatórios',                             pct: 0.0010, source: 'manual' },
-      { id: 'am_loom',       label: 'Loom',                                   pct: 0.0010, source: 'manual' },
+      { id: 'am_reports',    label: 'Relatórios',                             pct: 0.0010, source: 'manual', needs_evidence: true, evidence_type: 'link' },
+      { id: 'am_loom',       label: 'Loom',                                   pct: 0.0010, source: 'manual', needs_evidence: true, evidence_type: 'link' },
       // Pós-venda — pega o MAIOR (não cumulativo)
-      { id: 'am_pv_meeting', label: 'Pós-venda — Reunião (online/presencial)', pct: 0.0030, source: 'manual', constraint: 'non_cumulative_group:posvenda' },
-      { id: 'am_pv_doc',     label: 'Pós-venda — Doc. Pós Venda (PDF)',        pct: 0.0030, source: 'manual', constraint: 'non_cumulative_group:posvenda' },
-      { id: 'am_pv_onepage', label: 'Pós-venda — One Page',                    pct: 0.0010, source: 'manual', constraint: 'non_cumulative_group:posvenda' },
+      { id: 'am_pv_meeting', label: 'Pós-venda — Reunião (online/presencial)', pct: 0.0030, source: 'manual', needs_evidence: true, evidence_type: 'link', constraint: 'non_cumulative_group:posvenda' },
+      { id: 'am_pv_doc',     label: 'Pós-venda — Doc. Pós Venda (PDF)',        pct: 0.0030, source: 'manual', needs_evidence: true, evidence_type: 'link', constraint: 'non_cumulative_group:posvenda' },
+      { id: 'am_pv_onepage', label: 'Pós-venda — One Page',                    pct: 0.0010, source: 'manual', needs_evidence: true, evidence_type: 'link', constraint: 'non_cumulative_group:posvenda' },
       // Renovação — pega o MAIOR (não cumulativo)
       { id: 'am_ren_no_vp',  label: 'Renovação sem Value Proposition',         pct: 0.0025, source: 'manual', constraint: 'non_cumulative_group:renovacao' },
       { id: 'am_ren_vp',     label: 'Renovação com Value Proposition',         pct: 0.0050, source: 'manual', constraint: 'non_cumulative_group:renovacao' },
@@ -111,7 +111,7 @@ export const COMPPLAN_CATALOG = {
   extras: {
     label: 'Extras',
     items: [
-      { id: 'ex_dark_test',    label: 'Realização de dark test',  pct: 0.0010, source: 'manual', help: 'RMNd e Feature como dark test não entram no setup.' },
+      { id: 'ex_dark_test',    label: 'Realização de dark test',  pct: 0.0010, source: 'manual', needs_evidence: true, evidence_type: 'link_or_file', help: 'RMNd e Feature como dark test não entram no setup.' },
       { id: 'ex_design_studio',label: 'Design studio',            pct: 0.0015, source: 'manual' },
       { id: 'ex_estudos',      label: 'Estudos',                  pct: 0.0030, source: 'manual', help: 'Marcado se há estudos publicados associados à campanha.' },
     ],
