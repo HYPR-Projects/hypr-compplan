@@ -18,7 +18,7 @@ import { isOverException } from '../data/over-exceptions.js';
 import { sendEmail } from '../lib/email.js';
 import { parseQuarter } from '../engine/quarter-resolver.js';
 import { computeBonus } from '../engine/compplan-engine.js';
-import { FEATURE_TIERS } from '../engine/compplan-catalog.js';
+import { FEATURE_TIERS, COMPPLAN_CATALOG } from '../engine/compplan-catalog.js';
 
 export const router = Router();
 router.use(authRequired);
@@ -685,6 +685,201 @@ router.get('/history', async (req, res) => {
     });
   } catch (err) {
     console.error('GET /me/history error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /commplan/me/campaign/:token/replicate-sources
+ * Lista campanhas elegíveis para replicação (mesmo cliente, mesmo CS, com manual_checks preenchidos).
+ */
+router.get('/campaign/:token/replicate-sources', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { csEmail, byEmail, isAdmin } = resolveTargetCs(req);
+
+    const [target] = await query(
+      `SELECT short_token, client_name, cs_email FROM ${tableRef('commplan_checklists')}
+       WHERE short_token = @t LIMIT 1`,
+      { t: token }
+    );
+    if (!target) return res.status(404).json({ error: 'campanha não encontrada' });
+    if (!isAdmin && (target.cs_email || '').toLowerCase() !== csEmail) {
+      return res.status(403).json({ error: 'Sem permissão' });
+    }
+
+    // Busca campanhas do mesmo cliente (mesmo CS, exceto a própria) com manual_checks
+    const rows = await query(
+      `WITH same_client_camps AS (
+         SELECT c.short_token, c.campaign_name, c.start_date, c.end_date, c.is_legacy,
+                IFNULL(o.manual_checks, la.manual_checks) AS manual_checks,
+                IFNULL(o.updated_at, la.updated_at) AS last_updated
+         FROM ${tableRef('commplan_checklists')} c
+         LEFT JOIN ${tableRef('commplan_command_overrides')} o ON c.short_token = o.short_token
+         LEFT JOIN ${tableRef('commplan_legacy_assignments')} la ON c.short_token = la.short_token
+         WHERE LOWER(c.client_name) = LOWER(@client)
+           AND LOWER(c.cs_email) = LOWER(@cs)
+           AND c.short_token != @t
+       )
+       SELECT * FROM same_client_camps
+       WHERE manual_checks IS NOT NULL
+       ORDER BY last_updated DESC NULLS LAST, start_date DESC
+       LIMIT 50`,
+      { client: target.client_name, cs: csEmail, t: token }
+    );
+
+    const items = rows.map(r => {
+      let n_filled = 0;
+      try {
+        const mc = r.manual_checks ? JSON.parse(r.manual_checks) : {};
+        n_filled = Object.keys(mc).filter(k =>
+          !k.startsWith('__') && mc[k] === true
+        ).length;
+      } catch (_) {}
+      return {
+        short_token: r.short_token,
+        campaign_name: r.campaign_name,
+        start_date: r.start_date?.value || r.start_date,
+        end_date: r.end_date?.value || r.end_date,
+        is_legacy: !!r.is_legacy,
+        n_filled,
+        last_updated: r.last_updated?.value || r.last_updated,
+      };
+    });
+
+    res.json({
+      target: {
+        short_token: target.short_token,
+        client_name: target.client_name,
+      },
+      count: items.length,
+      items,
+    });
+  } catch (err) {
+    console.error('GET replicate-sources error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /commplan/me/campaign/:token/replicate-from
+ * Body: { source_token }
+ * Copia manual_checks da source pra target (mesmo cliente, mesmo CS).
+ * SOBRESCREVE o que estava lá. Só copia items manuais (Pré Campanha, Account Mgmt, Extras,
+ * Onboarding) + evidências. Setup e Otimizações ficam intactos (são auto).
+ */
+router.post('/campaign/:token/replicate-from', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { source_token } = req.body || {};
+    if (!source_token) return res.status(400).json({ error: 'source_token obrigatório' });
+    if (source_token === token) return res.status(400).json({ error: 'origem e destino são iguais' });
+
+    const { csEmail, byEmail, isAdmin } = resolveTargetCs(req);
+
+    // Carrega ambas as campanhas pra validar (mesmo cliente + mesmo CS)
+    const rows = await query(
+      `SELECT short_token, client_name, cs_email, is_legacy
+       FROM ${tableRef('commplan_checklists')}
+       WHERE short_token IN (@t, @s)`,
+      { t: token, s: source_token }
+    );
+    if (rows.length !== 2) return res.status(404).json({ error: 'campanha não encontrada' });
+
+    const target = rows.find(r => r.short_token === token);
+    const source = rows.find(r => r.short_token === source_token);
+    if (!target || !source) return res.status(404).json({ error: 'campanha não encontrada' });
+
+    if (!isAdmin) {
+      if ((target.cs_email || '').toLowerCase() !== csEmail) return res.status(403).json({ error: 'Sem permissão (target)' });
+      if ((source.cs_email || '').toLowerCase() !== csEmail) return res.status(403).json({ error: 'Sem permissão (source)' });
+    }
+    if ((target.client_name || '').toLowerCase() !== (source.client_name || '').toLowerCase()) {
+      return res.status(400).json({ error: `clientes diferentes (${target.client_name} vs ${source.client_name})` });
+    }
+
+    // Busca manual_checks da origem
+    const { manualChecks: srcMc } = await fetchManualChecks(source_token, !!source.is_legacy);
+
+    // Carrega manual_checks atual da target pra preservar __is_abs (toggle ABS específico),
+    // notas de revisão, __review_*, __evidence (mas evidências também são parte dos itens manuais → copia).
+    const { manualChecks: dstMc } = await fetchManualChecks(token, !!target.is_legacy);
+
+    // Lista de IDs de items "manuais" (não auto, não metrics, não semi_auto inferido)
+    // Categorias: pre_campaign, account_mgmt, extras, onboarding
+    // Note: setup (semi_auto) é EXCLUÍDO. optimization (metrics) tbm.
+    const MANUAL_CATS = ['pre_campaign', 'account_mgmt', 'extras', 'onboarding'];
+    const manualItemIds = new Set();
+    for (const catKey of MANUAL_CATS) {
+      const cat = COMPPLAN_CATALOG[catKey];
+      if (!cat) continue;
+      for (const item of cat.items) manualItemIds.add(item.id);
+    }
+
+    // Monta novo manualChecks:
+    // - copia itens manuais (sobrescreve) da source
+    // - copia __evidence só dos itens manuais + shared_evidence das categorias copiadas
+    // - PRESERVA __is_abs, __review_*, __setup_force (esses são da campanha atual)
+    const newMc = { ...dstMc };
+
+    // Remove items manuais antigos (sobrescreve)
+    for (const itemId of manualItemIds) delete newMc[itemId];
+    // Limpa evidências dos itens manuais que vão ser substituídas
+    if (newMc.__evidence) {
+      const ev = { ...newMc.__evidence };
+      for (const itemId of manualItemIds) delete ev[itemId];
+      delete ev.pre_campaign; // shared evidence
+      newMc.__evidence = ev;
+    }
+
+    // Aplica items manuais da source
+    let nCopied = 0;
+    for (const itemId of manualItemIds) {
+      if (srcMc[itemId] === true) {
+        newMc[itemId] = true;
+        nCopied++;
+      }
+    }
+    // Aplica evidências dos manuais
+    if (srcMc.__evidence) {
+      const ev = { ...(newMc.__evidence || {}) };
+      for (const itemId of manualItemIds) {
+        if (srcMc.__evidence[itemId]) ev[itemId] = srcMc.__evidence[itemId];
+      }
+      if (srcMc.__evidence.pre_campaign) ev.pre_campaign = srcMc.__evidence.pre_campaign;
+      newMc.__evidence = ev;
+    }
+
+    const newMcJson = JSON.stringify(newMc);
+
+    // Persiste
+    if (target.is_legacy) {
+      await query(
+        `UPDATE ${tableRef('commplan_legacy_assignments')}
+         SET manual_checks = @mc, updated_by = @by, updated_at = CURRENT_TIMESTAMP()
+         WHERE short_token = @t`,
+        { mc: newMcJson, by: byEmail, t: token }
+      );
+    } else {
+      await query(
+        `MERGE ${tableRef('commplan_command_overrides')} T
+         USING (SELECT @t AS short_token) S
+         ON T.short_token = S.short_token
+         WHEN MATCHED THEN UPDATE SET
+           manual_checks = @mc,
+           updated_at = CURRENT_TIMESTAMP(),
+           updated_by = @by
+         WHEN NOT MATCHED THEN INSERT
+           (short_token, cs_email, manual_checks, reviewed,
+            created_at, updated_at, updated_by)
+         VALUES (@t, @cs, @mc, FALSE, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), @by)`,
+        { t: token, cs: csEmail, mc: newMcJson, by: byEmail }
+      );
+    }
+
+    res.json({ ok: true, n_copied: nCopied, source_token, target_token: token });
+  } catch (err) {
+    console.error('POST replicate-from error:', err);
     res.status(500).json({ error: err.message });
   }
 });

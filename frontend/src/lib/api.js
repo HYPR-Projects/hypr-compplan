@@ -169,6 +169,15 @@ export const endpoints = {
     return api.get('/commplan/admin/review-requests');
   },
 
+  meReplicateSources(token, opts = {}) {
+    const q = opts.as ? `?as=${encodeURIComponent(opts.as)}` : '';
+    return api.get(`/commplan/me/campaign/${token}/replicate-sources${q}`);
+  },
+  meReplicateFrom(token, sourceToken, opts = {}) {
+    const q = opts.as ? `?as=${encodeURIComponent(opts.as)}` : '';
+    return api.post(`/commplan/me/campaign/${token}/replicate-from${q}`, { source_token: sourceToken });
+  },
+
   listMentorships()      { return api.get('/commplan/admin/mentorships'); },
   createMentorship(body) { return api.post('/commplan/admin/mentorships', body); },
   endMentorship(id)      { return api.delete(`/commplan/admin/mentorships/${id}`); },

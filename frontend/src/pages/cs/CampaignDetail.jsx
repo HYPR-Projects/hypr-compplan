@@ -3,12 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle2, AlertCircle, Save, Info,
   ChevronDown, ChevronRight, Sparkles, Zap, Eye, Link2, AlertTriangle,
-  MessageSquare, Shield,
+  MessageSquare, Shield, Copy,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
 import Button from '../../components/ui/Button.jsx';
+import { Modal } from '../../components/ui/Modal.jsx';
 import { fmt } from '../../lib/format.js';
 import { endpoints, auth } from '../../lib/api.js';
 import './CampaignDetail.css';
@@ -26,6 +27,7 @@ export default function CsCampaignDetail() {
   const [savedAt, setSavedAt] = useState(null);
   const [manualChecks, setManualChecks] = useState({});
   const [expandedCategories, setExpandedCategories] = useState(new Set(CATEGORY_ORDER));
+  const [showReplicateModal, setShowReplicateModal] = useState(false);
 
   // Helpers de impersonação
   const opts = impersonateEmail ? { as: impersonateEmail } : {};
@@ -184,6 +186,13 @@ export default function CsCampaignDetail() {
             </div>
           )}
         </div>
+        <Button
+          variant="ghost"
+          icon={Copy}
+          onClick={() => setShowReplicateModal(true)}
+        >
+          Replicar checkup
+        </Button>
       </header>
 
       {/* ── HERO: bônus total ─────────────────────────────────────── */}
@@ -332,6 +341,19 @@ export default function CsCampaignDetail() {
           {campaign.reviewed ? 'Atualizar revisão' : 'Confirmar revisão'}
         </Button>
       </div>
+
+      {showReplicateModal && (
+        <ReplicateModal
+          token={token}
+          opts={opts}
+          campaign={campaign}
+          onClose={() => setShowReplicateModal(false)}
+          onSuccess={() => {
+            setShowReplicateModal(false);
+            load();
+          }}
+        />
+      )}
     </AppShell>
   );
 }
@@ -789,4 +811,118 @@ function computeOptimizationEarned(metrics, isABS) {
     }
   }
   return earned;
+}
+
+function ReplicateModal({ token, opts, campaign, onClose, onSuccess }) {
+  const [sources, setSources] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    endpoints.meReplicateSources(token, opts)
+      .then(d => setSources(d.items || []))
+      .catch(e => setErr(e.message));
+  }, [token]);
+
+  const filtered = (sources || []).filter(s => {
+    const t = search.trim().toLowerCase();
+    if (!t) return true;
+    return (s.campaign_name || '').toLowerCase().includes(t) ||
+           (s.short_token || '').toLowerCase().includes(t);
+  });
+
+  async function handleConfirm() {
+    if (!selected) return;
+    setLoading(true);
+    setErr(null);
+    try {
+      await endpoints.meReplicateFrom(token, selected, opts);
+      onSuccess();
+    } catch (e) {
+      setErr(e.message);
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Modal title={`Replicar checkup — ${campaign.client_name}`} onClose={onClose}>
+      <div className="form-stack">
+        <Card variant="info" style={{ padding: 'var(--space-3)' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <Info size={16} style={{ color: 'var(--accent-cyan)', marginTop: 2, flexShrink: 0 }} />
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              Copia os itens manuais (<strong>Pré Campanha</strong>, <strong>Account Mgmt</strong>, <strong>Extras</strong>, <strong>Onboarding</strong>) de outra campanha do mesmo cliente.
+              <br />
+              <strong>Setup</strong> e <strong>Otimizações</strong> não são copiados — são automáticos por checklist e métricas.
+              <br />
+              <span style={{ color: 'var(--accent-yellow)' }}>⚠ Sobrescreve o que já estava nesta campanha.</span>
+            </div>
+          </div>
+        </Card>
+
+        {sources === null ? (
+          <div className="empty-state" style={{ padding: 'var(--space-3)' }}>Carregando…</div>
+        ) : sources.length === 0 ? (
+          <div className="empty-state" style={{ padding: 'var(--space-3)' }}>
+            Nenhuma outra campanha de <strong>{campaign.client_name}</strong> disponível pra replicar.
+          </div>
+        ) : (
+          <>
+            <input
+              type="text"
+              className="cs-notes-block__textarea"
+              style={{ minHeight: 'auto', padding: '8px 12px' }}
+              placeholder="Buscar campanha…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <div className="replicate-list">
+              {filtered.map(s => (
+                <label
+                  key={s.short_token}
+                  className={`replicate-option ${selected === s.short_token ? 'replicate-option--selected' : ''}`}
+                >
+                  <input
+                    type="radio"
+                    name="source"
+                    value={s.short_token}
+                    checked={selected === s.short_token}
+                    onChange={() => setSelected(s.short_token)}
+                  />
+                  <div className="replicate-option__main">
+                    <div className="replicate-option__title">
+                      <strong>{s.campaign_name}</strong>
+                      <Badge variant="neutral">{s.short_token}</Badge>
+                      {s.is_legacy && <Badge variant="neutral">Legacy</Badge>}
+                    </div>
+                    <div className="replicate-option__meta">
+                      {fmt.dateRange(s.start_date, s.end_date)}
+                      <span className="page-subtitle__sep">·</span>
+                      <strong>{s.n_filled}</strong> {s.n_filled === 1 ? 'item preenchido' : 'itens preenchidos'}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </>
+        )}
+
+        {err && <div className="form-error">{err}</div>}
+
+        <div className="modal__footer">
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button
+            variant="primary"
+            icon={Copy}
+            onClick={handleConfirm}
+            disabled={!selected || loading}
+          >
+            {loading ? 'Replicando…' : 'Replicar checkup'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
 }
