@@ -227,6 +227,8 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null) {
         source: item.source,
         constraint: item.constraint || null,
         help: item.help || null,
+        needs_evidence: !!item.needs_evidence,
+        evidence_type: item.evidence_type || null,
         earned: effectivelyEarned,
         // Pra UI: se setup foi anulado, mantém o checkbox visualmente mas não conta
         was_earned: wasEarned,
