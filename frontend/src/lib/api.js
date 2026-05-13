@@ -158,6 +158,10 @@ export const endpoints = {
   addAbsClient(body)     { return api.post('/commplan/admin/abs-clients', body); },
   removeAbsClient(id)    { return api.delete(`/commplan/admin/abs-clients/${encodeURIComponent(id)}`); },
 
+  listOverExceptions()        { return api.get('/commplan/admin/over-exceptions'); },
+  addOverException(body)      { return api.post('/commplan/admin/over-exceptions', body); },
+  removeOverException(name)   { return api.delete(`/commplan/admin/over-exceptions/${encodeURIComponent(name)}`); },
+
   listMentorships()      { return api.get('/commplan/admin/mentorships'); },
   createMentorship(body) { return api.post('/commplan/admin/mentorships', body); },
   endMentorship(id)      { return api.delete(`/commplan/admin/mentorships/${id}`); },

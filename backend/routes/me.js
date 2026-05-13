@@ -14,6 +14,7 @@ import { Router } from 'express';
 import { authRequired } from '../middleware/auth.js';
 import { query, tableRef } from '../lib/bigquery.js';
 import { getSalaryForCs } from '../data/cs-config.js';
+import { isOverException } from '../data/over-exceptions.js';
 import { parseQuarter } from '../engine/quarter-resolver.js';
 import { computeBonus } from '../engine/compplan-engine.js';
 import { FEATURE_TIERS } from '../engine/compplan-catalog.js';
@@ -56,7 +57,7 @@ router.get('/studies-catalog', async (req, res) => {
 // Agrega TODAS as linhas da campanha em campaign_results, filtra display
 // pro cálculo de over.
 // ─────────────────────────────────────────────────────────────────────
-async function fetchPerformanceMetrics(shortToken) {
+async function fetchPerformanceMetrics(shortToken, clientName = null) {
   try {
     // 1. Busca métricas brutas da campanha em prod_assets.unified_daily_performance_metrics (US).
     //
@@ -111,11 +112,17 @@ async function fetchPerformanceMetrics(shortToken) {
     const displayClicks      = Number(perfRow.display_clicks) || 0;
     const displayCost        = Number(perfRow.display_cost) || 0;
 
+    // Exceções de OVER (Pepsico, Amazon, ...) usam impressões TOTAIS no numerador.
+    // Só o OVER muda. eCPM, CTR e todos os limites continuam idênticos pra esses clientes.
+    const usesTotalImps = await isOverException(clientName);
+    const overNumerator = usesTotalImps ? displayImpressions : displayViewable;
+
     return {
       // Métricas que entram nas regras (todas baseadas em DISPLAY)
       ecpm: displayImpressions > 0 ? (displayCost / displayImpressions) * 1000 : 0,
       ctr: displayViewable > 0 ? displayClicks / displayViewable : 0,
-      over_percent: displayContracted > 0 ? ((displayViewable / displayContracted) - 1) * 100 : 0,
+      over_percent: displayContracted > 0 ? ((overNumerator / displayContracted) - 1) * 100 : 0,
+      over_uses_total_imps: usesTotalImps,
 
       // Detalhes pra UI
       display_impressions: displayImpressions,
@@ -287,6 +294,10 @@ router.get('/dashboard/:q', async (req, res) => {
         const contractedMap = {};
         for (const r of contractedRows) contractedMap[r.short_token] = Number(r.display_contracted) || 0;
 
+        // Mapa de client_name por token pra checar ABS
+        const clientByToken = {};
+        for (const c of campaigns) clientByToken[c.short_token] = c.client_name;
+
         for (const r of perfRows) {
           const displayContracted = contractedMap[r.short_token] || 0;
           const displayImps = Number(r.display_imps) || 0;
@@ -294,10 +305,15 @@ router.get('/dashboard/:q', async (req, res) => {
           const displayClicks = Number(r.display_clicks) || 0;
           const displayCost = Number(r.display_cost) || 0;
 
+          // Exceções de OVER: usa impressões totais no numerador (só OVER muda)
+          const usesTotalImps = await isOverException(clientByToken[r.short_token]);
+          const overNumerator = usesTotalImps ? displayImps : displayViewable;
+
           metricsByToken[r.short_token] = {
             ecpm: displayImps > 0 ? (displayCost / displayImps) * 1000 : 0,
             ctr: displayViewable > 0 ? displayClicks / displayViewable : 0,
-            over_percent: displayContracted > 0 ? ((displayViewable / displayContracted) - 1) * 100 : 0,
+            over_percent: displayContracted > 0 ? ((overNumerator / displayContracted) - 1) * 100 : 0,
+            over_uses_total_imps: usesTotalImps,
             display_impressions: displayImps,
             display_viewable: displayViewable,
             display_clicks: displayClicks,
@@ -431,7 +447,7 @@ router.get('/campaign/:token', async (req, res) => {
     // Pega manual_checks e métricas em paralelo
     const [manualChecks, metrics] = await Promise.all([
       fetchManualChecks(campaign.short_token, isLegacy),
-      fetchPerformanceMetrics(campaign.short_token),
+      fetchPerformanceMetrics(campaign.short_token, campaign.client_name),
     ]);
 
     // Calcula breakdown completo
@@ -571,7 +587,7 @@ router.put('/campaign/:token', async (req, res) => {
        WHERE c.short_token = @t LIMIT 1`,
       { t: token }
     );
-    const metrics = await fetchPerformanceMetrics(token);
+    const metrics = await fetchPerformanceMetrics(token, updated?.client_name);
     const breakdown = computeBonus(updated, manualChecks, metrics);
 
     res.json({ ok: true, reviewed, breakdown });
