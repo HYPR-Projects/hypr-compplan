@@ -3,10 +3,10 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://commplan-api-s7bziuk2fa-uc.a.run.app/:path*"
+      "destination": "https://hypr-commplan-backend-REPLACE_ME.run.app/:path*"
     },
     {
-      "source": "/((?!_next|favicon.svg|assets).*)",
+      "source": "/((?!_next|favicon.svg|assets|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|woff2?|ttf|otf)$).*)",
       "destination": "/index.html"
     }
   ],
