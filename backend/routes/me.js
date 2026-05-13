@@ -15,7 +15,66 @@ import { authRequired } from '../middleware/auth.js';
 import { query, tableRef } from '../lib/bigquery.js';
 import { getSalaryForCs } from '../data/cs-config.js';
 import { isOverException } from '../data/over-exceptions.js';
+import { findStudyByName } from '../data/studies.js';
 import { sendEmail } from '../lib/email.js';
+
+const VERSION_ID = '2026';
+
+/**
+ * Resolve studies_info pra uma campanha:
+ * - Pega studies_used (array de nomes vindos do Command)
+ * - Faz lookup por nome em commplan_studies_catalog
+ * - Retorna array [{ name, id, author_email, author_name, link, ... }]
+ */
+async function resolveStudiesInfo(campaign) {
+  const studyNames = Array.isArray(campaign.studies_used) ? campaign.studies_used : [];
+  if (studyNames.length === 0) return [];
+
+  // Parse studies_data_json (rico, do Command — name, cs, link, status)
+  let extraData = [];
+  try {
+    if (campaign.studies_data_json) {
+      const parsed = typeof campaign.studies_data_json === 'string'
+        ? JSON.parse(campaign.studies_data_json)
+        : campaign.studies_data_json;
+      extraData = Array.isArray(parsed) ? parsed : [];
+    }
+  } catch (_) { /* silent */ }
+
+  const result = [];
+  for (const name of studyNames) {
+    if (!name) continue;
+    let entry = {
+      name,
+      id: null,
+      author_email: null,
+      author_name: null,
+      link: null,
+      status: null,
+      delivery: null,
+      found_in_catalog: false,
+    };
+    // Lookup no catálogo
+    try {
+      const study = await findStudyByName(name, VERSION_ID);
+      if (study) {
+        entry.id = study.id;
+        entry.author_email = study.author_email || null;
+        entry.found_in_catalog = true;
+      }
+    } catch (e) { console.warn(`findStudyByName(${name}): ${e.message}`); }
+    // Enriquece com dados do JSON do Command (cs name, link, etc)
+    const extra = extraData.find(d => (d.name || '').toLowerCase() === name.toLowerCase());
+    if (extra) {
+      entry.author_name = entry.author_name || extra.cs || null;
+      entry.link = extra.link || null;
+      entry.status = extra.status || null;
+      entry.delivery = extra.delivery || null;
+    }
+    result.push(entry);
+  }
+  return result;
+}
 import { parseQuarter } from '../engine/quarter-resolver.js';
 import { computeBonus } from '../engine/compplan-engine.js';
 import { FEATURE_TIERS, COMPPLAN_CATALOG } from '../engine/compplan-catalog.js';
@@ -335,12 +394,26 @@ router.get('/dashboard/:q', async (req, res) => {
     // Agora calcula bônus de cada campanha com TODOS os dados
     let totalBonusBrl = 0;
     let totalBonusPreAssignedBrl = 0; // bônus de Pré atribuído pra este CS em campanhas de outros
+
+    // Resolve studies pra todas as campanhas em paralelo (pra UI mostrar nome + autor)
+    const studiesInfoByToken = {};
+    await Promise.all(campaigns.map(async (c) => {
+      try {
+        studiesInfoByToken[c.short_token] = await resolveStudiesInfo(c);
+      } catch (_) {
+        studiesInfoByToken[c.short_token] = [];
+      }
+    }));
+
     const items = campaigns.map(c => {
       const mc = manualChecksByToken[c.short_token] || {};
       const ao = adminOverridesByToken[c.short_token] || {};
       const preAssignee = preAssigneeByToken[c.short_token] || null;
       const metrics = metricsByToken[c.short_token] || null;
-      const breakdown = computeBonus(c, mc, metrics, ao, { preAssignee, csOwner: csEmail });
+      const studiesInfo = studiesInfoByToken[c.short_token] || [];
+      const breakdown = computeBonus(c, mc, metrics, ao, {
+        preAssignee, csOwner: csEmail, studiesInfo
+      });
       totalBonusBrl += breakdown.total_brl;
       return {
         short_token: c.short_token,
@@ -418,8 +491,77 @@ router.get('/dashboard/:q', async (req, res) => {
       console.warn(`Erro buscando pre-assigned: ${e.message}`);
     }
 
-    // Total = bonus das próprias campanhas + pré atribuída em campanhas de outros
-    totalBonusBrl += preAssignedBonusBrl;
+    // Busca campanhas onde este CS é AUTOR DE ESTUDO usado (mas não é CS dono)
+    let studyAuthoredItems = [];
+    let studyAuthoredBonusBrl = 0;
+    try {
+      // Filtro de datas do quarter (reutiliza o de pre-assigned)
+      const [qy2, qq2] = quarter.split('-Q');
+      const qStartMonth2 = (parseInt(qq2) - 1) * 3;
+      const qStart2 = `${qy2}-${String(qStartMonth2 + 1).padStart(2, '0')}-01`;
+      const qEndMonth2 = qStartMonth2 + 3;
+      const qEnd2 = `${qy2}-${String(qEndMonth2).padStart(2, '0')}-01`;
+
+      // 1) Pega todos os estudos do catálogo cujo autor é o CS
+      const myStudies = await query(
+        `SELECT id, display_name, author_email
+         FROM ${tableRef('commplan_studies_catalog')}
+         WHERE LOWER(author_email) = @cs AND active = TRUE AND version_id = @v`,
+        { cs: csEmail, v: VERSION_ID }
+      );
+      if (myStudies.length > 0) {
+        const myStudyNamesLower = myStudies.map(s => s.display_name.toLowerCase());
+
+        // 2) Busca campanhas no quarter onde studies_used contém algum dos nomes
+        // Como studies_used é ARRAY<STRING>, usamos EXISTS na expansão
+        const studyCampaigns = await query(
+          `SELECT
+             c.short_token, c.client_name, c.campaign_name, c.cs_email, c.cs_name,
+             c.start_date, c.end_date, c.is_legacy, c.total_value, c.studies_used
+           FROM ${tableRef('commplan_checklists')} c
+           WHERE LOWER(IFNULL(c.cs_email, '')) != @cs
+             AND c.start_date >= @qStart AND c.start_date < @qEnd
+             AND EXISTS (
+               SELECT 1 FROM UNNEST(c.studies_used) AS s
+               WHERE LOWER(s) IN UNNEST(@names)
+             )`,
+          { cs: csEmail, qStart: qStart2, qEnd: qEnd2, names: myStudyNamesLower }
+        );
+
+        // 3) Calcula bonus de cada campanha pra este autor
+        const STUDIES_PCT = 0.0030; // 0.30%
+        for (const sc of studyCampaigns) {
+          // Identifica qual estudo do CS foi usado
+          const namesInCamp = (sc.studies_used || []).filter(n =>
+            myStudyNamesLower.includes((n || '').toLowerCase())
+          );
+          if (namesInCamp.length === 0) continue;
+
+          const liquido = (Number(sc.total_value) || 0) * NET_FACTOR;
+          const studyBonus = liquido * STUDIES_PCT;
+          studyAuthoredBonusBrl += studyBonus;
+
+          studyAuthoredItems.push({
+            short_token: sc.short_token,
+            client_name: sc.client_name,
+            campaign_name: sc.campaign_name,
+            owner_cs_email: sc.cs_email,
+            owner_cs_name: sc.cs_name,
+            start_date: sc.start_date?.value || sc.start_date,
+            end_date: sc.end_date?.value || sc.end_date,
+            is_legacy: !!sc.is_legacy,
+            study_name: namesInCamp[0],
+            study_bonus_brl: studyBonus,
+            study_bonus_pct: STUDIES_PCT,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn(`Erro buscando study-authored: ${e.message}`);
+    }
+
+    // Total = bonus das próprias + pré atribuída + estudo autorado
+    totalBonusBrl += preAssignedBonusBrl + studyAuthoredBonusBrl;
 
     // Busca salário vigente do CS
     let monthlySalary = 0;
@@ -463,6 +605,7 @@ router.get('/dashboard/:q', async (req, res) => {
         liquido_total: bruto * NET_FACTOR,
         bonus_total: totalBonusBrl,
         bonus_pre_assigned: preAssignedBonusBrl,
+        bonus_study_authored: studyAuthoredBonusBrl,
         // Novos campos: piso + cálculo final
         monthly_salary: monthlySalary,
         floor_quarter: floorQuarter,
@@ -473,6 +616,7 @@ router.get('/dashboard/:q', async (req, res) => {
       },
       items,
       pre_assigned_items: preAssignedItems,
+      study_authored_items: studyAuthoredItems,
     });
   } catch (err) {
     console.error('GET /me/dashboard error:', err);
@@ -523,10 +667,14 @@ router.get('/campaign/:token', async (req, res) => {
       return res.status(403).json({ error: 'Sem permissão pra ver essa campanha' });
     }
 
-    // Calcula breakdown completo (com admin overrides + pre assignee aplicados)
+    // Resolve estudos usados (nome → catálogo)
+    const studiesInfo = await resolveStudiesInfo(campaign);
+
+    // Calcula breakdown completo (com admin overrides + pre assignee + studies aplicados)
     const breakdown = computeBonus(campaign, manualChecks, metrics, adminOverrides, {
       preAssignee,
       csOwner: csEmail,
+      studiesInfo,
     });
 
     // Status reviewed
@@ -725,9 +873,11 @@ router.put('/campaign/:token', async (req, res) => {
     const metrics = await fetchPerformanceMetrics(token, updated?.client_name);
     // Re-busca admin_overrides + pre_assignee (não mudam pelo PUT, mas garante consistência)
     const post = await fetchManualChecks(token, !!campaign.is_legacy);
+    const studiesInfoPost = await resolveStudiesInfo(updated);
     const breakdown = computeBonus(updated, manualChecks, metrics, post.adminOverrides || {}, {
       preAssignee: post.preAssignee,
       csOwner: csEmail,
+      studiesInfo: studiesInfoPost,
     });
 
     res.json({ ok: true, reviewed, breakdown });

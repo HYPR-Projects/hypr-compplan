@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle2, AlertCircle, Save, Info,
   ChevronDown, ChevronRight, Sparkles, Zap, Eye, Link2, AlertTriangle,
-  MessageSquare, Shield, Copy,
+  MessageSquare, Shield, Copy, BookOpen,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
@@ -611,6 +611,41 @@ function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS
         </div>
         {item.help && <div className="item-row__help">{item.help}</div>}
         {metricInfo && <div className="item-row__help item-row__help--metric">{metricInfo}</div>}
+
+        {item.studies_info && item.studies_info.length > 0 && (
+          <div className="item-row__studies">
+            {item.studies_info.map((s, idx) => (
+              <div key={idx} className="item-row__study">
+                <BookOpen size={12} />
+                <span className="item-row__study-name">{s.name}</span>
+                {(s.author_name || s.author_email) && (
+                  <span className="item-row__study-author">
+                    · <strong>{s.author_name || s.author_email}</strong>
+                  </span>
+                )}
+                {s.link && (
+                  <a href={s.link} target="_blank" rel="noreferrer" className="item-row__study-link">
+                    ↗
+                  </a>
+                )}
+                {!s.found_in_catalog && (
+                  <Badge variant="yellow">Não catalogado</Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {item.study_goes_to_other && item.studies_info && item.studies_info.length > 0 && (
+          <div className="item-row__pre-assigned-note">
+            <Info size={12} /> Bônus deste estudo vai pro autor, não pra você
+          </div>
+        )}
+        {item.pre_assigned_to_other && (
+          <div className="item-row__pre-assigned-note">
+            <Info size={12} /> Pré Campanha atribuída a outro CS — bônus não vai pra você
+          </div>
+        )}
 
         {needsEvidence && (
           <div className="item-row__evidence">

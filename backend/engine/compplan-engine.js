@@ -70,11 +70,13 @@ function inferAutoItems(campaign) {
   if (nT2 >= 2) earned.add('setup_tier2_2');
   if (nT3 >= 1) earned.add('setup_tier3_1');
 
-  // Extras — Estudos: NÃO entra no breakdown do CS dono da campanha.
-  // 0.30% vai pro AUTOR do estudo, processado separadamente no orchestrator
-  // de quarter via evaluators/study-used.js (que credita study_author_email).
-  // Aqui só registramos pra UI mostrar "estudo X usado" sem somar no bônus.
-  // → ex_estudos é renderizado mas com earned=false sempre pra o CS dono.
+  // Extras — Estudos: marca ex_estudos como earned se há algum estudo usado.
+  // O bônus VAI ser zero pro CS dono (ele NÃO recebe — vai pro autor via orchestrator),
+  // mas a UI precisa mostrar como "feito" pra clareza visual.
+  // Quando o engine for chamado pro author_email do estudo (orchestrator de quarter),
+  // aí value_brl conta normalmente.
+  const studies = Array.isArray(campaign.studies_used) ? campaign.studies_used : [];
+  if (studies.length > 0) earned.add('ex_estudos');
 
   return earned;
 }
@@ -188,7 +190,7 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
   const bruto = Number(campaign.total_value) || 0;
   const liquido = bruto * NET_FACTOR;
 
-  const { preAssignee = null, csOwner = null } = opts;
+  const { preAssignee = null, csOwner = null, studiesInfo = [] } = opts;
   // Pré Campanha entra no breakdown do CS APENAS se:
   //   - Não há assignee (sem atribuição → conta pro dono)
   //   - OU o CS olhando É o assignee (mesma pessoa)
@@ -275,9 +277,24 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
 
     const items = cat.items.map(item => {
       const wasEarned = earned.has(item.id);
-      const blocked = isSetupInvalidated || isPreCampaignBlocked;
+
+      // ex_estudos: bônus vai pro AUTOR. Se o csOwner observador NÃO é o autor de algum
+      // estudo da campanha, value_brl pro dono = 0.
+      const isStudyItem = item.id === 'ex_estudos';
+      let isStudyBlocked = false;
+      if (isStudyItem && studiesInfo.length > 0) {
+        const authors = studiesInfo.map(s => (s.author_email || '').toLowerCase()).filter(Boolean);
+        // Se nenhum dos autores é o csOwner → bloqueia
+        isStudyBlocked = !authors.includes(csOwnerLower);
+      }
+
+      const blocked = isSetupInvalidated || isPreCampaignBlocked || isStudyBlocked;
       const effectivelyEarned = wasEarned && !blocked;
       const adminOv = adminOverrides[item.id];
+      // Anexa info de estudos no item ex_estudos pra UI mostrar nome + autor
+      const studiesAttachment = (isStudyItem && studiesInfo.length > 0)
+        ? studiesInfo
+        : null;
       return {
         id: item.id,
         label: item.label,
@@ -291,9 +308,11 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
         was_earned: wasEarned,
         invalidated: isSetupInvalidated && wasEarned,
         pre_assigned_to_other: isPreCampaignBlocked && wasEarned,
+        study_goes_to_other: isStudyBlocked && wasEarned,
         value_brl: effectivelyEarned ? liquido * item.pct : 0,
         admin_overridden: !!adminOv,
         admin_override: adminOv || null,
+        studies_info: studiesAttachment,
       };
     });
 

@@ -32,6 +32,29 @@ export async function getStudyById(id, versionId) {
   return result;
 }
 
+/**
+ * Lookup por display_name (case-insensitive).
+ * Usado quando o Command grava o nome do estudo (Copa do Mundo) em vez do id.
+ * Retorna { id, display_name, author_email, ... } ou null.
+ */
+export async function findStudyByName(displayName, versionId) {
+  if (!displayName) return null;
+  const cacheKey = `study_by_name:${versionId}:${displayName.toLowerCase()}`;
+  const cached = cache.get(cacheKey);
+  if (cached !== null) return cached;
+
+  const sql = `
+    SELECT *
+    FROM ${tableRef('commplan_studies_catalog')}
+    WHERE LOWER(display_name) = LOWER(@n) AND version_id = @v AND active = TRUE
+    LIMIT 1
+  `;
+  const rows = await query(sql, { n: displayName, v: versionId });
+  const result = rows[0] || null;
+  cache.set(cacheKey, result);
+  return result;
+}
+
 /** Lista todos os estudos de uma versão. Admin usa pra UI. */
 export async function listStudies(versionId) {
   const sql = `

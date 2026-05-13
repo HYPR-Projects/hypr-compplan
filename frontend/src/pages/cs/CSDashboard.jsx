@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Search, ArrowRight, ArrowLeft, Eye, Calendar, Users, List, Filter,
-  CheckCircle2, Clock, UserPlus, X,
+  CheckCircle2, Clock, UserPlus, X, BookOpen,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
@@ -325,6 +325,47 @@ export default function CsDashboard() {
                 <div className="cs-pre-assigned__values">
                   <span className="mono cs-campaign-card__pct">{(pa.pre_subtotal_pct * 100).toFixed(2)}%</span>
                   <span className="mono cs-campaign-card__brl">{fmt.brl(pa.pre_subtotal_brl)}</span>
+                </div>
+                <ArrowRight size={16} className="cs-campaign-card__arrow" />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Estudos usados em campanhas de outros CSs (autor recebe 0.30%) */}
+      {data.study_authored_items && data.study_authored_items.length > 0 && (
+        <section className="cs-pre-assigned fade-up">
+          <div className="cs-month-group__header">
+            <span>
+              <BookOpen size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+              Estudos seus usados em campanhas de outros CSs
+            </span>
+            <span className="cs-month-group__count">
+              {fmt.brl(data.kpis.bonus_study_authored)} · {data.study_authored_items.length} {data.study_authored_items.length === 1 ? 'campanha' : 'campanhas'}
+            </span>
+          </div>
+          <div className="cs-pre-assigned__list">
+            {data.study_authored_items.map(sa => (
+              <div key={sa.short_token} className="cs-study-authored__card" onClick={() => navigate(`/cs/campanha/${sa.short_token}`)}>
+                <div className="cs-pre-assigned__main">
+                  <div className="cs-pre-assigned__title">
+                    <span className="cs-campaign-card__client">{sa.client_name}</span>
+                    <Badge variant="neutral">{sa.short_token}</Badge>
+                    {sa.is_legacy && <Badge variant="neutral">Legacy</Badge>}
+                  </div>
+                  <div className="cs-pre-assigned__campaign">{sa.campaign_name}</div>
+                  <div className="cs-pre-assigned__meta">
+                    Dono: <strong>{sa.owner_cs_name || sa.owner_cs_email}</strong>
+                    <span className="page-subtitle__sep">·</span>
+                    Estudo: <strong>{sa.study_name}</strong>
+                    <span className="page-subtitle__sep">·</span>
+                    {fmt.dateRange(sa.start_date, sa.end_date)}
+                  </div>
+                </div>
+                <div className="cs-pre-assigned__values">
+                  <span className="mono cs-campaign-card__pct">{(sa.study_bonus_pct * 100).toFixed(2)}%</span>
+                  <span className="mono cs-campaign-card__brl">{fmt.brl(sa.study_bonus_brl)}</span>
                 </div>
                 <ArrowRight size={16} className="cs-campaign-card__arrow" />
               </div>
