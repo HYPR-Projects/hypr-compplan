@@ -170,7 +170,8 @@ async function fetchManualChecks(shortToken, isLegacy) {
   try {
     const table = isLegacy ? 'commplan_legacy_assignments' : 'commplan_command_overrides';
     const [row] = await query(
-      `SELECT manual_checks, admin_overrides, admin_overrides_by, admin_overrides_at
+      `SELECT manual_checks, admin_overrides, admin_overrides_by, admin_overrides_at,
+              pre_campaign_assignee_email, pre_campaign_assigned_at
        FROM ${tableRef(table)}
        WHERE short_token = @t LIMIT 1`,
       { t: shortToken }
@@ -182,10 +183,12 @@ async function fetchManualChecks(shortToken, isLegacy) {
       adminOverrides,
       adminOverridesBy: row?.admin_overrides_by || null,
       adminOverridesAt: row?.admin_overrides_at?.value || row?.admin_overrides_at || null,
+      preAssignee: row?.pre_campaign_assignee_email || null,
+      preAssignedAt: row?.pre_campaign_assigned_at?.value || row?.pre_campaign_assigned_at || null,
     };
   } catch (err) {
     console.warn(`fetchManualChecks(${shortToken}): ${err.message}`);
-    return { manualChecks: {}, adminOverrides: {}, adminOverridesBy: null, adminOverridesAt: null };
+    return { manualChecks: {}, adminOverrides: {}, adminOverridesBy: null, adminOverridesAt: null, preAssignee: null, preAssignedAt: null };
   }
 }
 
@@ -223,20 +226,21 @@ router.get('/dashboard/:q', async (req, res) => {
     const tokens = campaigns.map(c => c.short_token);
     let manualChecksByToken = {};
     let adminOverridesByToken = {};
+    let preAssigneeByToken = {};
     let metricsByToken = {};
 
     if (tokens.length > 0) {
-      // Batch 1: manual_checks + admin_overrides de overrides + assignments
+      // Batch 1: manual_checks + admin_overrides + pre_assignee de overrides + assignments
       try {
         const [overrideRows, legacyRows] = await Promise.all([
           query(
-            `SELECT short_token, manual_checks, admin_overrides
+            `SELECT short_token, manual_checks, admin_overrides, pre_campaign_assignee_email
              FROM ${tableRef('commplan_command_overrides')}
              WHERE short_token IN UNNEST(@toks)`,
             { toks: tokens }
           ),
           query(
-            `SELECT short_token, manual_checks, admin_overrides
+            `SELECT short_token, manual_checks, admin_overrides, pre_campaign_assignee_email
              FROM ${tableRef('commplan_legacy_assignments')}
              WHERE short_token IN UNNEST(@toks)`,
             { toks: tokens }
@@ -250,6 +254,9 @@ router.get('/dashboard/:q', async (req, res) => {
           if (r.admin_overrides) {
             try { adminOverridesByToken[r.short_token] = JSON.parse(r.admin_overrides); }
             catch (_) { /* ignore */ }
+          }
+          if (r.pre_campaign_assignee_email) {
+            preAssigneeByToken[r.short_token] = r.pre_campaign_assignee_email;
           }
         }
       } catch (e) {
@@ -327,11 +334,13 @@ router.get('/dashboard/:q', async (req, res) => {
 
     // Agora calcula bônus de cada campanha com TODOS os dados
     let totalBonusBrl = 0;
+    let totalBonusPreAssignedBrl = 0; // bônus de Pré atribuído pra este CS em campanhas de outros
     const items = campaigns.map(c => {
       const mc = manualChecksByToken[c.short_token] || {};
       const ao = adminOverridesByToken[c.short_token] || {};
+      const preAssignee = preAssigneeByToken[c.short_token] || null;
       const metrics = metricsByToken[c.short_token] || null;
-      const breakdown = computeBonus(c, mc, metrics, ao);
+      const breakdown = computeBonus(c, mc, metrics, ao, { preAssignee, csOwner: csEmail });
       totalBonusBrl += breakdown.total_brl;
       return {
         short_token: c.short_token,
@@ -353,6 +362,64 @@ router.get('/dashboard/:q', async (req, res) => {
 
     const nReviewed = items.filter(i => i.reviewed).length;
     const bruto = items.reduce((s, i) => s + i.bruto, 0);
+
+    // Busca campanhas onde este CS é PRE_ASSIGNEE mas NÃO é o CS dono
+    // (Pré Campanha atribuída a este CS em campanhas de outros)
+    let preAssignedItems = [];
+    let preAssignedBonusBrl = 0;
+    try {
+      // Filtro de datas do quarter
+      const [qy, qq] = quarter.split('-Q');
+      const qStartMonth = (parseInt(qq) - 1) * 3;
+      const qStart = `${qy}-${String(qStartMonth + 1).padStart(2, '0')}-01`;
+      const qEndMonth = qStartMonth + 3;
+      const qEnd = `${qy}-${String(qEndMonth).padStart(2, '0')}-01`;
+
+      const preCampaigns = await query(
+        `SELECT
+           c.short_token, c.client_name, c.campaign_name, c.cp_name, c.agency,
+           c.start_date, c.end_date, c.is_legacy, c.cs_email, c.cs_name,
+           c.total_value,
+           IFNULL(o.manual_checks, la.manual_checks) AS manual_checks,
+           IFNULL(o.admin_overrides, la.admin_overrides) AS admin_overrides
+         FROM ${tableRef('commplan_checklists')} c
+         LEFT JOIN ${tableRef('commplan_command_overrides')} o ON c.short_token = o.short_token
+         LEFT JOIN ${tableRef('commplan_legacy_assignments')} la ON c.short_token = la.short_token
+         WHERE LOWER(IFNULL(o.pre_campaign_assignee_email, la.pre_campaign_assignee_email)) = @cs
+           AND LOWER(IFNULL(c.cs_email, '')) != @cs
+           AND c.start_date >= @qStart AND c.start_date < @qEnd`,
+        { cs: csEmail, qStart, qEnd }
+      );
+
+      for (const pc of preCampaigns) {
+        const mc = pc.manual_checks ? JSON.parse(pc.manual_checks) : {};
+        const ao = pc.admin_overrides ? JSON.parse(pc.admin_overrides) : {};
+        // Calcula com csOwner = csEmail (faz pre_campaign contar pra ele)
+        const breakdown = computeBonus(pc, mc, null, ao, { preAssignee: csEmail, csOwner: csEmail });
+        // Mas só pega o subtotal de pre_campaign (não conta setup/etc das campanhas de outros)
+        const preSubtotal = breakdown.by_category?.pre_campaign?.subtotal_brl || 0;
+        if (preSubtotal > 0) {
+          preAssignedBonusBrl += preSubtotal;
+          preAssignedItems.push({
+            short_token: pc.short_token,
+            client_name: pc.client_name,
+            campaign_name: pc.campaign_name,
+            owner_cs_email: pc.cs_email,
+            owner_cs_name: pc.cs_name,
+            start_date: pc.start_date?.value || pc.start_date,
+            end_date: pc.end_date?.value || pc.end_date,
+            is_legacy: !!pc.is_legacy,
+            pre_subtotal_brl: preSubtotal,
+            pre_subtotal_pct: breakdown.by_category.pre_campaign.subtotal_pct,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn(`Erro buscando pre-assigned: ${e.message}`);
+    }
+
+    // Total = bonus das próprias campanhas + pré atribuída em campanhas de outros
+    totalBonusBrl += preAssignedBonusBrl;
 
     // Busca salário vigente do CS
     let monthlySalary = 0;
@@ -395,6 +462,7 @@ router.get('/dashboard/:q', async (req, res) => {
         bruto_total: bruto,
         liquido_total: bruto * NET_FACTOR,
         bonus_total: totalBonusBrl,
+        bonus_pre_assigned: preAssignedBonusBrl,
         // Novos campos: piso + cálculo final
         monthly_salary: monthlySalary,
         floor_quarter: floorQuarter,
@@ -404,6 +472,7 @@ router.get('/dashboard/:q', async (req, res) => {
         tax_rate: TAX_RATE,
       },
       items,
+      pre_assigned_items: preAssignedItems,
     });
   } catch (err) {
     console.error('GET /me/dashboard error:', err);
@@ -438,10 +507,6 @@ router.get('/campaign/:token', async (req, res) => {
       return res.status(404).json({ error: `Campanha ${token} não encontrada` });
     }
 
-    if (!isAdmin && (campaign.cs_email || '').toLowerCase() !== csEmail) {
-      return res.status(403).json({ error: 'Sem permissão pra ver essa campanha' });
-    }
-
     const isLegacy = !!campaign.is_legacy;
 
     // Pega manual_checks e métricas em paralelo
@@ -449,10 +514,20 @@ router.get('/campaign/:token', async (req, res) => {
       fetchManualChecks(campaign.short_token, isLegacy),
       fetchPerformanceMetrics(campaign.short_token, campaign.client_name),
     ]);
-    const { manualChecks, adminOverrides, adminOverridesBy, adminOverridesAt } = mcData;
+    const { manualChecks, adminOverrides, adminOverridesBy, adminOverridesAt, preAssignee, preAssignedAt } = mcData;
 
-    // Calcula breakdown completo (com admin overrides aplicados)
-    const breakdown = computeBonus(campaign, manualChecks, metrics, adminOverrides);
+    // Permissão: CS dono OU admin OU assignee de pre_campaign
+    if (!isAdmin
+        && (campaign.cs_email || '').toLowerCase() !== csEmail
+        && (preAssignee || '').toLowerCase() !== csEmail) {
+      return res.status(403).json({ error: 'Sem permissão pra ver essa campanha' });
+    }
+
+    // Calcula breakdown completo (com admin overrides + pre assignee aplicados)
+    const breakdown = computeBonus(campaign, manualChecks, metrics, adminOverrides, {
+      preAssignee,
+      csOwner: csEmail,
+    });
 
     // Status reviewed
     let reviewed = false;
@@ -510,6 +585,12 @@ router.get('/campaign/:token', async (req, res) => {
       review_requested: !!manualChecks.__review_requested,
       review_request_notes: manualChecks.__review_notes || '',
 
+      // Pré Campanha — atribuída a outro CS?
+      pre_campaign_assignee_email: preAssignee,
+      pre_campaign_assigned_at: preAssignedAt,
+      // Flag útil pra UI: o viewer atual é o assignee?
+      viewer_is_pre_assignee: (preAssignee || '').toLowerCase() === csEmail,
+
       // Métricas pra Otimizações (se houver)
       metrics: metrics ? {
         ecpm: Number(metrics.ecpm) || 0,
@@ -543,7 +624,13 @@ router.put('/campaign/:token', async (req, res) => {
     );
 
     if (!campaign) return res.status(404).json({ error: `Campanha ${token} não encontrada` });
-    if (!isAdmin && (campaign.cs_email || '').toLowerCase() !== csEmail) {
+
+    // Permissão: CS dono OU admin OU assignee de pre_campaign
+    const prev = await fetchManualChecks(campaign.short_token, !!campaign.is_legacy);
+    const preAssignee = prev.preAssignee;
+    if (!isAdmin
+        && (campaign.cs_email || '').toLowerCase() !== csEmail
+        && (preAssignee || '').toLowerCase() !== csEmail) {
       return res.status(403).json({ error: 'Sem permissão pra editar' });
     }
 
@@ -555,11 +642,7 @@ router.put('/campaign/:token', async (req, res) => {
     const reviewed = body.reviewed !== false;
 
     // Antes de salvar, busca estado anterior pra detectar mudança no review_requested
-    let wasReviewRequested = false;
-    try {
-      const prev = await fetchManualChecks(campaign.short_token, !!campaign.is_legacy);
-      wasReviewRequested = !!prev.manualChecks?.__review_requested;
-    } catch (_) { /* silent */ }
+    let wasReviewRequested = !!prev.manualChecks?.__review_requested;
 
     const isNowReviewRequested = !!manualChecks.__review_requested;
     const reviewRequestedChanged = !wasReviewRequested && isNowReviewRequested;
@@ -640,9 +723,12 @@ router.put('/campaign/:token', async (req, res) => {
       { t: token }
     );
     const metrics = await fetchPerformanceMetrics(token, updated?.client_name);
-    // Re-busca admin_overrides (não muda pelo PUT do CS, mas garante consistência)
+    // Re-busca admin_overrides + pre_assignee (não mudam pelo PUT, mas garante consistência)
     const post = await fetchManualChecks(token, !!campaign.is_legacy);
-    const breakdown = computeBonus(updated, manualChecks, metrics, post.adminOverrides || {});
+    const breakdown = computeBonus(updated, manualChecks, metrics, post.adminOverrides || {}, {
+      preAssignee: post.preAssignee,
+      csOwner: csEmail,
+    });
 
     res.json({ ok: true, reviewed, breakdown });
   } catch (err) {
@@ -690,9 +776,158 @@ router.get('/history', async (req, res) => {
 });
 
 /**
- * GET /commplan/me/campaign/:token/replicate-sources
- * Lista campanhas elegíveis para replicação (mesmo cliente, mesmo CS, com manual_checks preenchidos).
+ * GET /commplan/me/pre-campaign-search?q=
+ * Lista campanhas pra atribuir Pré Campanha (busca por cliente/campanha/token).
  */
+router.get('/pre-campaign-search', async (req, res) => {
+  try {
+    const q = (req.query.q || '').toString().trim();
+    const limit = Math.min(parseInt(req.query.limit) || 30, 100);
+
+    let sql = `
+      SELECT
+        c.short_token, c.client_name, c.campaign_name, c.start_date, c.end_date,
+        c.is_legacy, c.cs_email, c.cs_name,
+        IFNULL(o.pre_campaign_assignee_email, la.pre_campaign_assignee_email) AS pre_assignee
+      FROM ${tableRef('commplan_checklists')} c
+      LEFT JOIN ${tableRef('commplan_command_overrides')} o ON c.short_token = o.short_token
+      LEFT JOIN ${tableRef('commplan_legacy_assignments')} la ON c.short_token = la.short_token
+      WHERE c.cs_email IS NOT NULL
+    `;
+    const params = {};
+    if (q) {
+      sql += ` AND (
+        LOWER(c.client_name) LIKE @q
+        OR LOWER(c.campaign_name) LIKE @q
+        OR LOWER(c.short_token) LIKE @q
+        OR LOWER(c.cs_name) LIKE @q
+      )`;
+      params.q = `%${q.toLowerCase()}%`;
+    }
+    sql += ` ORDER BY c.start_date DESC LIMIT @lim`;
+    params.lim = limit;
+
+    const rows = await query(sql, params);
+
+    res.json({
+      count: rows.length,
+      items: rows.map(r => ({
+        short_token: r.short_token,
+        client_name: r.client_name,
+        campaign_name: r.campaign_name,
+        start_date: r.start_date?.value || r.start_date,
+        end_date: r.end_date?.value || r.end_date,
+        is_legacy: !!r.is_legacy,
+        cs_email: r.cs_email,
+        cs_name: r.cs_name,
+        pre_assignee: r.pre_assignee || null,
+      })),
+    });
+  } catch (err) {
+    console.error('GET /me/pre-campaign-search error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /commplan/me/campaign/:token/assign-pre
+ * Atribui a Pré Campanha desta campanha ao CS logado.
+ * Qualquer CS pode atribuir (não precisa ser admin nem dono).
+ */
+router.post('/campaign/:token/assign-pre', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { csEmail, byEmail } = resolveTargetCs(req);
+
+    const [campaign] = await query(
+      `SELECT short_token, is_legacy, cs_email
+       FROM ${tableRef('commplan_checklists')}
+       WHERE short_token = @t LIMIT 1`,
+      { t: token }
+    );
+    if (!campaign) return res.status(404).json({ error: 'campanha não encontrada' });
+
+    const table = campaign.is_legacy ? 'commplan_legacy_assignments' : 'commplan_command_overrides';
+    if (campaign.is_legacy) {
+      await query(
+        `UPDATE ${tableRef(table)}
+         SET pre_campaign_assignee_email = @assignee,
+             pre_campaign_assigned_at = CURRENT_TIMESTAMP(),
+             updated_by = @by,
+             updated_at = CURRENT_TIMESTAMP()
+         WHERE short_token = @t`,
+        { t: token, assignee: csEmail, by: byEmail }
+      );
+    } else {
+      await query(
+        `MERGE ${tableRef(table)} T
+         USING (SELECT @t AS short_token) S
+         ON T.short_token = S.short_token
+         WHEN MATCHED THEN UPDATE SET
+           pre_campaign_assignee_email = @assignee,
+           pre_campaign_assigned_at = CURRENT_TIMESTAMP(),
+           updated_at = CURRENT_TIMESTAMP(),
+           updated_by = @by
+         WHEN NOT MATCHED THEN INSERT
+           (short_token, cs_email, pre_campaign_assignee_email, pre_campaign_assigned_at,
+            reviewed, created_at, updated_at, updated_by)
+         VALUES (@t, @csOriginal, @assignee, CURRENT_TIMESTAMP(),
+                 FALSE, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), @by)`,
+        { t: token, assignee: csEmail, by: byEmail, csOriginal: campaign.cs_email || csEmail }
+      );
+    }
+
+    res.json({ ok: true, assignee: csEmail, target_token: token });
+  } catch (err) {
+    console.error('POST assign-pre error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /commplan/me/campaign/:token/assign-pre
+ * Remove a atribuição. Quem pode: o próprio assignee OU o CS dono OU admin.
+ */
+router.delete('/campaign/:token/assign-pre', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { csEmail, byEmail, isAdmin } = resolveTargetCs(req);
+
+    const [campaign] = await query(
+      `SELECT c.short_token, c.is_legacy, c.cs_email,
+              IFNULL(o.pre_campaign_assignee_email, la.pre_campaign_assignee_email) AS pre_assignee
+       FROM ${tableRef('commplan_checklists')} c
+       LEFT JOIN ${tableRef('commplan_command_overrides')} o ON c.short_token = o.short_token
+       LEFT JOIN ${tableRef('commplan_legacy_assignments')} la ON c.short_token = la.short_token
+       WHERE c.short_token = @t LIMIT 1`,
+      { t: token }
+    );
+    if (!campaign) return res.status(404).json({ error: 'campanha não encontrada' });
+
+    const canRemove = isAdmin
+      || (campaign.pre_assignee || '').toLowerCase() === csEmail
+      || (campaign.cs_email || '').toLowerCase() === csEmail;
+    if (!canRemove) {
+      return res.status(403).json({ error: 'Sem permissão (precisa ser admin, assignee ou CS dono)' });
+    }
+
+    const table = campaign.is_legacy ? 'commplan_legacy_assignments' : 'commplan_command_overrides';
+    await query(
+      `UPDATE ${tableRef(table)}
+       SET pre_campaign_assignee_email = NULL,
+           pre_campaign_assigned_at = NULL,
+           updated_by = @by,
+           updated_at = CURRENT_TIMESTAMP()
+       WHERE short_token = @t`,
+      { t: token, by: byEmail }
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE assign-pre error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 router.get('/campaign/:token/replicate-sources', async (req, res) => {
   try {
     const { token } = req.params;

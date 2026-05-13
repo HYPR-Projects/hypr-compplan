@@ -178,6 +178,21 @@ export const endpoints = {
     return api.post(`/commplan/me/campaign/${token}/replicate-from${q}`, { source_token: sourceToken });
   },
 
+  mePreCampaignSearch(q = '', opts = {}) {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (opts.as) params.set('as', opts.as);
+    return api.get(`/commplan/me/pre-campaign-search?${params.toString()}`);
+  },
+  meAssignPre(token, opts = {}) {
+    const q = opts.as ? `?as=${encodeURIComponent(opts.as)}` : '';
+    return api.post(`/commplan/me/campaign/${token}/assign-pre${q}`, {});
+  },
+  meUnassignPre(token, opts = {}) {
+    const q = opts.as ? `?as=${encodeURIComponent(opts.as)}` : '';
+    return api.delete(`/commplan/me/campaign/${token}/assign-pre${q}`);
+  },
+
   listMentorships()      { return api.get('/commplan/admin/mentorships'); },
   createMentorship(body) { return api.post('/commplan/admin/mentorships', body); },
   endMentorship(id)      { return api.delete(`/commplan/admin/mentorships/${id}`); },

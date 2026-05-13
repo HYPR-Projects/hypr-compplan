@@ -406,3 +406,74 @@
   border-color: var(--accent-cyan);
   color: var(--accent-cyan);
 }
+
+/* ── Pré Campanha atribuída em campanhas de outros CSs ─────────── */
+
+.cs-pre-assigned {
+  margin-top: var(--space-5);
+}
+
+.cs-pre-assigned__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cs-pre-assigned__card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent-cyan, #0891b2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+
+.cs-pre-assigned__card:hover {
+  border-color: var(--accent-cyan);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.cs-pre-assigned__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.cs-pre-assigned__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.cs-pre-assigned__campaign {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.cs-pre-assigned__meta {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.cs-pre-assigned__values {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 110px;
+}
+
+.cs-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}

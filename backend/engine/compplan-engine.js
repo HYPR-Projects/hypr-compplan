@@ -178,15 +178,24 @@ function applyConstraints(earnedItems, allItems, adminOverriddenItems = new Set(
  * @param {object} campaign - Dados da campanha (do checklist)
  * @param {object} manualChecks - JSON do que o CS marcou (item_id → bool)
  * @param {object} metrics - Métricas (eCPM, CTR, over)
- * @param {object} adminOverrides - JSON com overrides admin:
- *   {
- *     "<item_id>": { earned: bool, reason, by, at },
- *     "__setup_force": "auto" | "valid" | "invalid"
- *   }
+ * @param {object} adminOverrides - JSON com overrides admin
+ * @param {object} opts - { preAssignee: email|null, csOwner: email }
+ *   Se preAssignee diferente de null, os itens de pre_campaign NÃO contam pro CS dono.
+ *   Eles continuam aparecendo (e podem ser marcados) mas value_brl=0 no breakdown do dono.
+ *   Quando engine roda PRO assignee (outra view), preAssignee === csOwner → conta normalmente.
  */
-export function computeBonus(campaign, manualChecks = {}, metrics = null, adminOverrides = {}) {
+export function computeBonus(campaign, manualChecks = {}, metrics = null, adminOverrides = {}, opts = {}) {
   const bruto = Number(campaign.total_value) || 0;
   const liquido = bruto * NET_FACTOR;
+
+  const { preAssignee = null, csOwner = null } = opts;
+  // Pré Campanha entra no breakdown do CS APENAS se:
+  //   - Não há assignee (sem atribuição → conta pro dono)
+  //   - OU o CS olhando É o assignee (mesma pessoa)
+  // Quando preAssignee existe E é diferente do csOwner observador, pre_campaign zera.
+  const csOwnerLower = (csOwner || '').toLowerCase();
+  const preAssigneeLower = (preAssignee || '').toLowerCase();
+  const preGoesToOwner = !preAssigneeLower || preAssigneeLower === csOwnerLower;
 
   // 1. Items inferidos do checklist (auto + semi_auto)
   const inferred = inferAutoItems(campaign);
@@ -261,10 +270,13 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
 
   for (const [catKey, cat] of Object.entries(COMPPLAN_CATALOG)) {
     const isSetupInvalidated = catKey === 'setup' && setupValidation.invalidated;
+    // Pré Campanha: se atribuída a outro CS, items aparecem mas value_brl=0 pro dono
+    const isPreCampaignBlocked = catKey === 'pre_campaign' && !preGoesToOwner;
 
     const items = cat.items.map(item => {
       const wasEarned = earned.has(item.id);
-      const effectivelyEarned = wasEarned && !isSetupInvalidated;
+      const blocked = isSetupInvalidated || isPreCampaignBlocked;
+      const effectivelyEarned = wasEarned && !blocked;
       const adminOv = adminOverrides[item.id];
       return {
         id: item.id,
@@ -278,8 +290,8 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
         earned: effectivelyEarned,
         was_earned: wasEarned,
         invalidated: isSetupInvalidated && wasEarned,
+        pre_assigned_to_other: isPreCampaignBlocked && wasEarned,
         value_brl: effectivelyEarned ? liquido * item.pct : 0,
-        // Admin override metadata pra UI
         admin_overridden: !!adminOv,
         admin_override: adminOv || null,
       };
@@ -299,6 +311,8 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
       invalidation_reason: isSetupInvalidated ? setupValidation.reason : null,
       setup_forced: catKey === 'setup' ? (setupValidation.forced || false) : false,
       setup_force_meta: catKey === 'setup' ? setupForcedBy : null,
+      pre_assigned_to: catKey === 'pre_campaign' ? (preAssignee || null) : null,
+      pre_blocked_for_owner: isPreCampaignBlocked,
     };
 
     totalPct += subtotalPct;

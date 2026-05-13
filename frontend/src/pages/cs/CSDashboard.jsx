@@ -2,12 +2,14 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Search, ArrowRight, ArrowLeft, Eye, Calendar, Users, List, Filter,
-  CheckCircle2, Clock,
+  CheckCircle2, Clock, UserPlus, X,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
 import { Input } from '../../components/ui/Input.jsx';
+import Button from '../../components/ui/Button.jsx';
+import { Modal } from '../../components/ui/Modal.jsx';
 import { fmt, currentQuarter } from '../../lib/format.js';
 import { auth, endpoints } from '../../lib/api.js';
 import './CSDashboard.css';
@@ -26,16 +28,23 @@ export default function CsDashboard() {
   const [tab, setTab] = useState('por_mes'); // por_mes | por_cliente | lista
   const [statusFilter, setStatusFilter] = useState('todas'); // todas | revisadas | pendentes
   const [monthFilter, setMonthFilter] = useState('todos'); // todos | "2026-05" | ...
+  const [showAssignPreModal, setShowAssignPreModal] = useState(false);
 
   const impersonateEmail = params.csEmail || null;
 
-  useEffect(() => {
-    let cancelled = false;
+  async function load() {
     const opts = impersonateEmail ? { as: impersonateEmail } : {};
-    endpoints.meDashboard(quarter, opts)
-      .then(d => { if (!cancelled) setData(d); })
-      .catch(e => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
+    try {
+      const d = await endpoints.meDashboard(quarter, opts);
+      setData(d);
+      setError(null);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  useEffect(() => {
+    load();
   }, [quarter, impersonateEmail]);
 
   const items = data?.items || [];
@@ -150,6 +159,9 @@ export default function CsDashboard() {
             {quarter}
           </div>
         </div>
+        <Button variant="ghost" icon={UserPlus} onClick={() => setShowAssignPreModal(true)}>
+          Atribuir Pré Campanha
+        </Button>
       </header>
 
       {/* 3 KPIs grandes (estilo Report Center) */}
@@ -281,6 +293,53 @@ export default function CsDashboard() {
           })}
         </div>
       )}
+
+      {/* Pré Campanhas que este CS está cuidando em campanhas de outros */}
+      {data.pre_assigned_items && data.pre_assigned_items.length > 0 && (
+        <section className="cs-pre-assigned fade-up">
+          <div className="cs-month-group__header">
+            <span>
+              <UserPlus size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+              Pré Campanha em campanhas de outros CSs
+            </span>
+            <span className="cs-month-group__count">
+              {fmt.brl(data.kpis.bonus_pre_assigned)} · {data.pre_assigned_items.length} {data.pre_assigned_items.length === 1 ? 'campanha' : 'campanhas'}
+            </span>
+          </div>
+          <div className="cs-pre-assigned__list">
+            {data.pre_assigned_items.map(pa => (
+              <div key={pa.short_token} className="cs-pre-assigned__card" onClick={() => navigate(`/cs/campanha/${pa.short_token}`)}>
+                <div className="cs-pre-assigned__main">
+                  <div className="cs-pre-assigned__title">
+                    <span className="cs-campaign-card__client">{pa.client_name}</span>
+                    <Badge variant="neutral">{pa.short_token}</Badge>
+                    {pa.is_legacy && <Badge variant="neutral">Legacy</Badge>}
+                  </div>
+                  <div className="cs-pre-assigned__campaign">{pa.campaign_name}</div>
+                  <div className="cs-pre-assigned__meta">
+                    Dono: <strong>{pa.owner_cs_name || pa.owner_cs_email}</strong>
+                    <span className="page-subtitle__sep">·</span>
+                    {fmt.dateRange(pa.start_date, pa.end_date)}
+                  </div>
+                </div>
+                <div className="cs-pre-assigned__values">
+                  <span className="mono cs-campaign-card__pct">{(pa.pre_subtotal_pct * 100).toFixed(2)}%</span>
+                  <span className="mono cs-campaign-card__brl">{fmt.brl(pa.pre_subtotal_brl)}</span>
+                </div>
+                <ArrowRight size={16} className="cs-campaign-card__arrow" />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {showAssignPreModal && (
+        <AssignPreModal
+          onClose={() => setShowAssignPreModal(false)}
+          onSuccess={() => { setShowAssignPreModal(false); load(); }}
+          opts={impersonateEmail ? { as: impersonateEmail } : {}}
+        />
+      )}
     </AppShell>
   );
 }
@@ -357,5 +416,125 @@ function CampaignRowNew({ campaign, onClick, i }) {
         <button className="cs-campaign-card__btn">Ver campanha <ArrowRight size={14} /></button>
       </div>
     </div>
+  );
+}
+
+function AssignPreModal({ onClose, onSuccess, opts }) {
+  const [search, setSearch] = useState('');
+  const [results, setResults] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
+
+  // Busca inicial (sem query)
+  useEffect(() => {
+    endpoints.mePreCampaignSearch('', opts)
+      .then(d => setResults(d.items || []))
+      .catch(e => setErr(e.message));
+  }, []);
+
+  // Debounced search
+  useEffect(() => {
+    const t = setTimeout(() => {
+      endpoints.mePreCampaignSearch(search.trim(), opts)
+        .then(d => setResults(d.items || []))
+        .catch(e => setErr(e.message));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  async function handleConfirm() {
+    if (!selected) return;
+    setLoading(true);
+    setErr(null);
+    try {
+      await endpoints.meAssignPre(selected.short_token, opts);
+      onSuccess();
+    } catch (e) {
+      setErr(e.message);
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Modal open={true} title="Atribuir Pré Campanha em outra campanha" onClose={onClose} size="lg">
+      <div className="form-stack">
+        <Card variant="info" style={{ padding: 'var(--space-3)' }}>
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            Atribua a si mesmo a <strong>Pré Campanha</strong> de uma campanha de outro CS.
+            Você recebe <strong>1,35%</strong> (max) sobre a líquida dessa campanha pelos itens
+            de Pré que marcar.
+          </div>
+        </Card>
+
+        <Input
+          icon={Search}
+          placeholder="Buscar por cliente, campanha, token ou CS…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+
+        {results === null ? (
+          <div className="empty-state" style={{ padding: 'var(--space-3)' }}>Buscando…</div>
+        ) : results.length === 0 ? (
+          <div className="empty-state" style={{ padding: 'var(--space-3)' }}>
+            Nenhuma campanha encontrada.
+          </div>
+        ) : (
+          <div className="replicate-list">
+            {results.map(c => (
+              <label
+                key={c.short_token}
+                className={`replicate-option ${selected?.short_token === c.short_token ? 'replicate-option--selected' : ''}`}
+              >
+                <input
+                  type="radio"
+                  name="campaign"
+                  value={c.short_token}
+                  checked={selected?.short_token === c.short_token}
+                  onChange={() => setSelected(c)}
+                />
+                <div className="replicate-option__main">
+                  <div className="replicate-option__title">
+                    <span className="cs-campaign-card__client">{c.client_name}</span>
+                    <strong>{c.campaign_name}</strong>
+                    <Badge variant="neutral">{c.short_token}</Badge>
+                    {c.is_legacy && <Badge variant="neutral">Legacy</Badge>}
+                    {c.pre_assignee && (
+                      <Badge variant="yellow">Pré já atribuída</Badge>
+                    )}
+                  </div>
+                  <div className="replicate-option__meta">
+                    CS dono: <strong>{c.cs_name || c.cs_email}</strong>
+                    <span className="page-subtitle__sep">·</span>
+                    {fmt.dateRange(c.start_date, c.end_date)}
+                    {c.pre_assignee && (
+                      <>
+                        <span className="page-subtitle__sep">·</span>
+                        Pré atualmente com {c.pre_assignee}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {err && <div className="form-error">{err}</div>}
+
+        <div className="modal__footer">
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button
+            variant="primary"
+            icon={UserPlus}
+            onClick={handleConfirm}
+            disabled={!selected || loading}
+          >
+            {loading ? 'Atribuindo…' : 'Atribuir Pré pra mim'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }

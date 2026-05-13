@@ -172,6 +172,11 @@ export default function CsCampaignDetail() {
             <Badge variant="neutral">{campaign.short_token}</Badge>
             {campaign.is_legacy && <Badge variant="neutral">Legacy</Badge>}
             {campaign.reviewed && <Badge variant="green">Revisada</Badge>}
+            {campaign.pre_campaign_assignee_email && (
+              <Badge variant={campaign.viewer_is_pre_assignee ? 'cyan' : 'yellow'}>
+                Pré: {campaign.pre_campaign_assignee_email}
+              </Badge>
+            )}
           </div>
           <h1 className="page-title">{campaign.campaign_name}</h1>
           <div className="page-subtitle">
