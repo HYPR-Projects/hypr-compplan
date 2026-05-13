@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Home, Calendar, FileText, Users, BookOpen, Shield,
-  Settings, LogOut, Sun, Moon, History, Sparkles, Archive,
+  Settings, LogOut, Sun, Moon, History, Sparkles, Archive, MessageSquare,
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.jsx';
 import { auth } from '../../lib/api.js';
@@ -22,11 +22,12 @@ const NAV_CS = [
 ];
 
 const NAV_ADMIN = [
-  { to: '/admin',                label: 'Visão geral',     icon: Home },
-  { to: '/admin/pendentes',      label: 'Pendentes',       icon: Sparkles, badge: 'pending' },
-  { to: '/admin/campanhas',      label: 'Campanhas',       icon: FileText },
-  { to: '/admin/time',           label: 'Time',            icon: Users },
-  { to: '/admin/excecoes-over',  label: 'Exceções OVER',   icon: Shield },
+  { to: '/admin',                  label: 'Visão geral',     icon: Home },
+  { to: '/admin/pendentes',        label: 'Pendentes',       icon: Sparkles, badge: 'pending' },
+  { to: '/admin/pedidos-revisao',  label: 'Pedidos análise', icon: MessageSquare },
+  { to: '/admin/campanhas',        label: 'Campanhas',       icon: FileText },
+  { to: '/admin/time',             label: 'Time',            icon: Users },
+  { to: '/admin/excecoes-over',    label: 'Exceções OVER',   icon: Shield },
 ];
 
 export default function AppShell({ children, pendingEvidences = 0, pendingCount = 0 }) {

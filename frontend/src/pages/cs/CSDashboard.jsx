@@ -325,6 +325,9 @@ function CampaignRowNew({ campaign, onClick, i }) {
           <span className="cs-campaign-card__client">{campaign.client_name}</span>
           <Badge variant="neutral">{campaign.short_token}</Badge>
           {campaign.is_legacy && <Badge variant="neutral">Legacy</Badge>}
+          {campaign.review_requested && (
+            <Badge variant="yellow">📋 Pedido de análise</Badge>
+          )}
         </div>
         <div className="cs-campaign-card__campaign">{campaign.campaign_name}</div>
         <div className="cs-campaign-card__meta">

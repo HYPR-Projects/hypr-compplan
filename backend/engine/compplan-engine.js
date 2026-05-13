@@ -137,7 +137,7 @@ function validateSetup(metrics) {
   return { invalidated: false, reason: null };
 }
 
-function applyConstraints(earnedItems, allItems) {
+function applyConstraints(earnedItems, allItems, adminOverriddenItems = new Set()) {
   const groups = {};
   for (const item of allItems) {
     if (!earnedItems.has(item.id)) continue;
@@ -152,6 +152,17 @@ function applyConstraints(earnedItems, allItems) {
 
   for (const items of Object.values(groups)) {
     if (items.length <= 1) continue;
+    // Se algum item do grupo foi forçado pelo admin, ele tem prioridade absoluta
+    const adminForced = items.filter(i => adminOverriddenItems.has(i.id));
+    if (adminForced.length > 0) {
+      // Mantém só os admin-forced (ou só o de maior pct entre eles)
+      adminForced.sort((a, b) => b.pct - a.pct);
+      for (const it of items) {
+        if (it.id !== adminForced[0].id) earnedItems.delete(it.id);
+      }
+      continue;
+    }
+    // Senão, comportamento normal: mantém só o maior pct
     items.sort((a, b) => b.pct - a.pct);
     for (let i = 1; i < items.length; i++) {
       earnedItems.delete(items[i].id);
@@ -161,8 +172,17 @@ function applyConstraints(earnedItems, allItems) {
 
 /**
  * Calcula o breakdown completo de bônus.
+ *
+ * @param {object} campaign - Dados da campanha (do checklist)
+ * @param {object} manualChecks - JSON do que o CS marcou (item_id → bool)
+ * @param {object} metrics - Métricas (eCPM, CTR, over)
+ * @param {object} adminOverrides - JSON com overrides admin:
+ *   {
+ *     "<item_id>": { earned: bool, reason, by, at },
+ *     "__setup_force": "auto" | "valid" | "invalid"
+ *   }
  */
-export function computeBonus(campaign, manualChecks = {}, metrics = null) {
+export function computeBonus(campaign, manualChecks = {}, metrics = null, adminOverrides = {}) {
   const bruto = Number(campaign.total_value) || 0;
   const liquido = bruto * NET_FACTOR;
 
@@ -177,7 +197,9 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null) {
   //    - 'semi_auto': se manualChecks tem chave, usa esse valor; senão, usa inferido
   //    - 'manual':    só se manualChecks.x === true
   //    - 'metrics':   o que o metricEarned disser
+  //    Depois disso, aplica adminOverrides[item_id].earned (se houver) — admin tem palavra final.
   const earned = new Set();
+  const adminOverriddenItems = new Set();
   const allItems = [];
   for (const [catKey, cat] of Object.entries(COMPPLAN_CATALOG)) {
     for (const item of cat.items) {
@@ -189,8 +211,6 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null) {
       if (item.source === 'auto') {
         if (inferred.has(item.id)) earned.add(item.id);
       } else if (item.source === 'semi_auto') {
-        // Se CS explicitamente marcou/desmarcou, usa esse valor.
-        // Senão, usa o inferido.
         if (explicitlySet) {
           if (manualVal) earned.add(item.id);
         } else {
@@ -201,14 +221,37 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null) {
       } else if (item.source === 'metrics') {
         if (metricEarned.has(item.id)) earned.add(item.id);
       }
+
+      // Admin override: sobrescreve a decisão automática
+      const adminOv = adminOverrides[item.id];
+      if (adminOv && typeof adminOv === 'object') {
+        adminOverriddenItems.add(item.id);
+        if (adminOv.earned === true) earned.add(item.id);
+        else if (adminOv.earned === false) earned.delete(item.id);
+      }
     }
   }
 
-  // 4. Aplica constraints (non_cumulative, oneof)
-  applyConstraints(earned, allItems);
+  // 4. Aplica constraints (non_cumulative, oneof) — mas só em items NÃO overridded
+  // Admin override tem precedência sobre constraints automáticas.
+  applyConstraints(earned, allItems, adminOverriddenItems);
 
-  // 5. Valida setup (over > 50%, criative fee, under)
-  const setupValidation = validateSetup(metrics);
+  // 5. Valida setup (over > 50%, criative fee, under) + admin force
+  const autoSetupValidation = validateSetup(metrics);
+  const setupForce = adminOverrides.__setup_force || 'auto';
+  let setupValidation = autoSetupValidation;
+  let setupForcedBy = null;
+  if (setupForce === 'valid') {
+    setupValidation = { invalidated: false, reason: null, forced: true };
+    setupForcedBy = adminOverrides.__setup_force_meta || null;
+  } else if (setupForce === 'invalid') {
+    setupValidation = {
+      invalidated: true,
+      reason: adminOverrides.__setup_force_meta?.reason || 'Setup anulado pelo admin.',
+      forced: true,
+    };
+    setupForcedBy = adminOverrides.__setup_force_meta || null;
+  }
 
   // 6. Monta breakdown por categoria
   const byCategory = {};
@@ -220,6 +263,7 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null) {
     const items = cat.items.map(item => {
       const wasEarned = earned.has(item.id);
       const effectivelyEarned = wasEarned && !isSetupInvalidated;
+      const adminOv = adminOverrides[item.id];
       return {
         id: item.id,
         label: item.label,
@@ -230,10 +274,12 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null) {
         needs_evidence: !!item.needs_evidence,
         evidence_type: item.evidence_type || null,
         earned: effectivelyEarned,
-        // Pra UI: se setup foi anulado, mantém o checkbox visualmente mas não conta
         was_earned: wasEarned,
         invalidated: isSetupInvalidated && wasEarned,
         value_brl: effectivelyEarned ? liquido * item.pct : 0,
+        // Admin override metadata pra UI
+        admin_overridden: !!adminOv,
+        admin_override: adminOv || null,
       };
     });
 
@@ -249,6 +295,8 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null) {
       subtotal_brl: subtotalBrl,
       invalidated: isSetupInvalidated,
       invalidation_reason: isSetupInvalidated ? setupValidation.reason : null,
+      setup_forced: catKey === 'setup' ? (setupValidation.forced || false) : false,
+      setup_force_meta: catKey === 'setup' ? setupForcedBy : null,
     };
 
     totalPct += subtotalPct;
@@ -262,5 +310,6 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null) {
     total_pct: totalPct,
     total_brl: liquido * totalPct,
     setup_validation: setupValidation,
+    auto_setup_validation: autoSetupValidation,  // pra UI ver o que era automático
   };
 }

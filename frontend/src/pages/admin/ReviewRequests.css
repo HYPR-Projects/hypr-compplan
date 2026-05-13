@@ -1,0 +1,109 @@
+/**
+ * ReviewRequests.css
+ */
+
+.review-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.review-card {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-3);
+  padding: 0;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+  overflow: hidden;
+}
+
+.review-card:hover {
+  border-color: var(--accent-yellow, #f5a524);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.review-card__stripe {
+  width: 4px;
+  background: var(--accent-yellow, #f5a524);
+  flex-shrink: 0;
+}
+
+.review-card__main {
+  flex: 1;
+  padding: var(--space-3) 0;
+  min-width: 0;
+}
+
+.review-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.review-card__client {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.review-card__campaign {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.review-card__meta {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+}
+
+.review-card__notes {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: rgba(245, 165, 36, 0.05);
+  border-left: 3px solid var(--accent-yellow, #f5a524);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  font-style: italic;
+}
+
+.review-card__notes > svg {
+  color: var(--accent-yellow, #f5a524);
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.review-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.review-card__arrow {
+  color: var(--text-tertiary);
+  align-self: center;
+  margin-right: var(--space-3);
+  transition: color 120ms ease, transform 120ms ease;
+  flex-shrink: 0;
+}
+
+.review-card:hover .review-card__arrow {
+  color: var(--accent-yellow, #f5a524);
+  transform: translateX(2px);
+}

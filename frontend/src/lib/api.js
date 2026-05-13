@@ -162,6 +162,13 @@ export const endpoints = {
   addOverException(body)      { return api.post('/commplan/admin/over-exceptions', body); },
   removeOverException(name)   { return api.delete(`/commplan/admin/over-exceptions/${encodeURIComponent(name)}`); },
 
+  adminOverrideItem(token, body) {
+    return api.put(`/commplan/admin/campaign/${token}/override`, body);
+  },
+  adminReviewRequests() {
+    return api.get('/commplan/admin/review-requests');
+  },
+
   listMentorships()      { return api.get('/commplan/admin/mentorships'); },
   createMentorship(body) { return api.post('/commplan/admin/mentorships', body); },
   endMentorship(id)      { return api.delete(`/commplan/admin/mentorships/${id}`); },

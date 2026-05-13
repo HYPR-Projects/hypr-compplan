@@ -3,13 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle2, AlertCircle, Save, Info,
   ChevronDown, ChevronRight, Sparkles, Zap, Eye, Link2, AlertTriangle,
+  MessageSquare, Shield,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { fmt } from '../../lib/format.js';
-import { endpoints } from '../../lib/api.js';
+import { endpoints, auth } from '../../lib/api.js';
 import './CampaignDetail.css';
 
 const CATEGORY_ORDER = ['pre_campaign', 'setup', 'optimization', 'account_mgmt', 'extras', 'onboarding'];
@@ -17,6 +18,8 @@ const CATEGORY_ORDER = ['pre_campaign', 'setup', 'optimization', 'account_mgmt',
 export default function CsCampaignDetail() {
   const { token, csEmail: impersonateEmail } = useParams();
   const navigate = useNavigate();
+  const user = auth.getUser();
+  const isAdmin = user?.role === 'admin';
   const [campaign, setCampaign] = useState(null);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -60,6 +63,26 @@ export default function CsCampaignDetail() {
       }
       return { ...prev, __evidence: evidence };
     });
+  }
+
+  /** Admin force earned/clear de um item. earned = true | false | null (clear) */
+  async function handleAdminOverride(itemId, earned, reason) {
+    try {
+      await endpoints.adminOverrideItem(token, { item_id: itemId, earned, reason });
+      await load(); // recarrega tudo
+    } catch (e) {
+      setError(`Erro ao forçar override: ${e.message}`);
+    }
+  }
+
+  /** Admin force setup auto | valid | invalid */
+  async function handleSetupForce(forceMode, reason) {
+    try {
+      await endpoints.adminOverrideItem(token, { force_setup: forceMode, reason });
+      await load();
+    } catch (e) {
+      setError(`Erro ao forçar setup: ${e.message}`);
+    }
   }
 
   function toggleCategory(catKey) {
@@ -243,6 +266,9 @@ export default function CsCampaignDetail() {
             metrics={campaign.metrics}
             isABS={effectiveIsAbs}
             onAbsChange={(newAbs) => setManualChecks(prev => ({ ...prev, __is_abs: newAbs }))}
+            isAdmin={isAdmin}
+            onAdminOverride={handleAdminOverride}
+            onSetupForce={handleSetupForce}
           />
         );
       })}
@@ -259,6 +285,45 @@ export default function CsCampaignDetail() {
         </div>
       )}
 
+      {/* Bloco de observação CS - pedido de análise */}
+      <Card className="cs-notes-block">
+        <div className="cs-notes-block__header">
+          <MessageSquare size={16} />
+          <div>
+            <div className="cs-notes-block__title">Observações / Pedido de análise</div>
+            <div className="cs-notes-block__sub">
+              Use este campo se algo precisa de atenção do admin. Apenas admins veem.
+            </div>
+          </div>
+        </div>
+        <textarea
+          className="cs-notes-block__textarea"
+          rows={3}
+          placeholder="Ex: campanha entregou as impressões pactuadas mas a base não reflete. Solicito revisão para considerar setup válido."
+          value={manualChecks.__review_notes || ''}
+          onChange={(e) => setManualChecks(prev => ({ ...prev, __review_notes: e.target.value }))}
+        />
+        <label className="cs-notes-block__checkbox">
+          <input
+            type="checkbox"
+            checked={!!manualChecks.__review_requested}
+            onChange={(e) => setManualChecks(prev => ({ ...prev, __review_requested: e.target.checked }))}
+          />
+          <span>Solicitar análise do admin sobre esta campanha</span>
+        </label>
+        {manualChecks.__review_requested && !campaign.admin_overrides_by && (
+          <div className="cs-notes-block__pending">
+            <AlertTriangle size={12} /> Pendente revisão do admin
+          </div>
+        )}
+        {campaign.admin_overrides_by && (
+          <div className="cs-notes-block__reviewed">
+            <CheckCircle2 size={12} /> Revisado por {campaign.admin_overrides_by}
+            {campaign.admin_overrides_at && ` · ${fmt.date(campaign.admin_overrides_at)}`}
+          </div>
+        )}
+      </Card>
+
       <div className="form-actions">
         <Button variant="ghost" onClick={() => handleSave(false)} disabled={saving}>
           Salvar rascunho
@@ -271,7 +336,7 @@ export default function CsCampaignDetail() {
   );
 }
 
-function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, onEvidenceChange, metrics, isABS, onAbsChange }) {
+function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, onEvidenceChange, metrics, isABS, onAbsChange, isAdmin, onAdminOverride, onSetupForce }) {
   const earnedCount = cat.items.filter(i => isEffectivelyEarned(i, manualChecks)).length;
   const isOptimization = catKey === 'optimization';
 
@@ -306,6 +371,47 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
             <div className="category-block__invalidation">
               <AlertCircle size={16} />
               <span>{cat.invalidation_reason}</span>
+              {cat.setup_forced && cat.setup_force_meta && (
+                <span className="category-block__setup-by">
+                  · forçado por {cat.setup_force_meta.by}
+                </span>
+              )}
+            </div>
+          )}
+          {catKey === 'setup' && isAdmin && onSetupForce && (
+            <div className="category-block__setup-admin">
+              <Shield size={14} />
+              <span className="category-block__setup-admin-label">
+                Override admin do Setup:
+              </span>
+              <div className="item-row__admin-actions">
+                <button
+                  className={`item-row__admin-btn ${cat.setup_forced && !cat.invalidated ? 'item-row__admin-btn--active-on' : ''}`}
+                  onClick={() => {
+                    const reason = window.prompt('Motivo (opcional):') || '';
+                    onSetupForce('valid', reason);
+                  }}
+                >
+                  ✓ Forçar válido
+                </button>
+                <button
+                  className={`item-row__admin-btn ${cat.setup_forced && cat.invalidated ? 'item-row__admin-btn--active-off' : ''}`}
+                  onClick={() => {
+                    const reason = window.prompt('Motivo (opcional):') || '';
+                    onSetupForce('invalid', reason);
+                  }}
+                >
+                  ✗ Forçar anulado
+                </button>
+                {cat.setup_forced && (
+                  <button
+                    className="item-row__admin-btn"
+                    onClick={() => onSetupForce('auto', '')}
+                  >
+                    Auto
+                  </button>
+                )}
+              </div>
             </div>
           )}
           {isOptimization && onAbsChange && (
@@ -386,6 +492,8 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
               metrics={metrics}
               isABS={isABS}
               invalidated={cat.invalidated}
+              isAdmin={isAdmin}
+              onAdminOverride={onAdminOverride}
             />
           ))}
           {cat.notes && (
@@ -399,7 +507,7 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
   );
 }
 
-function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS, invalidated }) {
+function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS, invalidated, isAdmin, onAdminOverride }) {
   const isManual = item.source === 'manual';
   const isSemiAuto = item.source === 'semi_auto';
   const isAuto = item.source === 'auto';
@@ -430,8 +538,12 @@ function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS
   const hasEvidence = !!evidenceLink.trim();
   const showEvidenceWarn = needsEvidence && !hasEvidence;
 
+  // Admin override status
+  const adminOv = item.admin_override;
+  const isAdminForced = !!adminOv;
+
   return (
-    <div className={`item-row ${item.earned ? 'item-row--earned' : ''} ${invalidated && item.was_earned ? 'item-row--invalidated' : ''}`}>
+    <div className={`item-row ${item.earned ? 'item-row--earned' : ''} ${invalidated && item.was_earned ? 'item-row--invalidated' : ''} ${isAdminForced ? 'item-row--admin-forced' : ''}`}>
       <div className="item-row__check">
         {editable ? (
           <input
@@ -454,6 +566,11 @@ function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS
           {isAuto && <span className="item-row__badge item-row__badge--auto"><Zap size={10} /> Auto</span>}
           {isSemiAuto && <span className="item-row__badge item-row__badge--semi"><Zap size={10} /> Semi auto</span>}
           {isMetric && <span className="item-row__badge item-row__badge--metric"><Sparkles size={10} /> Métrica</span>}
+          {isAdminForced && (
+            <span className="item-row__badge item-row__badge--admin">
+              <Shield size={10} /> Override admin
+            </span>
+          )}
           {showEvidenceWarn && (
             <span className="item-row__badge item-row__badge--warn">
               <AlertTriangle size={10} /> Sem evidência
@@ -491,6 +608,49 @@ function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS
                 Abrir ↗
               </a>
             )}
+          </div>
+        )}
+
+        {/* Admin override panel — visível só pra admin */}
+        {isAdmin && onAdminOverride && (
+          <div className="item-row__admin-override">
+            <Shield size={12} />
+            <span style={{ marginRight: 'auto' }}>
+              {isAdminForced
+                ? `Override por ${adminOv.by} · ${adminOv.reason || 'sem motivo'}`
+                : 'Forçar resultado deste item:'}
+            </span>
+            <div className="item-row__admin-actions">
+              <button
+                className={`item-row__admin-btn ${adminOv?.earned === true ? 'item-row__admin-btn--active-on' : ''}`}
+                onClick={() => {
+                  const reason = window.prompt('Motivo (opcional):') || '';
+                  onAdminOverride(item.id, true, reason);
+                }}
+                title="Forçar como conquistado"
+              >
+                ✓ OK
+              </button>
+              <button
+                className={`item-row__admin-btn ${adminOv?.earned === false ? 'item-row__admin-btn--active-off' : ''}`}
+                onClick={() => {
+                  const reason = window.prompt('Motivo (opcional):') || '';
+                  onAdminOverride(item.id, false, reason);
+                }}
+                title="Forçar como não-conquistado"
+              >
+                ✗ Não
+              </button>
+              {isAdminForced && (
+                <button
+                  className="item-row__admin-btn"
+                  onClick={() => onAdminOverride(item.id, null)}
+                  title="Voltar ao automático"
+                >
+                  Auto
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>

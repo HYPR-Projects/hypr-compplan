@@ -15,6 +15,7 @@ import { authRequired } from '../middleware/auth.js';
 import { query, tableRef } from '../lib/bigquery.js';
 import { getSalaryForCs } from '../data/cs-config.js';
 import { isOverException } from '../data/over-exceptions.js';
+import { sendEmail } from '../lib/email.js';
 import { parseQuarter } from '../engine/quarter-resolver.js';
 import { computeBonus } from '../engine/compplan-engine.js';
 import { FEATURE_TIERS } from '../engine/compplan-catalog.js';
@@ -167,26 +168,24 @@ function resolveTargetCs(req) {
 // ─────────────────────────────────────────────────────────────────────
 async function fetchManualChecks(shortToken, isLegacy) {
   try {
-    if (isLegacy) {
-      const [row] = await query(
-        `SELECT manual_checks
-         FROM ${tableRef('commplan_legacy_assignments')}
-         WHERE short_token = @t LIMIT 1`,
-        { t: shortToken }
-      );
-      return row?.manual_checks ? JSON.parse(row.manual_checks) : {};
-    } else {
-      const [row] = await query(
-        `SELECT manual_checks
-         FROM ${tableRef('commplan_command_overrides')}
-         WHERE short_token = @t LIMIT 1`,
-        { t: shortToken }
-      );
-      return row?.manual_checks ? JSON.parse(row.manual_checks) : {};
-    }
+    const table = isLegacy ? 'commplan_legacy_assignments' : 'commplan_command_overrides';
+    const [row] = await query(
+      `SELECT manual_checks, admin_overrides, admin_overrides_by, admin_overrides_at
+       FROM ${tableRef(table)}
+       WHERE short_token = @t LIMIT 1`,
+      { t: shortToken }
+    );
+    const manualChecks = row?.manual_checks ? JSON.parse(row.manual_checks) : {};
+    const adminOverrides = row?.admin_overrides ? JSON.parse(row.admin_overrides) : {};
+    return {
+      manualChecks,
+      adminOverrides,
+      adminOverridesBy: row?.admin_overrides_by || null,
+      adminOverridesAt: row?.admin_overrides_at?.value || row?.admin_overrides_at || null,
+    };
   } catch (err) {
     console.warn(`fetchManualChecks(${shortToken}): ${err.message}`);
-    return {};
+    return { manualChecks: {}, adminOverrides: {}, adminOverridesBy: null, adminOverridesAt: null };
   }
 }
 
@@ -220,37 +219,36 @@ router.get('/dashboard/:q', async (req, res) => {
       { cs: csEmail, s: startDate, e: endDate }
     );
 
-    // Pra cada campanha, busca manual_checks + métricas em batch pra calcular bônus completo
+    // Pra cada campanha, busca manual_checks + admin_overrides + métricas em batch
     const tokens = campaigns.map(c => c.short_token);
     let manualChecksByToken = {};
+    let adminOverridesByToken = {};
     let metricsByToken = {};
 
     if (tokens.length > 0) {
-      // Batch 1: manual_checks de overrides + assignments
+      // Batch 1: manual_checks + admin_overrides de overrides + assignments
       try {
         const [overrideRows, legacyRows] = await Promise.all([
           query(
-            `SELECT short_token, manual_checks
+            `SELECT short_token, manual_checks, admin_overrides
              FROM ${tableRef('commplan_command_overrides')}
              WHERE short_token IN UNNEST(@toks)`,
             { toks: tokens }
           ),
           query(
-            `SELECT short_token, manual_checks
+            `SELECT short_token, manual_checks, admin_overrides
              FROM ${tableRef('commplan_legacy_assignments')}
              WHERE short_token IN UNNEST(@toks)`,
             { toks: tokens }
           ),
         ]);
-        for (const r of overrideRows) {
+        for (const r of [...overrideRows, ...legacyRows]) {
           if (r.manual_checks) {
             try { manualChecksByToken[r.short_token] = JSON.parse(r.manual_checks); }
             catch (_) { /* ignore */ }
           }
-        }
-        for (const r of legacyRows) {
-          if (r.manual_checks) {
-            try { manualChecksByToken[r.short_token] = JSON.parse(r.manual_checks); }
+          if (r.admin_overrides) {
+            try { adminOverridesByToken[r.short_token] = JSON.parse(r.admin_overrides); }
             catch (_) { /* ignore */ }
           }
         }
@@ -331,8 +329,9 @@ router.get('/dashboard/:q', async (req, res) => {
     let totalBonusBrl = 0;
     const items = campaigns.map(c => {
       const mc = manualChecksByToken[c.short_token] || {};
+      const ao = adminOverridesByToken[c.short_token] || {};
       const metrics = metricsByToken[c.short_token] || null;
-      const breakdown = computeBonus(c, mc, metrics);
+      const breakdown = computeBonus(c, mc, metrics, ao);
       totalBonusBrl += breakdown.total_brl;
       return {
         short_token: c.short_token,
@@ -344,6 +343,7 @@ router.get('/dashboard/:q', async (req, res) => {
         end_date: c.end_date?.value || c.end_date,
         is_legacy: !!c.is_legacy,
         reviewed: !!c.reviewed,
+        review_requested: !!mc.__review_requested,
         bruto: Number(c.total_value) || 0,
         liquido: (Number(c.total_value) || 0) * NET_FACTOR,
         bonus_brl: breakdown.total_brl,
@@ -445,13 +445,14 @@ router.get('/campaign/:token', async (req, res) => {
     const isLegacy = !!campaign.is_legacy;
 
     // Pega manual_checks e métricas em paralelo
-    const [manualChecks, metrics] = await Promise.all([
+    const [mcData, metrics] = await Promise.all([
       fetchManualChecks(campaign.short_token, isLegacy),
       fetchPerformanceMetrics(campaign.short_token, campaign.client_name),
     ]);
+    const { manualChecks, adminOverrides, adminOverridesBy, adminOverridesAt } = mcData;
 
-    // Calcula breakdown completo
-    const breakdown = computeBonus(campaign, manualChecks, metrics);
+    // Calcula breakdown completo (com admin overrides aplicados)
+    const breakdown = computeBonus(campaign, manualChecks, metrics, adminOverrides);
 
     // Status reviewed
     let reviewed = false;
@@ -502,6 +503,13 @@ router.get('/campaign/:token', async (req, res) => {
       // Manual checks atuais
       manual_checks: manualChecks,
 
+      // Admin overrides + CS review request
+      admin_overrides: adminOverrides,
+      admin_overrides_by: adminOverridesBy,
+      admin_overrides_at: adminOverridesAt,
+      review_requested: !!manualChecks.__review_requested,
+      review_request_notes: manualChecks.__review_notes || '',
+
       // Métricas pra Otimizações (se houver)
       metrics: metrics ? {
         ecpm: Number(metrics.ecpm) || 0,
@@ -546,6 +554,16 @@ router.put('/campaign/:token', async (req, res) => {
     const notes = body.notes || '';
     const reviewed = body.reviewed !== false;
 
+    // Antes de salvar, busca estado anterior pra detectar mudança no review_requested
+    let wasReviewRequested = false;
+    try {
+      const prev = await fetchManualChecks(campaign.short_token, !!campaign.is_legacy);
+      wasReviewRequested = !!prev.manualChecks?.__review_requested;
+    } catch (_) { /* silent */ }
+
+    const isNowReviewRequested = !!manualChecks.__review_requested;
+    const reviewRequestedChanged = !wasReviewRequested && isNowReviewRequested;
+
     if (campaign.is_legacy) {
       // Legacy: salva em commplan_legacy_assignments (campo manual_checks JSON)
       await query(
@@ -580,6 +598,40 @@ router.put('/campaign/:token', async (req, res) => {
       );
     }
 
+    // Se CS solicitou análise (transição de false→true), notifica admins por email
+    if (reviewRequestedChanged) {
+      try {
+        const adminEmails = await query(
+          `SELECT email FROM ${tableRef('compplan_team')}
+           WHERE role = 'admin' AND active = TRUE`
+        );
+        const reviewNotes = manualChecks.__review_notes || '(sem detalhes)';
+        const subject = `[Commplan] CS pediu análise: ${campaign.client_name || token}`;
+        const html = `
+          <h2>Pedido de análise — ${campaign.client_name || token}</h2>
+          <p><strong>Campanha:</strong> ${campaign.campaign_name || ''} (${token})</p>
+          <p><strong>CS:</strong> ${byEmail}</p>
+          <p><strong>Observação:</strong></p>
+          <blockquote style="border-left: 3px solid #0891b2; padding-left: 12px; color: #555;">
+            ${reviewNotes.replace(/</g, '&lt;').replace(/\n/g, '<br>')}
+          </blockquote>
+          <p><a href="https://hypr-compplan.vercel.app/admin/cs/${encodeURIComponent(byEmail)}/campanha/${token}">
+            Abrir campanha →
+          </a></p>
+        `;
+        for (const a of adminEmails) {
+          await sendEmail({
+            to: a.email,
+            subject,
+            html,
+            text: `${byEmail} pediu análise da campanha ${token}: ${reviewNotes}`,
+          });
+        }
+      } catch (e) {
+        console.warn('Falha ao notificar admins por email:', e.message);
+      }
+    }
+
     // Re-calcula e retorna breakdown atualizado
     const [updated] = await query(
       `SELECT c.*
@@ -588,7 +640,9 @@ router.put('/campaign/:token', async (req, res) => {
       { t: token }
     );
     const metrics = await fetchPerformanceMetrics(token, updated?.client_name);
-    const breakdown = computeBonus(updated, manualChecks, metrics);
+    // Re-busca admin_overrides (não muda pelo PUT do CS, mas garante consistência)
+    const post = await fetchManualChecks(token, !!campaign.is_legacy);
+    const breakdown = computeBonus(updated, manualChecks, metrics, post.adminOverrides || {});
 
     res.json({ ok: true, reviewed, breakdown });
   } catch (err) {
