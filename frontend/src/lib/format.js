@@ -17,6 +17,26 @@ const NUM_COMPACT = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximu
 const DATE = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 const DATE_SHORT = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' });
 
+/**
+ * Parse de data sem cair na armadilha do timezone.
+ * `new Date("2026-05-01")` interpreta como UTC midnight → vira 30/04 21:00 em São Paulo.
+ * Aqui forçamos construção como data LOCAL, sem deslocar dia.
+ */
+function parseDateLocal(d) {
+  if (!d) return null;
+  if (d instanceof Date) return isNaN(d) ? null : d;
+  if (typeof d !== 'string') return null;
+
+  // Caso ISO data pura "YYYY-MM-DD" (com ou sem hora)
+  const ymdMatch = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (ymdMatch) {
+    return new Date(Number(ymdMatch[1]), Number(ymdMatch[2]) - 1, Number(ymdMatch[3]));
+  }
+  // Fallback
+  const date = new Date(d);
+  return isNaN(date) ? null : date;
+}
+
 export const fmt = {
   /** R$ 12.345,67 */
   brl(n) { return BRL.format(Number(n) || 0); },
@@ -38,17 +58,15 @@ export const fmt = {
 
   /** 31/12/2026 */
   date(d) {
-    if (!d) return '—';
-    const date = typeof d === 'string' ? new Date(d) : d;
-    if (isNaN(date)) return '—';
+    const date = parseDateLocal(d);
+    if (!date) return '—';
     return DATE.format(date);
   },
 
   /** 31/12 — pra ranges curtos */
   dateShort(d) {
-    if (!d) return '—';
-    const date = typeof d === 'string' ? new Date(d) : d;
-    if (isNaN(date)) return '—';
+    const date = parseDateLocal(d);
+    if (!date) return '—';
     return DATE_SHORT.format(date);
   },
 
@@ -60,8 +78,8 @@ export const fmt = {
 
   /** "Jan 26", "Mai 26" */
   monthShort(d) {
-    if (!d) return '—';
-    const date = typeof d === 'string' ? new Date(d) : d;
+    const date = parseDateLocal(d);
+    if (!date) return '—';
     const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     return `${months[date.getMonth()]} ${String(date.getFullYear()).slice(-2)}`;
   },

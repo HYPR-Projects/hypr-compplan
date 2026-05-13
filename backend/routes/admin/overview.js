@@ -17,6 +17,8 @@ import { Router } from 'express';
 import { authRequired, adminRequired } from '../../middleware/auth.js';
 import { query, tableRef, bq, DATASET } from '../../lib/bigquery.js';
 import { parseQuarter } from '../../engine/quarter-resolver.js';
+import { computeBonus } from '../../engine/compplan-engine.js';
+import { getSalaryForCs } from '../../data/cs-config.js';
 
 export const router = Router();
 router.use(authRequired, adminRequired);
@@ -54,20 +56,132 @@ router.get('/overview/:q', async (req, res) => {
     const bruto = Number(kpis.bruto_total) || 0;
     const pendingBruto = Number(pending.pending_bruto) || 0;
 
-    // 3. Ranking por CS
-    const byCs = await query(
+    // 3. Ranking por CS — agora com bonus calculado
+    const byCsRaw = await query(
       `SELECT
-         cs_email,
-         ANY_VALUE(cs_name) AS cs_name,
+         c.cs_email,
+         ANY_VALUE(c.cs_name) AS cs_name,
          COUNT(*) AS n_camp,
-         IFNULL(SUM(total_value), 0) AS bruto
-       FROM ${tableRef('commplan_checklists')}
-       WHERE start_date >= @s AND start_date <= @e
-         AND cs_email IS NOT NULL
-       GROUP BY cs_email
+         COUNTIF(IFNULL(o.reviewed, FALSE) = TRUE OR (la.updated_at IS NOT NULL AND la.updated_at > la.attributed_at)) AS n_reviewed,
+         IFNULL(SUM(c.total_value), 0) AS bruto
+       FROM ${tableRef('commplan_checklists')} c
+       LEFT JOIN ${tableRef('commplan_command_overrides')} o ON c.short_token = o.short_token
+       LEFT JOIN ${tableRef('commplan_legacy_assignments')} la ON c.short_token = la.short_token
+       WHERE c.start_date >= @s AND c.start_date <= @e
+         AND c.cs_email IS NOT NULL
+       GROUP BY c.cs_email
        ORDER BY bruto DESC`,
       { s: startDate, e: endDate }
     );
+
+    // Pra cada CS, calcula bônus total das campanhas (com manual_checks + métricas)
+    let totalBonusBrutoAll = 0;
+    let totalFixoAll = 0;
+    let totalLiquidoAll = 0;
+
+    const byCs = await Promise.all(byCsRaw.map(async (csRow) => {
+      // Salário vigente
+      let monthlySalary = 0;
+      try {
+        const sal = await getSalaryForCs({ csEmail: csRow.cs_email });
+        monthlySalary = Number(sal?.fixed_salary_brl) || 0;
+      } catch (_) { /* silent */ }
+      const fixoQuarter = monthlySalary * 2;
+
+      // Campanhas desse CS (precisa pra calcular bônus)
+      const campaigns = await query(
+        `SELECT
+           c.short_token, c.is_legacy, c.total_value, c.features, c.products,
+           c.formats, c.audiences, c.studies_used, c.pracas_type,
+           o.manual_checks AS o_mc, la.manual_checks AS la_mc
+         FROM ${tableRef('commplan_checklists')} c
+         LEFT JOIN ${tableRef('commplan_command_overrides')} o ON c.short_token = o.short_token
+         LEFT JOIN ${tableRef('commplan_legacy_assignments')} la ON c.short_token = la.short_token
+         WHERE c.start_date >= @s AND c.start_date <= @e
+           AND LOWER(c.cs_email) = @cs`,
+        { s: startDate, e: endDate, cs: csRow.cs_email.toLowerCase() }
+      );
+
+      // Métricas em batch
+      const tokens = campaigns.map(c => c.short_token);
+      let metricsByToken = {};
+      if (tokens.length > 0) {
+        try {
+          const [perfRows, contractedRows] = await Promise.all([
+            query(
+              `SELECT short_token,
+                 SUM(IF(LOWER(media_type) = 'display', impressions, 0))           AS display_imps,
+                 SUM(IF(LOWER(media_type) = 'display', viewable_impressions, 0))  AS display_viewable,
+                 SUM(IF(LOWER(media_type) = 'display', clicks, 0))                AS display_clicks,
+                 SUM(IF(LOWER(media_type) = 'display', total_cost, 0))            AS display_cost
+               FROM \`site-hypr.prod_assets.unified_daily_performance_metrics\`
+               WHERE short_token IN UNNEST(@toks)
+                 AND LOWER(IFNULL(line_name, '')) NOT LIKE '%survey%'
+                 AND LOWER(IFNULL(line_name, '')) NOT LIKE '%controle%'
+                 AND LOWER(IFNULL(line_name, '')) NOT LIKE '%exposto%'
+               GROUP BY short_token`,
+              { toks: tokens },
+              'US'
+            ),
+            query(
+              `SELECT short_token,
+                 IFNULL(o2o_display_impressions, 0)
+               + IFNULL(bonus_o2o_display_impressions, 0)
+               + IFNULL(ooh_display_impressions, 0)
+               + IFNULL(bonus_ooh_display_impressions, 0) AS display_contracted
+               FROM ${tableRef('commplan_checklists')}
+               WHERE short_token IN UNNEST(@toks)`,
+              { toks: tokens }
+            ),
+          ]);
+          const contractedMap = {};
+          for (const r of contractedRows) contractedMap[r.short_token] = Number(r.display_contracted) || 0;
+          for (const r of perfRows) {
+            const dc = contractedMap[r.short_token] || 0;
+            const di = Number(r.display_imps) || 0;
+            const dv = Number(r.display_viewable) || 0;
+            const dk = Number(r.display_clicks) || 0;
+            const cc = Number(r.display_cost) || 0;
+            metricsByToken[r.short_token] = {
+              ecpm: di > 0 ? (cc / di) * 1000 : 0,
+              ctr: dv > 0 ? dk / dv : 0,
+              over_percent: dc > 0 ? ((dv / dc) - 1) * 100 : 0,
+            };
+          }
+        } catch (_) { /* silent */ }
+      }
+
+      let totalBonus = 0;
+      for (const c of campaigns) {
+        let mc = {};
+        const mcStr = c.is_legacy ? c.la_mc : c.o_mc;
+        if (mcStr) { try { mc = JSON.parse(mcStr); } catch (_) {} }
+        const breakdown = computeBonus(c, mc, metricsByToken[c.short_token] || null);
+        totalBonus += breakdown.total_brl;
+      }
+
+      const bonusLiquido = Math.max(0, totalBonus - fixoQuarter);
+      const hitFloor = totalBonus >= fixoQuarter && fixoQuarter > 0;
+
+      const b = Number(csRow.bruto) || 0;
+      totalBonusBrutoAll += totalBonus;
+      totalFixoAll += fixoQuarter;
+      totalLiquidoAll += bonusLiquido;
+
+      return {
+        cs_email: csRow.cs_email,
+        cs_name: csRow.cs_name,
+        n_camp: csRow.n_camp || 0,
+        n_reviewed: csRow.n_reviewed || 0,
+        bruto: b,
+        liquido: b * NET_FACTOR,
+        bonus_bruto: totalBonus,
+        monthly_salary: monthlySalary,
+        fixo_quarter: fixoQuarter,
+        bonus_liquido: bonusLiquido,
+        hit_floor: hitFloor,
+      };
+    }));
 
     res.json({
       quarter,
@@ -81,17 +195,11 @@ router.get('/overview/:q', async (req, res) => {
         n_pending: pending.n_pending || 0,
         pending_bruto: pendingBruto,
         pending_liquido: pendingBruto * NET_FACTOR,
+        bonus_bruto_total: totalBonusBrutoAll,
+        fixo_total: totalFixoAll,
+        bonus_liquido_total: totalLiquidoAll,
       },
-      by_cs: byCs.map(r => {
-        const b = Number(r.bruto) || 0;
-        return {
-          cs_email: r.cs_email,
-          cs_name: r.cs_name,
-          n_camp: r.n_camp || 0,
-          bruto: b,
-          liquido: b * NET_FACTOR,
-        };
-      }),
+      by_cs: byCs,
     });
   } catch (err) {
     console.error('GET /admin/overview/:q error:', err);
@@ -241,14 +349,31 @@ router.post('/pending/:token/assign', async (req, res) => {
       return res.status(400).json({ error: `CS "${csEmail}" não encontrado ou inativo` });
     }
 
-    // Valida que a campanha existe e está pendente
-    const [pending] = await query(
-      `SELECT short_token FROM ${tableRef('commplan_pending_legacy')}
+    // Valida que a campanha existe em checklist_info_snapshot.
+    // (Não usa commplan_pending_legacy porque essa view exclui campanhas que
+    //  já entraram no Command — mas o admin pode querer atribuir mesmo assim,
+    //  pra forçar a contagem caso a sincronia ainda esteja pendente.)
+    const [exists] = await query(
+      `SELECT short_token FROM ${tableRef('checklist_info_snapshot')}
        WHERE short_token = @t LIMIT 1`,
       { t: token }
     );
-    if (!pending) {
-      return res.status(404).json({ error: `Campanha "${token}" não está pendente (já atribuída ou inexistente)` });
+    if (!exists) {
+      return res.status(404).json({
+        error: `Campanha "${token}" não existe em checklist_info_snapshot. Talvez precise rodar refresh-snapshot.`
+      });
+    }
+
+    // Verifica se já tem atribuição (evita duplicar)
+    const [already] = await query(
+      `SELECT short_token FROM ${tableRef('commplan_legacy_assignments')}
+       WHERE short_token = @t LIMIT 1`,
+      { t: token }
+    );
+    if (already) {
+      return res.status(409).json({
+        error: `Campanha "${token}" já tem CS atribuído. Pra trocar, remova a atribuição primeiro.`
+      });
     }
 
     // Insere atribuição

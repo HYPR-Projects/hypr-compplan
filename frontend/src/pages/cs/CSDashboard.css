@@ -1,107 +1,365 @@
 /**
- * CSDashboard.css — estilos do painel CS e lista de campanhas.
+ * CSDashboard.css — novo layout estilo Report Center.
  */
 
-.cs-campaign-list {
+/* ── Header ───────────────────────────────────────────────────────── */
+
+.cs-page-header {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-4);
 }
 
-.cs-campaign-row {
+.text-warn {
+  color: var(--accent-yellow, #f5a524);
+}
+
+/* ── 3 KPIs grandes (estilo Report Center) ──────────────────────── */
+
+.kpi-row-big {
   display: grid;
-  grid-template-columns: auto minmax(0, 2.5fr) minmax(110px, 0.7fr) minmax(110px, 0.7fr) auto;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  align-items: center;
+  margin-bottom: var(--space-5);
+}
+
+.kpi-big {
+  padding: var(--space-4);
   background: var(--surface-card);
-  border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
-  cursor: pointer;
-  transition: border-color 120ms ease, transform 120ms ease;
+  border-radius: var(--radius-md);
+  transition: border-color 120ms ease;
 }
 
-.cs-campaign-row:hover {
-  border-color: var(--accent-cyan);
-  transform: translateX(2px);
+.kpi-big:hover {
+  border-color: var(--border-strong);
 }
 
-.cs-campaign-row__indicator {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.status-icon--green { color: var(--accent-green, #18bf6b); }
-.status-icon--yellow { color: var(--accent-yellow, #f5a524); }
-.status-icon--red { color: var(--accent-red, #f43f5e); }
-
-.cs-campaign-row__main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.cs-campaign-row__title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
-.cs-campaign-row__client {
+.kpi-big__label {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.kpi-big__value {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.1;
+  margin-bottom: 6px;
   color: var(--text-primary);
 }
 
-.cs-campaign-row__campaign {
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.kpi-big--green .kpi-big__value {
+  color: var(--accent-green, #18bf6b);
 }
 
-.cs-campaign-row__meta {
+.kpi-big--warn .kpi-big__value {
+  color: var(--accent-yellow, #f5a524);
+}
+
+.kpi-big__sub {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
+  font-weight: 500;
 }
 
-.cs-campaign-row__num {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
+.kpi-big--green .kpi-big__sub {
+  color: var(--accent-green, #18bf6b);
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────── */
+
+.cs-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+}
+
+.cs-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  font-family: inherit;
   font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 120ms ease, color 120ms ease;
+  font-weight: 500;
 }
 
-.cs-campaign-row__num--cyan {
+.cs-tab:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-primary);
+}
+
+.cs-tab--active {
+  background: var(--surface-card-elevated, #f1f3f5);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ── Toolbar (search + filters) ─────────────────────────────────── */
+
+.cs-toolbar {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.cs-toolbar__search {
+  flex: 1;
+  min-width: 280px;
+}
+
+.cs-toolbar__filters {
+  display: flex;
+  gap: 8px;
+}
+
+.cs-select {
+  padding: 9px 14px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+
+.cs-select:hover { border-color: var(--border-strong); }
+.cs-select:focus { outline: 2px solid var(--accent-cyan); outline-offset: -1px; }
+
+/* ── Month chips ────────────────────────────────────────────────── */
+
+.month-chips {
+  display: flex;
+  gap: 8px;
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.month-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.month-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.month-chip--active {
+  background: rgba(0, 212, 255, 0.08);
+  border-color: var(--accent-cyan);
   color: var(--accent-cyan);
   font-weight: 600;
 }
 
-.cs-campaign-row__cta {
+.month-chip__count {
+  padding: 1px 8px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.month-chip--active .month-chip__count {
+  background: rgba(0, 212, 255, 0.15);
+  color: var(--accent-cyan);
+}
+
+/* ── Month group ────────────────────────────────────────────────── */
+
+.cs-month-group {
+  margin-bottom: var(--space-5);
+}
+
+.cs-month-group__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+}
+
+.cs-month-group__count {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ── Campaign card ──────────────────────────────────────────────── */
+
+.cs-campaign-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cs-campaign-card {
+  display: grid;
+  grid-template-columns: 4px 1fr auto auto auto;
+  gap: var(--space-3);
+  padding: 0;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+  align-items: center;
+  padding-right: var(--space-3);
+}
+
+.cs-campaign-card:hover {
+  border-color: var(--accent-cyan);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.cs-campaign-card__stripe {
+  width: 4px;
+  align-self: stretch;
+  background: var(--border-subtle);
+}
+
+.cs-campaign-card__stripe.is-green {
+  background: var(--accent-green, #18bf6b);
+}
+
+.cs-campaign-card__stripe.is-warn {
+  background: var(--accent-yellow, #f5a524);
+}
+
+.cs-campaign-card__main {
+  padding: var(--space-3) 0;
+  min-width: 0;
+}
+
+.cs-campaign-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.cs-campaign-card__client {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.cs-campaign-card__campaign {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.cs-campaign-card__meta {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.cs-campaign-card__metric {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 100px;
+}
+
+.cs-campaign-card__metric > .label {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.cs-campaign-card__metric > .mono {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.cs-campaign-card__metric--cyan {
+  color: var(--accent-cyan);
+}
+
+.cs-campaign-card__cta {
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
 
-.cs-campaign-row__arrow {
-  color: var(--text-tertiary);
+.cs-campaign-card__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #0891b2;
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.cs-campaign-card__btn:hover {
+  background: #0e7490;
 }
 
 @media (max-width: 900px) {
-  .cs-campaign-row {
-    grid-template-columns: auto 1fr auto;
+  .cs-campaign-card {
+    grid-template-columns: 4px 1fr;
   }
-  .cs-campaign-row__num {
+  .cs-campaign-card__metric,
+  .cs-campaign-card__cta {
     grid-column: 2;
-    align-items: flex-start;
+    padding: 0;
   }
-  .cs-campaign-row__cta {
-    grid-column: 1 / -1;
-    justify-content: flex-end;
+  .cs-campaign-card__metric {
+    align-items: flex-start;
+    flex-direction: row;
+    gap: 8px;
   }
 }
 

@@ -1,89 +1,210 @@
-.cs-leaderboard {
+/**
+ * Overview.css — admin visão geral, estilo Report Center.
+ */
+
+/* ── Header ───────────────────────────────────────────────────────── */
+
+.admin-page-header {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  margin-bottom: var(--space-8);
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-4);
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }
 
-.cs-row {
-  display: grid;
-  grid-template-columns: 36px auto 1fr auto auto auto auto;
+.admin-page-header__filters {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Pending alert ───────────────────────────────────────────────── */
+
+.admin-pending-alert {
+  margin-bottom: var(--space-4);
+}
+
+.admin-pending-alert__content {
+  display: flex;
   align-items: center;
-  gap: var(--space-5);
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--border-subtle);
-  transition: background var(--duration) var(--ease-out);
+  gap: var(--space-3);
 }
 
-.cs-row:last-child { border-bottom: none; }
-.cs-row:hover { background: var(--bg-elevated); }
+.admin-pending-alert__content > svg:first-child {
+  color: var(--accent-yellow, #f5a524);
+  flex-shrink: 0;
+}
 
-.cs-row__rank {
-  font-size: var(--text-md);
-  font-weight: 600;
+.admin-pending-alert__text {
+  flex: 1;
+}
+
+.admin-pending-alert__content > svg:last-child {
   color: var(--text-tertiary);
-  text-align: center;
-  font-feature-settings: 'tnum' 1;
+  flex-shrink: 0;
 }
 
-.cs-row__main {
+/* ── CS Card grid ───────────────────────────────────────────────── */
+
+.admin-cs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: var(--space-3);
+}
+
+.admin-cs-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  min-width: 160px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
 }
 
-.cs-row__name {
+.admin-cs-card:hover {
+  border-color: var(--accent-cyan);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.admin-cs-card__stripe {
+  height: 4px;
+  background: var(--border-subtle);
+}
+
+.admin-cs-card__stripe.is-green { background: var(--accent-green, #18bf6b); }
+.admin-cs-card__stripe.is-warn { background: var(--accent-yellow, #f5a524); }
+.admin-cs-card__stripe.is-neutral { background: var(--border-subtle); }
+
+.admin-cs-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.admin-cs-card__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
   font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--text-primary);
+  color: #fff;
+  flex-shrink: 0;
 }
 
-.cs-row__email {
+.admin-cs-card__avatar[data-color="0"] { background: #0891b2; }
+.admin-cs-card__avatar[data-color="1"] { background: #18bf6b; }
+.admin-cs-card__avatar[data-color="2"] { background: #f5a524; }
+.admin-cs-card__avatar[data-color="3"] { background: #8b5cf6; }
+.admin-cs-card__avatar[data-color="4"] { background: #ec4899; }
+.admin-cs-card__avatar[data-color="5"] { background: #6366f1; }
+
+.admin-cs-card__identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-cs-card__name {
+  font-weight: 700;
+  font-size: var(--text-base, 15px);
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.admin-cs-card__email {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
-.cs-row__metric {
+.admin-cs-card__arrow {
+  color: var(--text-tertiary);
+  transition: color 120ms ease, transform 120ms ease;
+  flex-shrink: 0;
+}
+
+.admin-cs-card:hover .admin-cs-card__arrow {
+  color: var(--accent-cyan);
+  transform: translateX(2px);
+}
+
+.admin-cs-card__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.admin-cs-card__stat {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
   gap: 2px;
-  min-width: 100px;
 }
 
-.cs-row__metric-value {
+.admin-cs-card__stat > .label,
+.admin-cs-card__bonus-block > .label {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.admin-cs-card__stat > .mono {
   font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--text-primary);
-  letter-spacing: -0.01em;
+  font-weight: 600;
 }
 
-.cs-row__metric-value--cyan { color: var(--brand); font-weight: 600; }
+.admin-cs-card__sub {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
 
-.cs-row__cta {
-  display: flex;
-  align-items: center;
+.admin-cs-card__bonus-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: var(--space-2);
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-card-elevated, rgba(0, 0, 0, 0.02));
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-@media (max-width: 1100px) {
-  .cs-row { grid-template-columns: 36px auto 1fr auto; }
-  .cs-row__metric:nth-child(4),
-  .cs-row__metric:nth-child(5) { display: none; }
+.admin-cs-card__bonus-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.cs-row--clickable {
-  cursor: pointer;
-  transition: border-color 120ms ease, transform 120ms ease;
+.admin-cs-card__bonus-block > .mono {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
-.cs-row--clickable:hover {
-  border-color: var(--accent-cyan);
-  transform: translateX(2px);
+.admin-cs-card__bonus-block--final > .mono {
+  font-size: var(--text-base, 16px);
+  font-weight: 700;
+}
+
+.admin-cs-card__green { color: var(--accent-green, #18bf6b); }
+.admin-cs-card__warn { color: var(--accent-yellow, #f5a524); }
+
+.admin-cs-card__footer {
+  padding: var(--space-3) var(--space-4);
+}
+
+@media (max-width: 600px) {
+  .admin-cs-card__bonus-row {
+    grid-template-columns: 1fr;
+  }
 }
