@@ -1,227 +1,275 @@
-import { useState } from 'react';
-import { Plus, Edit3, BookOpen, User } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Edit3, BookOpen, User, Info } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
 import Button from '../../components/ui/Button.jsx';
-import Avatar from '../../components/ui/Avatar.jsx';
-import { Input, Select } from '../../components/ui/Input.jsx';
+import { Input, Textarea } from '../../components/ui/Input.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
+import { endpoints } from '../../lib/api.js';
 import { fmt } from '../../lib/format.js';
-import './Team.css';
 import './Studies.css';
 
-// Mock — vem de endpoints.listStudies('2026')
-const MOCK_STUDIES = [
-  { id: 'st_dia_mulheres_2026',  display_name: 'Dia das Mulheres',  author_email: 'beatriz.severine@hypr.mobi',  author_name: 'Beatriz Severine',   status: 'completed', usage_count: 4 },
-  { id: 'st_natal_2026',         display_name: 'Natal',             author_email: 'beatriz.severine@hypr.mobi',  author_name: 'Beatriz Severine',   status: 'planned',   usage_count: 0 },
-  { id: 'st_pascoa_2026',        display_name: 'Páscoa',            author_email: 'isaac.lobo@hypr.mobi',        author_name: 'Isaac Lobo',         status: 'completed', usage_count: 5 },
-  { id: 'st_dia_criancas_2026',  display_name: 'Dia das Crianças',  author_email: 'isaac.lobo@hypr.mobi',        author_name: 'Isaac Lobo',         status: 'planned',   usage_count: 0 },
-  { id: 'st_copa_mundo_2026',    display_name: 'Copa do Mundo',     author_email: 'thiago.nascimento@hypr.mobi', author_name: 'Thiago Nascimento',  status: 'completed', usage_count: 12 },
-  { id: 'st_verao_2026',         display_name: 'Verão / Férias',    author_email: 'thiago.nascimento@hypr.mobi', author_name: 'Thiago Nascimento',  status: 'planned',   usage_count: 0 },
-  { id: 'st_carnaval_2026',      display_name: 'Carnaval',          author_email: 'thiago.nascimento@hypr.mobi', author_name: 'Thiago Nascimento',  status: 'planned',   usage_count: 0 },
-  { id: 'st_dia_maes_2026',      display_name: 'Dia das Mães',      author_email: 'mariana.lewinski@hypr.mobi',  author_name: 'Mariana Lewinski',   status: 'completed', usage_count: 7 },
-  { id: 'st_formula1_2026',      display_name: 'Fórmula 1',         author_email: 'mariana.lewinski@hypr.mobi',  author_name: 'Mariana Lewinski',   status: 'planned',   usage_count: 0 },
-  { id: 'st_festivais_2026',     display_name: 'Festivais',         author_email: 'joao.buzolin@hypr.mobi',      author_name: 'João Buzolin',       status: 'completed', usage_count: 3 },
-  { id: 'st_festa_junina_2026',  display_name: 'Festa Junina',      author_email: 'joao.buzolin@hypr.mobi',      author_name: 'João Buzolin',       status: 'completed', usage_count: 8 },
-  { id: 'st_volta_aulas_2026',   display_name: 'Volta às Aulas',    author_email: 'joao.buzolin@hypr.mobi',      author_name: 'João Buzolin',       status: 'planned',   usage_count: 0 },
-  { id: 'st_namorados_2026',     display_name: 'Dia dos Namorados', author_email: 'joao.armelin@hypr.mobi',      author_name: 'João Armelin',       status: 'completed', usage_count: 6 },
-  { id: 'st_pais_2026',          display_name: 'Dia dos Pais',      author_email: 'joao.armelin@hypr.mobi',      author_name: 'João Armelin',       status: 'planned',   usage_count: 0 },
-  { id: 'st_black_friday_2026',  display_name: 'Black Friday',      author_email: 'joao.armelin@hypr.mobi',      author_name: 'João Armelin',       status: 'planned',   usage_count: 0 },
-];
+const VERSION = '2026';
 
-export default function AdminStudies() {
-  const [studies, setStudies] = useState(MOCK_STUDIES);
-  const [creating, setCreating] = useState(false);
+export default function StudiesPage() {
+  const [list, setList] = useState(null);
+  const [error, setError] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState(null);
 
-  const completed = studies.filter(s => s.status === 'completed');
-  const planned = studies.filter(s => s.status === 'planned');
+  function reload() {
+    setError(null);
+    endpoints.listStudies(VERSION)
+      .then(d => setList(d.items || []))
+      .catch(e => setError(e.message));
+  }
+
+  useEffect(() => { reload(); }, []);
+
+  async function handleSave(body, editingId) {
+    if (editingId) {
+      await endpoints.updateStudy(editingId, body);
+    } else {
+      await endpoints.createStudy({ ...body, version_id: VERSION });
+    }
+    setShowAdd(false);
+    setEditing(null);
+    reload();
+  }
 
   return (
     <AppShell>
-      <header className="page-header fade-up">
+      <header className="admin-page-header fade-up">
         <div>
-          <h1 className="page-title">Catálogo de estudos</h1>
+          <h1 className="page-title">
+            <BookOpen size={20} style={{ verticalAlign: 'middle', marginRight: 8 }} />
+            Estudos
+          </h1>
           <div className="page-subtitle">
-            <span>{studies.length} estudos · {completed.length} prontos · {planned.length} planejados</span>
-            <span className="page-subtitle__sep">·</span>
-            <span style={{ color: 'var(--text-tertiary)' }}>Autor recebe 0.30% por uso</span>
+            Catálogo de estudos sazonais. Quando um CP marca um estudo no checklist do Command,
+            <strong> 0,30%</strong> da líquida da campanha vai pro <strong>autor do estudo</strong>.
           </div>
         </div>
-        <Button variant="primary" icon={Plus} onClick={() => setCreating(true)}>
-          Novo estudo
+        <Button onClick={() => setShowAdd(true)} icon={Plus}>
+          Cadastrar estudo
         </Button>
       </header>
 
-      <section className="fade-up" style={{ marginBottom: 'var(--space-8)' }}>
-        <div className="section-header">
-          <h2 className="section-title">Estudos prontos ({completed.length})</h2>
-          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>
-            Disponíveis para Campaign Planners selecionarem
-          </span>
+      <Card variant="info" className="studies-info fade-up">
+        <div className="studies-info__icon">
+          <Info size={18} />
         </div>
-        <div className="studies-grid">
-          {completed.map((s, i) => (
-            <StudyCard key={s.id} study={s} onEdit={() => setEditing(s)} i={i} />
-          ))}
+        <div>
+          <strong>Como funciona</strong>
+          <p>
+            O <code>ID do estudo</code> é o que o CP vai ver no dropdown do Command quando
+            preencher o checklist. Quando a campanha for atribuída a um estudo aqui,
+            o autor recebe automaticamente o bônus de 0,30% sobre a líquida da campanha
+            (independente de quem é o CS dono).
+          </p>
+          <p className="studies-info__note">
+            <strong>Regra:</strong> 1 estudo por campanha. Se uma campanha tiver múltiplos estudos
+            marcados, vale apenas o primeiro.
+          </p>
         </div>
-      </section>
+      </Card>
 
-      <section className="fade-up" style={{ '--i': 1 }}>
-        <div className="section-header">
-          <h2 className="section-title">Planejados ({planned.length})</h2>
-          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>
-            Em desenvolvimento — não aparecem para CPs ainda
-          </span>
-        </div>
-        <div className="studies-grid">
-          {planned.map((s, i) => (
-            <StudyCard key={s.id} study={s} onEdit={() => setEditing(s)} i={i} />
-          ))}
-        </div>
-      </section>
+      {error && (
+        <Card variant="warn"><strong>Erro:</strong> {error}</Card>
+      )}
 
-      {(creating || editing) && (
+      {!list ? (
+        <div className="empty-state">Carregando…</div>
+      ) : list.length === 0 ? (
+        <Card>
+          <p className="card__subtitle">
+            Nenhum estudo cadastrado. Clique em <strong>Cadastrar estudo</strong> pra começar.
+          </p>
+        </Card>
+      ) : (
+        <>
+          <div className="cs-month-group__header">
+            <span>Catálogo {VERSION}</span>
+            <span className="cs-month-group__count">{list.length} estudos</span>
+          </div>
+          <div className="studies-grid">
+            {list.map((s, i) => (
+              <div
+                key={s.id}
+                className="study-card stagger"
+                style={{ '--i': Math.min(i, 20) }}
+                onClick={() => setEditing(s)}
+              >
+                <div className={`study-card__stripe is-${s.status || 'planned'}`}></div>
+                <div className="study-card__main">
+                  <div className="study-card__title-row">
+                    <span className="study-card__title">{s.display_name}</span>
+                    {s.status === 'completed' && <Badge variant="green">Publicado</Badge>}
+                    {s.status === 'planned' && <Badge variant="neutral">Planejado</Badge>}
+                    {s.status === 'archived' && <Badge variant="neutral">Arquivado</Badge>}
+                  </div>
+                  <div className="study-card__meta">
+                    <code>{s.id}</code>
+                  </div>
+                  <div className="study-card__author">
+                    <User size={12} /> Autor: <strong>{s.author_name || s.author_email || '—'}</strong>
+                  </div>
+                  {s.usage_count > 0 && (
+                    <div className="study-card__usage">
+                      Usado em <strong>{s.usage_count}</strong> {s.usage_count === 1 ? 'campanha' : 'campanhas'} este quarter
+                    </div>
+                  )}
+                </div>
+                <Edit3 size={16} className="study-card__edit" />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {(showAdd || editing) && (
         <StudyModal
           study={editing}
-          onClose={() => { setCreating(false); setEditing(null); }}
-          onSave={(data) => {
-            if (creating) {
-              setStudies(s => [...s, { ...data, id: `st_${Date.now()}`, usage_count: 0 }]);
-            } else {
-              setStudies(s => s.map(x => x.id === editing.id ? { ...x, ...data } : x));
-            }
-            setCreating(false);
-            setEditing(null);
-          }}
+          onClose={() => { setShowAdd(false); setEditing(null); }}
+          onSave={handleSave}
         />
       )}
     </AppShell>
   );
 }
 
-function StudyCard({ study, onEdit, i }) {
-  return (
-    <div className="member-card stagger" style={{ '--i': i }}>
-      <div className="member-card__main">
-        <div style={{
-          width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'var(--brand-soft)', color: 'var(--brand)',
-          borderRadius: 'var(--radius)',
-        }}>
-          <BookOpen size={18} />
-        </div>
-        <div className="member-card__info">
-          <div className="member-card__name">
-            {study.display_name}
-            <Badge variant={study.status === 'completed' ? 'green' : 'yellow'}>
-              {study.status === 'completed' ? 'Pronto' : 'Planejado'}
-            </Badge>
-          </div>
-          <div className="member-card__email">
-            <User size={11} style={{ display: 'inline', marginRight: 4, verticalAlign: -1 }} />
-            {study.author_name}
-          </div>
-        </div>
-        <button className="member-card__edit" onClick={onEdit} title="Editar">
-          <Edit3 size={14} />
-        </button>
-      </div>
-
-      <div className="member-card__metrics" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <div className="member-card__metric">
-          <span className="label">Usado em</span>
-          <span className="member-card__metric-value mono">
-            {study.usage_count}× campanha{study.usage_count !== 1 ? 's' : ''}
-          </span>
-        </div>
-        <div className="member-card__metric">
-          <span className="label">Bônus gerado</span>
-          <span className="member-card__metric-value mono member-card__metric-value--cyan">
-            {fmt.brlCompact(study.usage_count * 580000 * 0.0030)}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function StudyModal({ study, onClose, onSave }) {
-  const isNew = !study;
+  const isEdit = !!study;
   const [form, setForm] = useState({
+    id: study?.id || '',
     display_name: study?.display_name || '',
     author_email: study?.author_email || '',
-    author_name: study?.author_name || '',
     status: study?.status || 'planned',
+    link: study?.link || '',
+    notes: study?.notes || '',
   });
   const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
 
-  const handleSave = async () => {
+  async function handleSubmit() {
+    if (!form.display_name.trim()) {
+      setErr('Nome do estudo é obrigatório');
+      return;
+    }
+    if (!isEdit && !form.id.trim()) {
+      setErr('ID do estudo é obrigatório');
+      return;
+    }
+    if (!form.author_email.trim()) {
+      setErr('Email do autor é obrigatório');
+      return;
+    }
     setSaving(true);
-    await new Promise(r => setTimeout(r, 300));
-    onSave(form);
-    setSaving(false);
-  };
+    setErr(null);
+    try {
+      const body = {
+        display_name: form.display_name.trim(),
+        author_email: form.author_email.trim().toLowerCase(),
+        status: form.status,
+        link: form.link.trim() || null,
+        notes: form.notes.trim() || null,
+      };
+      if (!isEdit) body.id = form.id.trim();
+      await onSave(body, isEdit ? study.id : null);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
-    <Modal
-      open
-      onClose={onClose}
-      title={isNew ? 'Novo estudo' : `Editar ${study.display_name}`}
-      subtitle="Estudos sazonais alimentam o catálogo no checklist do Command"
-      size="md"
-      footer={
-        <>
+    <Modal title={isEdit ? `Editar: ${study.display_name}` : 'Cadastrar estudo'} onClose={onClose}>
+      <div className="form-stack">
+        {!isEdit && (
+          <div>
+            <label className="form-label">
+              ID do estudo *
+              <small className="form-label__hint">
+                ID único que o CP vê no Command. Use snake_case, ex: <code>st_black_friday_2026</code>
+              </small>
+            </label>
+            <Input
+              placeholder="st_black_friday_2026"
+              value={form.id}
+              onChange={(e) => setForm({ ...form, id: e.target.value })}
+            />
+          </div>
+        )}
+
+        <div>
+          <label className="form-label">
+            Nome de exibição *
+            <small className="form-label__hint">Aparece no dropdown do Command e nos relatórios</small>
+          </label>
+          <Input
+            placeholder="Black Friday 2026"
+            value={form.display_name}
+            onChange={(e) => setForm({ ...form, display_name: e.target.value })}
+          />
+        </div>
+
+        <div>
+          <label className="form-label">
+            Email do autor *
+            <small className="form-label__hint">
+              Pessoa que recebe os 0,30% de bônus por campanha que usar o estudo
+            </small>
+          </label>
+          <Input
+            placeholder="beatriz.severine@hypr.mobi"
+            value={form.author_email}
+            onChange={(e) => setForm({ ...form, author_email: e.target.value })}
+          />
+        </div>
+
+        <div>
+          <label className="form-label">Status</label>
+          <select
+            className="cs-select"
+            value={form.status}
+            onChange={(e) => setForm({ ...form, status: e.target.value })}
+            style={{ width: '100%' }}
+          >
+            <option value="planned">Planejado</option>
+            <option value="completed">Publicado</option>
+            <option value="archived">Arquivado</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="form-label">Link do estudo (opcional)</label>
+          <Input
+            placeholder="https://drive.google.com/..."
+            value={form.link}
+            onChange={(e) => setForm({ ...form, link: e.target.value })}
+          />
+        </div>
+
+        <div>
+          <label className="form-label">Notas (opcional)</label>
+          <Textarea
+            rows={2}
+            placeholder="Co-autor: Mariana"
+            value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+          />
+        </div>
+
+        {err && <div className="form-error">{err}</div>}
+
+        <div className="modal__footer">
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" onClick={handleSave} loading={saving}>
-            {isNew ? 'Criar estudo' : 'Salvar'}
+          <Button onClick={handleSubmit} disabled={saving}>
+            {saving ? 'Salvando…' : (isEdit ? 'Salvar' : 'Cadastrar')}
           </Button>
-        </>
-      }
-    >
-      <div className="member-form">
-        <Input
-          label="Nome do estudo"
-          placeholder="Ex: Dia das Mulheres, Carnaval, Festa Junina…"
-          value={form.display_name}
-          onChange={(e) => setForm({ ...form, display_name: e.target.value })}
-        />
-
-        <Select
-          label="Autor (CS responsável)"
-          value={form.author_email}
-          onChange={(e) => {
-            const opts = [
-              { email: 'beatriz.severine@hypr.mobi', name: 'Beatriz Severine' },
-              { email: 'isaac.lobo@hypr.mobi', name: 'Isaac Lobo' },
-              { email: 'mariana.lewinski@hypr.mobi', name: 'Mariana Lewinski' },
-              { email: 'thiago.nascimento@hypr.mobi', name: 'Thiago Nascimento' },
-              { email: 'joao.buzolin@hypr.mobi', name: 'João Buzolin' },
-              { email: 'joao.armelin@hypr.mobi', name: 'João Armelin' },
-            ];
-            const found = opts.find(o => o.email === e.target.value);
-            setForm({ ...form, author_email: e.target.value, author_name: found?.name || '' });
-          }}
-        >
-          <option value="">Selecione um CS</option>
-          <option value="beatriz.severine@hypr.mobi">Beatriz Severine</option>
-          <option value="isaac.lobo@hypr.mobi">Isaac Lobo</option>
-          <option value="mariana.lewinski@hypr.mobi">Mariana Lewinski</option>
-          <option value="thiago.nascimento@hypr.mobi">Thiago Nascimento</option>
-          <option value="joao.buzolin@hypr.mobi">João Buzolin</option>
-          <option value="joao.armelin@hypr.mobi">João Armelin</option>
-        </Select>
-
-        <Select
-          label="Status"
-          value={form.status}
-          onChange={(e) => setForm({ ...form, status: e.target.value })}
-          hint="Apenas 'Pronto' aparece para CPs no Command"
-        >
-          <option value="planned">Planejado (em desenvolvimento)</option>
-          <option value="completed">Pronto (disponível para uso)</option>
-        </Select>
+        </div>
       </div>
     </Modal>
   );

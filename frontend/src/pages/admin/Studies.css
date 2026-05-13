@@ -1,6 +1,136 @@
-/* Studies usa o mesmo padrão visual de Team — apenas garantindo grid */
+/**
+ * Studies.css — admin gerencia catálogo de estudos.
+ */
+
+.studies-info {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  align-items: flex-start;
+}
+
+.studies-info__icon {
+  color: var(--accent-cyan);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.studies-info p {
+  margin: 0 0 8px 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.studies-info__note {
+  font-size: var(--text-xs) !important;
+  color: var(--text-tertiary) !important;
+  border-top: 1px dashed var(--border-subtle);
+  padding-top: 8px;
+  margin-top: 8px !important;
+}
+
+.studies-info code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 6px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+  color: var(--text-primary);
+}
+
 .studies-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: var(--space-3);
+}
+
+.study-card {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+
+.study-card:hover {
+  border-color: var(--accent-cyan);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.study-card__stripe {
+  width: 4px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.study-card__stripe.is-completed { background: var(--accent-green, #18bf6b); }
+.study-card__stripe.is-planned   { background: var(--accent-cyan, #0891b2); }
+.study-card__stripe.is-archived  { background: var(--border-strong); }
+
+.study-card__main {
+  flex: 1;
+  padding: var(--space-3) var(--space-4);
+  min-width: 0;
+}
+
+.study-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.study-card__title {
+  font-weight: 700;
+  font-size: var(--text-base, 15px);
+  color: var(--text-primary);
+}
+
+.study-card__meta {
+  margin-bottom: 6px;
+}
+
+.study-card__meta code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 3px;
+  color: var(--text-tertiary);
+}
+
+.study-card__author {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.study-card__author > svg {
+  color: var(--accent-cyan);
+}
+
+.study-card__usage {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.study-card__edit {
+  align-self: center;
+  margin-right: var(--space-3);
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  transition: color 120ms ease;
+}
+
+.study-card:hover .study-card__edit {
+  color: var(--accent-cyan);
 }

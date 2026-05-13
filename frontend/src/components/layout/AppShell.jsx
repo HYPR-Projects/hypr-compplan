@@ -27,6 +27,7 @@ const NAV_ADMIN = [
   { to: '/admin/pedidos-revisao',  label: 'Pedidos análise', icon: MessageSquare },
   { to: '/admin/campanhas',        label: 'Campanhas',       icon: FileText },
   { to: '/admin/time',             label: 'Time',            icon: Users },
+  { to: '/admin/estudos',          label: 'Estudos',         icon: BookOpen },
   { to: '/admin/excecoes-over',    label: 'Exceções OVER',   icon: Shield },
 ];
 

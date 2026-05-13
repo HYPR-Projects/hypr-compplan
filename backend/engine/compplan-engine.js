@@ -70,9 +70,11 @@ function inferAutoItems(campaign) {
   if (nT2 >= 2) earned.add('setup_tier2_2');
   if (nT3 >= 1) earned.add('setup_tier3_1');
 
-  // Extras — Estudos (auto — vem do studies_used)
-  const studies = Array.isArray(campaign.studies_used) ? campaign.studies_used : [];
-  if (studies.length > 0) earned.add('ex_estudos');
+  // Extras — Estudos: NÃO entra no breakdown do CS dono da campanha.
+  // 0.30% vai pro AUTOR do estudo, processado separadamente no orchestrator
+  // de quarter via evaluators/study-used.js (que credita study_author_email).
+  // Aqui só registramos pra UI mostrar "estudo X usado" sem somar no bônus.
+  // → ex_estudos é renderizado mas com earned=false sempre pra o CS dono.
 
   return earned;
 }

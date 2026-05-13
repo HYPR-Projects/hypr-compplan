@@ -118,7 +118,7 @@ export const COMPPLAN_CATALOG = {
     items: [
       { id: 'ex_dark_test',    label: 'Realização de dark test',  pct: 0.0010, source: 'manual', needs_evidence: true, evidence_type: 'link_or_file', help: 'RMNd e Feature como dark test não entram no setup.' },
       { id: 'ex_design_studio',label: 'Design studio',            pct: 0.0015, source: 'manual' },
-      { id: 'ex_estudos',      label: 'Estudos',                  pct: 0.0030, source: 'manual', help: 'Marcado se há estudos publicados associados à campanha.' },
+      { id: 'ex_estudos',      label: 'Estudos',                  pct: 0.0030, source: 'auto', help: 'Bônus vai pro AUTOR do estudo cadastrado em /admin/estudos, não pro CS dono da campanha.' },
     ],
   },
 
