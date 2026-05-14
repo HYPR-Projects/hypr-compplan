@@ -2,7 +2,9 @@
  * lib/api.js — cliente HTTP do Compplan backend.
  *
  * Convenções:
- *   - Token JWT armazenado em sessionStorage (some no fechar de aba)
+ *   - Token JWT em localStorage (persiste entre abas + restart do browser)
+ *   - Sessão de 8h: backend emite JWT com exp=8h; frontend também checa
+ *     expiry local pra fazer logout proativo (evita 401 surpresa)
  *   - Em dev, usa proxy /api → http://localhost:8080 (ver vite.config.js)
  *   - Em produção, usa VITE_API_URL como base
  *
@@ -15,19 +17,56 @@ import { config } from './config.js';
 
 const API_BASE = config.apiUrl;
 const TOKEN_KEY = 'commplan_jwt';
+const USER_KEY = 'commplan_user';
+const EXPIRY_KEY = 'commplan_jwt_exp';   // unix timestamp em ms
+
+/** Decodifica payload do JWT sem verificar (só pra ler `exp`). */
+function decodeJwtPayload(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    // base64url → base64
+    const pad = parts[1].length % 4 === 0 ? '' : '='.repeat(4 - parts[1].length % 4);
+    const b64 = (parts[1] + pad).replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(b64));
+  } catch (_) { return null; }
+}
 
 export const auth = {
-  getToken() { return sessionStorage.getItem(TOKEN_KEY); },
-  setToken(t) { sessionStorage.setItem(TOKEN_KEY, t); },
-  clearToken() { sessionStorage.removeItem(TOKEN_KEY); },
+  getToken() {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) return null;
+    // Checa expiry local
+    const exp = Number(localStorage.getItem(EXPIRY_KEY) || 0);
+    if (exp > 0 && Date.now() >= exp) {
+      // expirado — limpa e retorna null
+      this.clearToken();
+      this.clearUser();
+      return null;
+    }
+    return token;
+  },
+  setToken(t) {
+    localStorage.setItem(TOKEN_KEY, t);
+    // Armazena expiry pra checar localmente
+    const payload = decodeJwtPayload(t);
+    if (payload?.exp) {
+      localStorage.setItem(EXPIRY_KEY, String(payload.exp * 1000));
+    } else {
+      localStorage.removeItem(EXPIRY_KEY);
+    }
+  },
+  clearToken() {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(EXPIRY_KEY);
+  },
 
-  // role e email persistem em memória + sessionStorage pra sobreviver a F5
   getUser() {
-    const raw = sessionStorage.getItem('commplan_user');
+    const raw = localStorage.getItem(USER_KEY);
     return raw ? JSON.parse(raw) : null;
   },
-  setUser(u) { sessionStorage.setItem('commplan_user', JSON.stringify(u)); },
-  clearUser() { sessionStorage.removeItem('commplan_user'); },
+  setUser(u) { localStorage.setItem(USER_KEY, JSON.stringify(u)); },
+  clearUser() { localStorage.removeItem(USER_KEY); },
 
   logout() {
     this.clearToken();

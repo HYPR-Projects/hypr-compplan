@@ -1,9 +1,9 @@
 /**
- * lib/auth.js — autenticação do Commplan
+ * lib/auth.js — autenticação do Compplan
  *
  * Port direto do auth.py do Report Center (Python) pra Node, mantendo
  * compatibilidade BINÁRIA do JWT — mesmo JWT_SECRET = SSO entre Report
- * Center e Commplan.
+ * Center e Compplan.
  *
  * Fluxo
  * -----
@@ -25,7 +25,7 @@ import crypto from 'crypto';
 import https from 'https';
 
 const JWT_SECRET = process.env.JWT_SECRET || '';
-const JWT_TTL_SECONDS = 30 * 60;            // 30 min — mesmo do Report Center
+const JWT_TTL_SECONDS = 8 * 60 * 60;         // 8 horas — sessão de trabalho típica
 const JWT_ISSUER = 'hypr-report-hub';        // mesmo issuer = JWT vale nos dois sistemas
 const ADMIN_EMAIL_DOMAIN = '@hypr.mobi';
 
