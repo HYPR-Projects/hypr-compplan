@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle2, AlertCircle, Save, Info,
   ChevronDown, ChevronRight, Sparkles, Zap, Eye, Link2, AlertTriangle,
-  MessageSquare, Shield, Copy, BookOpen,
+  MessageSquare, Shield, Copy, BookOpen, X,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
