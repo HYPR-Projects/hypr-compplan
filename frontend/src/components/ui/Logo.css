@@ -1,7 +1,6 @@
 /* ╔══════════════════════════════════════════════════════════════════╗
-   ║  Logo HYPR — usa imagem oficial PNG (preta sem fundo).            ║
-   ║  Dark theme: filter invert(1) pra ficar branca.                   ║
-   ║  Light theme: PNG natural (preta).                                ║
+   ║  Logo HYPR — SVG inline com fill="currentColor".                  ║
+   ║  Cor automática via CSS (dark → branco, light → preto).          ║
    ╚══════════════════════════════════════════════════════════════════╝ */
 
 .hypr-logo {
@@ -9,24 +8,14 @@
   align-items: center;
   gap: var(--space-3);
   user-select: none;
+  /* currentColor herda do text-primary do theme atual */
+  color: var(--text-primary);
 }
 
-.hypr-logo__img {
+.hypr-logo__svg {
   display: block;
   height: 28px;
   width: auto;
-  object-fit: contain;
-}
-
-/* Dark theme — inverte a imagem PNG preta pra ficar branca */
-[data-theme="dark"] .hypr-logo__img,
-:root .hypr-logo__img {
-  filter: invert(1) brightness(1.05);
-}
-
-/* Light theme — PNG natural (preta) */
-[data-theme="light"] .hypr-logo__img {
-  filter: none;
 }
 
 .hypr-logo__sub {
@@ -36,28 +25,29 @@
   font-weight: 600;
   text-transform: none;
   white-space: nowrap;
+  position: relative;
+  padding-left: var(--space-3);
 }
 
-/* Tamanhos — altura da imagem + tamanho do subtitle */
-.hypr-logo--sm .hypr-logo__img { height: 20px; }
-.hypr-logo--sm .hypr-logo__sub { font-size: 14px; }
-
-.hypr-logo--md .hypr-logo__img { height: 28px; }
-.hypr-logo--md .hypr-logo__sub { font-size: 18px; }
-
-.hypr-logo--lg .hypr-logo__img { height: 40px; }
-.hypr-logo--lg .hypr-logo__sub { font-size: 24px; }
-
-.hypr-logo--xl .hypr-logo__img { height: 56px; }
-.hypr-logo--xl .hypr-logo__sub { font-size: 32px; }
-
-/* Separador visual entre logo e subtitle (linha vertical sutil) */
 .hypr-logo__sub::before {
   content: '';
-  display: inline-block;
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
   width: 1px;
-  height: 0.8em;
+  height: 1em;
   background: var(--border);
-  margin-right: var(--space-3);
-  vertical-align: -0.05em;
 }
+
+.hypr-logo--sm .hypr-logo__svg { height: 20px; }
+.hypr-logo--sm .hypr-logo__sub { font-size: 14px; }
+
+.hypr-logo--md .hypr-logo__svg { height: 28px; }
+.hypr-logo--md .hypr-logo__sub { font-size: 18px; }
+
+.hypr-logo--lg .hypr-logo__svg { height: 40px; }
+.hypr-logo--lg .hypr-logo__sub { font-size: 24px; }
+
+.hypr-logo--xl .hypr-logo__svg { height: 56px; }
+.hypr-logo--xl .hypr-logo__sub { font-size: 32px; }

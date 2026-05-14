@@ -1,24 +1,55 @@
 import './Logo.css';
 
 /**
- * Logo HYPR° — usa a imagem oficial preta (PNG sem fundo).
- *
- * No dark theme, aplicamos CSS filter pra inverter pra branco.
- * No light theme, fica preto natural.
+ * Logo HYPR° — SVG inline (vetorial). Usa `fill="currentColor"`,
+ * então a cor é controlada via CSS no elemento pai.
+ * - Dark theme → cor branca
+ * - Light theme → cor preta
  *
  * Props:
  *   subtitle: texto secundário (default 'Compplan')
- *   size:     sm | md | lg
+ *   size:     sm | md | lg | xl
  */
 export default function Logo({ subtitle = 'Compplan', size = 'md' }) {
   const cls = `hypr-logo hypr-logo--${size}`;
   return (
     <div className={cls}>
-      <img
-        src="/hypr-logo.png"
-        alt="HYPR"
-        className="hypr-logo__img"
-      />
+      <svg
+        className="hypr-logo__svg"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 931.974364 164.149106"
+        preserveAspectRatio="xMidYMid meet"
+        aria-label="HYPR"
+        role="img"
+      >
+        <g transform="translate(-14.000000,175.149106) scale(0.100000,-0.100000)"
+           fill="currentColor" stroke="none">
+          <path d="M140 930 l0 -820 70 0 70 0 0 375 0 375 575 0 575 0 0 -375 0 -375
+70 0 70 0 0 820 0 820 -70 0 -70 0 0 -380 0 -380 -575 0 -575 0 0 380 0 380
+-70 0 -70 0 0 -820z"/>
+          <path d="M2400 1740 c0 -5 64 -112 142 -237 373 -601 498 -805 498 -814 0 -6
+-44 -81 -97 -167 -53 -86 -130 -210 -170 -275 -40 -66 -73 -123 -73 -128 0 -5
+33 -9 73 -9 l72 0 156 253 c86 138 285 461 443 717 158 256 312 504 342 551
+79 126 79 119 -8 119 l-75 0 -288 -466 c-158 -256 -291 -462 -295 -457 -4 4
+-39 60 -77 123 -39 63 -141 230 -228 370 -87 140 -181 293 -210 340 l-51 85
+-77 3 c-49 2 -77 -1 -77 -8z"/>
+          <path d="M4596 1742 c-3 -6 -5 -374 -3 -818 l2 -809 70 0 70 0 3 277 2 276
+423 5 c287 3 438 8 472 17 67 16 181 72 227 110 121 101 188 311 159 497 -32
+210 -149 348 -353 419 l-83 28 -491 4 c-310 2 -494 0 -498 -6z m1056 -169 c84
+-39 160 -110 192 -177 56 -114 55 -268 -1 -383 -34 -70 -116 -145 -191 -175
+-56 -23 -64 -23 -484 -26 l-428 -3 0 401 0 401 423 -3 422 -3 67 -32z"/>
+          <path d="M6810 931 l0 -821 70 0 70 0 0 280 0 280 374 0 374 0 209 -277 209
+-278 82 -3 c45 -2 82 0 82 3 0 3 -96 134 -214 290 l-214 284 37 12 c224 71
+351 254 351 504 0 260 -140 447 -390 522 -47 14 -130 17 -547 20 l-493 4 0
+-820z m995 663 c118 -30 206 -103 259 -214 29 -60 31 -73 31 -175 0 -98 -3
+-116 -27 -167 -37 -79 -78 -128 -140 -165 -99 -60 -129 -63 -575 -63 l-403 0
+0 400 0 400 398 0 c327 0 408 -3 457 -16z"/>
+          <path d="M8855 1739 c-44 -25 -45 -31 -45 -296 l0 -254 25 -24 24 -25 266 0
+c271 0 294 3 322 39 9 12 12 85 13 263 0 247 0 247 -24 275 l-24 28 -269 2
+c-183 2 -274 -1 -288 -8z m505 -294 l0 -205 -225 0 -225 0 0 205 0 205 225 0
+225 0 0 -205z"/>
+        </g>
+      </svg>
       {subtitle && (
         <span className="hypr-logo__sub">{subtitle}</span>
       )}
