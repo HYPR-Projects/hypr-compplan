@@ -7,7 +7,7 @@ import { Badge } from '../../components/ui/Badge.jsx';
 import { Input } from '../../components/ui/Input.jsx';
 import Avatar from '../../components/ui/Avatar.jsx';
 import { fmt, currentQuarter } from '../../lib/format.js';
-import { endpoints } from '../../lib/api.js';
+import { endpoints, auth } from '../../lib/api.js';
 import './Overview.css';
 
 // Quarter selector — atual + 3 anteriores
@@ -178,9 +178,28 @@ export default function AdminOverview() {
         </Card>
       ) : (
         <div className="admin-cs-grid">
-          {filteredCs.map((cs, i) => (
-            <CsCard key={cs.cs_email} cs={cs} i={i} onClick={() => navigate(`/admin/cs/${encodeURIComponent(cs.cs_email)}`)} />
-          ))}
+          {filteredCs.map((cs, i) => {
+            const isAdmin = (auth.getUser()?.role === 'admin');
+            const isOwnCard = (auth.getUser()?.email || '').toLowerCase() === (cs.cs_email || '').toLowerCase();
+            const handleClick = () => {
+              if (isAdmin) {
+                navigate(`/admin/cs/${encodeURIComponent(cs.cs_email)}`);
+              } else if (isOwnCard) {
+                navigate('/cs');
+              }
+              // CS não navega pra cards de outros CSs
+            };
+            const clickable = isAdmin || isOwnCard;
+            return (
+              <CsCard
+                key={cs.cs_email}
+                cs={cs}
+                i={i}
+                onClick={clickable ? handleClick : undefined}
+                style={clickable ? {} : { cursor: 'default' }}
+              />
+            );
+          })}
         </div>
       )}
     </AppShell>
@@ -197,7 +216,7 @@ function KpiBig({ label, value, sub, variant }) {
   );
 }
 
-function CsCard({ cs, i, onClick }) {
+function CsCard({ cs, i, onClick, style }) {
   const hitFloor = cs.hit_floor;
   const fixoBrl = cs.fixo_quarter || 0;
   const bonusLiquido = cs.bonus_liquido || 0;
@@ -207,7 +226,7 @@ function CsCard({ cs, i, onClick }) {
   return (
     <div
       className={`admin-cs-card stagger ${hasPositive ? 'has-positive-bonus' : ''}`}
-      style={{ '--i': Math.min(i, 20) }}
+      style={{ '--i': Math.min(i, 20), ...(style || {}) }}
       onClick={onClick}
     >
       <div className="admin-cs-card__header">

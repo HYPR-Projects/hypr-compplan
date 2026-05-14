@@ -139,6 +139,20 @@ export const endpoints = {
   approveQuarter(q, cs)  { return api.put(`/commplan/admin/quarter/${q}/${encodeURIComponent(cs)}/approve`); },
   markPaidQuarter(q, cs) { return api.put(`/commplan/admin/quarter/${q}/${encodeURIComponent(cs)}/mark-paid`); },
 
+  // Floor override (admin tira meses do piso de um CS)
+  getFloorOverride(csEmail, q) {
+    return api.get(`/commplan/admin/cs/${encodeURIComponent(csEmail)}/floor-override/${q}`);
+  },
+  setFloorOverride(csEmail, q, months_off, note = null) {
+    return api.post(`/commplan/admin/cs/${encodeURIComponent(csEmail)}/floor-override/${q}`,
+      { months_off, note });
+  },
+
+  // Assign-study (admin atribui bônus de estudo a outro CS)
+  assignStudy(token, cs_email, opts = {}) {
+    return api.post(`/commplan/me/campaign/${token}/assign-study${asQuery(opts)}`, { cs_email });
+  },
+
   pendingEvidences()     { return api.get('/commplan/admin/evidences/pending'); },
   approveEvidence(id, notes) { return api.put(`/commplan/admin/evidences/${id}/approve`, { review_notes: notes }); },
   rejectEvidence(id, notes)  { return api.put(`/commplan/admin/evidences/${id}/reject`,  { review_notes: notes }); },

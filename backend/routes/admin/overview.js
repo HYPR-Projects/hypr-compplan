@@ -19,15 +19,21 @@ import { query, tableRef, bq, DATASET } from '../../lib/bigquery.js';
 import { parseQuarter } from '../../engine/quarter-resolver.js';
 import { computeBonus } from '../../engine/compplan-engine.js';
 import { getSalaryForCs } from '../../data/cs-config.js';
+import { getFloorOverride } from '../../data/floor-overrides.js';
 
 export const router = Router();
-router.use(authRequired, adminRequired);
+router.use(authRequired);
+// adminRequired vai ser aplicado endpoint a endpoint
 
 const TAX_RATE = 0.1653;
 const NET_FACTOR = 1 - TAX_RATE; // 0.8347
 
 // ─── GET /admin/overview/:q ────────────────────────────────────────────
-router.get('/overview/:q', async (req, res) => {
+/**
+ * Handler do overview (KPIs + ranking por CS).
+ * Exportado pra ser reutilizado em rota não-admin (CS também tem acesso).
+ */
+export async function overviewHandler(req, res) {
   try {
     const quarter = req.params.q;
     const { startDate, endDate } = parseQuarter(quarter);
@@ -81,6 +87,8 @@ router.get('/overview/:q', async (req, res) => {
     let totalFixoAll = 0;
     let totalLiquidoAll = 0;
 
+    // Quarter pra buscar override (já vem em formato "Q1-2026" no req.params.q)
+
     const byCs = await Promise.all(byCsRaw.map(async (csRow) => {
       // Salário vigente
       let monthlySalary = 0;
@@ -88,7 +96,16 @@ router.get('/overview/:q', async (req, res) => {
         const sal = await getSalaryForCs({ csEmail: csRow.cs_email });
         monthlySalary = Number(sal?.fixed_salary_brl) || 0;
       } catch (_) { /* silent */ }
-      const fixoQuarter = monthlySalary * 2;
+
+      // Floor override
+      let monthsWaived = 0;
+      let floorOverride = null;
+      try {
+        floorOverride = await getFloorOverride({ csEmail: csRow.cs_email, quarter });
+        monthsWaived = floorOverride?.months_off || 0;
+      } catch (_) { /* silent */ }
+      const floorMonths = Math.max(0, 2 - monthsWaived);
+      const fixoQuarter = monthlySalary * floorMonths;
 
       // Campanhas desse CS (precisa pra calcular bônus)
       const campaigns = await query(
@@ -181,6 +198,8 @@ router.get('/overview/:q', async (req, res) => {
         bonus_bruto: totalBonus,
         monthly_salary: monthlySalary,
         fixo_quarter: fixoQuarter,
+        floor_months_off: monthsWaived,
+        floor_override_note: floorOverride?.note || null,
         bonus_liquido: bonusLiquido,
         hit_floor: hitFloor,
       };
@@ -208,10 +227,13 @@ router.get('/overview/:q', async (req, res) => {
     console.error('GET /admin/overview/:q error:', err);
     res.status(500).json({ error: err.message });
   }
-});
+}
+
+// Registra a rota usando o handler exportado
+router.get('/overview/:q', overviewHandler);
 
 // ─── GET /admin/campaigns/:q ───────────────────────────────────────────
-router.get('/campaigns/:q', async (req, res) => {
+router.get('/campaigns/:q', adminRequired, async (req, res) => {
   try {
     const quarter = req.params.q;
     const { startDate, endDate } = parseQuarter(quarter);
@@ -264,7 +286,7 @@ router.get('/campaigns/:q', async (req, res) => {
 
 // ─── GET /admin/pending/:q ─────────────────────────────────────────────
 // Lista campanhas legadas SEM CS atribuído.
-router.get('/pending/:q', async (req, res) => {
+router.get('/pending/:q', adminRequired, async (req, res) => {
   try {
     const quarter = req.params.q;
     const { startDate, endDate } = parseQuarter(quarter);
@@ -329,7 +351,7 @@ router.get('/team', async (req, res) => {
 // ─── POST /admin/pending/:token/assign ─────────────────────────────────
 // Atribui um CS a uma campanha legada. Insere em commplan_legacy_assignments.
 // Body: { cs_email: string }
-router.post('/pending/:token/assign', async (req, res) => {
+router.post('/pending/:token/assign', adminRequired, async (req, res) => {
   try {
     const { token } = req.params;
     const { cs_email } = req.body || {};
@@ -399,6 +421,42 @@ router.post('/pending/:token/assign', async (req, res) => {
     res.json({ ok: true, short_token: token, cs_email: csEmail, attributed_by: adminEmail });
   } catch (err) {
     console.error('POST /admin/pending/:token/assign error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /admin/cs/:email/floor-override/:q ────────────────────────────
+// Lê override de piso atual (months_off + note).
+router.get('/cs/:email/floor-override/:q', adminRequired, async (req, res) => {
+  try {
+    const { setFloorOverride: _, getFloorOverride: _g } = await import('../../data/floor-overrides.js');
+    const { email, q } = req.params;
+    const { getFloorOverride } = await import('../../data/floor-overrides.js');
+    const fo = await getFloorOverride({ csEmail: email, quarter: q });
+    res.json(fo || { months_off: 0, note: null });
+  } catch (err) {
+    console.error('GET floor-override:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /admin/cs/:email/floor-override/:q ───────────────────────────
+// Set/update override de piso.
+// Body: { months_off: 0|1|2, note?: string }
+router.post('/cs/:email/floor-override/:q', adminRequired, async (req, res) => {
+  try {
+    const { setFloorOverride } = await import('../../data/floor-overrides.js');
+    const { email, q } = req.params;
+    const { months_off, note } = req.body || {};
+    const m = Number(months_off);
+    if (![0, 1, 2].includes(m)) {
+      return res.status(400).json({ error: 'months_off deve ser 0, 1 ou 2' });
+    }
+    const adminEmail = req.auth?.email || 'unknown';
+    await setFloorOverride({ csEmail: email, quarter: q, monthsOff: m, note, byEmail: adminEmail });
+    res.json({ ok: true, months_off: m });
+  } catch (err) {
+    console.error('POST floor-override:', err);
     res.status(500).json({ error: err.message });
   }
 });

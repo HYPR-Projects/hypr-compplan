@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Search, ArrowRight, ArrowLeft, Eye, Calendar, Users, List, Filter,
-  CheckCircle2, Clock, UserPlus, X, BookOpen,
+  CheckCircle2, Clock, UserPlus, X, BookOpen, Shield,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
@@ -164,6 +164,17 @@ export default function CsDashboard() {
         </Button>
       </header>
 
+      {/* Floor override (admin impersonando) */}
+      {data.impersonating && user?.role === 'admin' && (
+        <FloorOverridePanel
+          csEmail={impersonateEmail}
+          quarter={quarter}
+          currentMonthsOff={kpis.floor_override?.months_off || 0}
+          monthlySalary={kpis.monthly_salary || 0}
+          onChange={() => load()}
+        />
+      )}
+
       {/* 3 KPIs grandes (estilo Report Center) */}
       <section className="kpi-row-big stagger">
         <KpiBig
@@ -175,8 +186,15 @@ export default function CsDashboard() {
         <KpiBig
           label="Salário fixo"
           value={fmt.brl(fixoQuarter)}
-          sub={kpis.monthly_salary ? `2 × ${fmt.brl(kpis.monthly_salary)}/mês` : 'Não definido'}
-          variant="neutral"
+          sub={(() => {
+            const months = kpis.floor_months ?? 2;
+            const salary = kpis.monthly_salary;
+            if (!salary) return 'Não definido';
+            if (months === 0) return '✓ Piso zerado por admin';
+            if (months < 2) return `${months}× ${fmt.brl(salary)}/mês · admin tirou ${2 - months}m`;
+            return `2 × ${fmt.brl(salary)}/mês`;
+          })()}
+          variant={kpis.floor_months !== undefined && kpis.floor_months < 2 ? 'green' : 'neutral'}
         />
         <KpiBig
           label="Bônus líquido"
@@ -185,6 +203,17 @@ export default function CsDashboard() {
           variant={hitFloor ? 'green' : 'warn'}
         />
       </section>
+
+      {/* Admin-only: controle de override do piso */}
+      {impersonateEmail && (
+        <FloorOverrideControl
+          csEmail={impersonateEmail}
+          quarter={quarter}
+          monthsWaived={2 - (kpis.floor_months ?? 2)}
+          monthlySalary={kpis.monthly_salary || 0}
+          onChange={() => load()}
+        />
+      )}
 
       {/* Tabs */}
       <div className="cs-tabs fade-up">
@@ -385,6 +414,59 @@ export default function CsDashboard() {
   );
 }
 
+function FloorOverridePanel({ csEmail, quarter, currentMonthsOff, monthlySalary, onChange }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function setMonths(m) {
+    setSaving(true);
+    setError(null);
+    try {
+      await endpoints.setFloorOverride(csEmail, quarter, m);
+      onChange?.();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const newFixo = monthlySalary * Math.max(0, 2 - currentMonthsOff);
+  const labelFor = (m) => {
+    if (m === 0) return 'Piso normal (2 meses)';
+    if (m === 1) return 'Tirar 1 mês';
+    return 'Tirar 2 meses (zerar piso)';
+  };
+
+  return (
+    <section className="floor-override-panel">
+      <div className="floor-override-panel__header">
+        <Shield size={14} />
+        <strong>Override de piso (admin)</strong>
+        <span className="floor-override-panel__current">
+          Atual: {currentMonthsOff === 0 ? 'piso completo' :
+                  currentMonthsOff === 1 ? '−1 mês' : '−2 meses (zerado)'}
+          {' '}· Fixo do quarter: {fmt.brl(newFixo)}
+        </span>
+      </div>
+      <div className="floor-override-panel__actions">
+        {[0, 1, 2].map(m => (
+          <button
+            key={m}
+            type="button"
+            disabled={saving || m === currentMonthsOff}
+            className={`floor-override-btn ${m === currentMonthsOff ? 'is-active' : ''}`}
+            onClick={() => setMonths(m)}
+          >
+            {labelFor(m)}
+          </button>
+        ))}
+      </div>
+      {error && <div className="floor-override-panel__error">{error}</div>}
+    </section>
+  );
+}
+
 function KpiBig({ label, value, sub, variant }) {
   return (
     <div className={`kpi-big kpi-big--${variant || 'neutral'}`}>
@@ -577,5 +659,67 @@ function AssignPreModal({ onClose, onSuccess, opts }) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * FloorOverrideControl — Admin tira 1 ou 2 meses do piso do CS no quarter.
+ * Apenas visível em modo impersonate (admin no painel do CS).
+ */
+function FloorOverrideControl({ csEmail, quarter, monthsWaived, monthlySalary, onChange }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const setMonths = async (m) => {
+    if (saving) return;
+    setSaving(true); setError(null);
+    try {
+      await api.post(
+        `/commplan/admin/cs-config/${encodeURIComponent(csEmail)}/floor-override`,
+        { quarter, months_waived: m }
+      );
+      onChange?.();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="floor-override-control fade-up">
+      <div className="floor-override-control__title">
+        <Shield size={14} /> Override do piso (admin)
+      </div>
+      <div className="floor-override-control__body">
+        <span className="floor-override-control__desc">
+          Tirar meses do piso ({monthlySalary ? fmt.brl(monthlySalary) : 'R$ —'}/mês) no quarter {quarter}:
+        </span>
+        <div className="floor-override-control__buttons">
+          <button
+            className={`btn-toggle ${monthsWaived === 0 ? 'btn-toggle--active' : ''}`}
+            onClick={() => setMonths(0)}
+            disabled={saving}
+          >
+            Sem desconto (2 meses)
+          </button>
+          <button
+            className={`btn-toggle ${monthsWaived === 1 ? 'btn-toggle--active' : ''}`}
+            onClick={() => setMonths(1)}
+            disabled={saving}
+          >
+            Tirar 1 mês
+          </button>
+          <button
+            className={`btn-toggle ${monthsWaived === 2 ? 'btn-toggle--active' : ''}`}
+            onClick={() => setMonths(2)}
+            disabled={saving}
+          >
+            Tirar 2 meses (zerar)
+          </button>
+        </div>
+      </div>
+      {error && <div className="floor-override-control__error">⚠ {error}</div>}
+    </section>
   );
 }

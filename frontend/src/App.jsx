@@ -59,6 +59,7 @@ export default function App() {
 
         {/* ── CS (portal pessoal) ────────────────────────────────── */}
         <Route path="/cs"                    element={<ProtectedRoute><CsDashboard /></ProtectedRoute>} />
+        <Route path="/cs/visao-geral"        element={<ProtectedRoute><AdminOverview /></ProtectedRoute>} />
         <Route path="/cs/campanha/:token"    element={<ProtectedRoute><CsCampaignDetail /></ProtectedRoute>} />
         <Route path="/cs/historico"          element={<ProtectedRoute><CsHistory /></ProtectedRoute>} />
 

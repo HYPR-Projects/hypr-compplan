@@ -28,6 +28,7 @@ export default function CsCampaignDetail() {
   const [manualChecks, setManualChecks] = useState({});
   const [expandedCategories, setExpandedCategories] = useState(new Set(CATEGORY_ORDER));
   const [showReplicateModal, setShowReplicateModal] = useState(false);
+  const [teamList, setTeamList] = useState([]);
 
   // Helpers de impersonação
   const opts = impersonateEmail ? { as: impersonateEmail } : {};
@@ -43,6 +44,24 @@ export default function CsCampaignDetail() {
       setManualChecks(c.manual_checks || {});
     } catch (e) {
       setError(e.message);
+    }
+  }
+
+  // Carrega lista do time (pra admin atribuir estudo)
+  useEffect(() => {
+    if (isAdmin) {
+      endpoints.adminTeam()
+        .then(d => setTeamList(d.items || []))
+        .catch(() => setTeamList([]));
+    }
+  }, [isAdmin]);
+
+  async function handleAssignStudy(csEmail) {
+    try {
+      await endpoints.assignStudy(token, csEmail, opts);
+      await load();
+    } catch (e) {
+      alert(`Erro ao atribuir estudo: ${e.message}`);
     }
   }
 
@@ -264,28 +283,58 @@ export default function CsCampaignDetail() {
         Detalhamento do bônus
       </h2>
 
-      {CATEGORY_ORDER.map(catKey => {
-        const cat = breakdown.by_category[catKey];
-        if (!cat) return null;
+      {/* Quando o viewer é APENAS pre_assignee (não é dono nem admin),
+          mostra só o bloco de Pré Campanha. */}
+      {(() => {
+        const viewerEmail = (user?.email || '').toLowerCase();
+        const ownerEmail = (campaign.cs_email || '').toLowerCase();
+        const isOwner = viewerEmail === ownerEmail;
+        const onlyPreCampaign = !isAdmin && !isOwner && campaign.viewer_is_pre_assignee;
+
+        const categoriesToShow = onlyPreCampaign
+          ? ['pre_campaign']
+          : CATEGORY_ORDER;
+
         return (
-          <CategoryBlock
-            key={catKey}
-            catKey={catKey}
-            cat={cat}
-            expanded={expandedCategories.has(catKey)}
-            onToggleExpand={() => toggleCategory(catKey)}
-            manualChecks={manualChecks}
-            onCheck={toggleCheck}
-            onEvidenceChange={setEvidence}
-            metrics={campaign.metrics}
-            isABS={effectiveIsAbs}
-            onAbsChange={(newAbs) => setManualChecks(prev => ({ ...prev, __is_abs: newAbs }))}
-            isAdmin={isAdmin}
-            onAdminOverride={handleAdminOverride}
-            onSetupForce={handleSetupForce}
-          />
+          <>
+            {onlyPreCampaign && (
+              <div className="cs-only-pre-banner">
+                <Info size={14} />
+                <span>
+                  Você foi atribuído à <strong>Pré Campanha</strong> desta campanha
+                  (dono: <strong>{campaign.cs_name || campaign.cs_email}</strong>).
+                  Só você pode preencher esta seção — o resto da campanha não é editável por você.
+                </span>
+              </div>
+            )}
+            {categoriesToShow.map(catKey => {
+              const cat = breakdown.by_category[catKey];
+              if (!cat) return null;
+              return (
+                <CategoryBlock
+                  key={catKey}
+                  catKey={catKey}
+                  cat={cat}
+                  expanded={expandedCategories.has(catKey)}
+                  onToggleExpand={() => toggleCategory(catKey)}
+                  manualChecks={manualChecks}
+                  onCheck={toggleCheck}
+                  onEvidenceChange={setEvidence}
+                  metrics={campaign.metrics}
+                  isABS={effectiveIsAbs}
+                  onAbsChange={(newAbs) => setManualChecks(prev => ({ ...prev, __is_abs: newAbs }))}
+                  isAdmin={isAdmin}
+                  onAdminOverride={handleAdminOverride}
+                  onSetupForce={handleSetupForce}
+                  teamList={teamList}
+                  currentStudyAssignee={campaign.study_assignee_email || null}
+                  onAssignStudy={handleAssignStudy}
+                />
+              );
+            })}
+          </>
         );
-      })}
+      })()}
 
       {error && (
         <div className="form-error">
@@ -363,7 +412,7 @@ export default function CsCampaignDetail() {
   );
 }
 
-function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, onEvidenceChange, metrics, isABS, onAbsChange, isAdmin, onAdminOverride, onSetupForce }) {
+function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, onEvidenceChange, metrics, isABS, onAbsChange, isAdmin, onAdminOverride, onSetupForce, teamList, currentStudyAssignee, onAssignStudy }) {
   const earnedCount = cat.items.filter(i => isEffectivelyEarned(i, manualChecks)).length;
   const isOptimization = catKey === 'optimization';
 
@@ -521,6 +570,9 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
               invalidated={cat.invalidated}
               isAdmin={isAdmin}
               onAdminOverride={onAdminOverride}
+              teamList={teamList}
+              currentStudyAssignee={currentStudyAssignee}
+              onAssignStudy={onAssignStudy}
             />
           ))}
           {cat.notes && (
@@ -534,7 +586,7 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
   );
 }
 
-function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS, invalidated, isAdmin, onAdminOverride }) {
+function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS, invalidated, isAdmin, onAdminOverride, teamList, currentStudyAssignee, onAssignStudy }) {
   const isManual = item.source === 'manual';
   const isSemiAuto = item.source === 'semi_auto';
   const isAuto = item.source === 'auto';
@@ -623,6 +675,9 @@ function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS
                     · <strong>{s.author_name || s.author_email}</strong>
                   </span>
                 )}
+                {s.assignee_overridden && (
+                  <Badge variant="cyan">Atribuído por admin</Badge>
+                )}
                 {s.link && (
                   <a href={s.link} target="_blank" rel="noreferrer" className="item-row__study-link">
                     ↗
@@ -633,6 +688,26 @@ function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Admin: dropdown pra atribuir estudo a outro CS */}
+        {isAdmin && item.id === 'ex_estudos' && item.studies_info && item.studies_info.length > 0 && (
+          <div className="item-row__study-assign">
+            <label>
+              <Shield size={11} /> Atribuir bônus deste estudo:
+            </label>
+            <select
+              value={currentStudyAssignee || ''}
+              onChange={(e) => onAssignStudy?.(e.target.value || null)}
+            >
+              <option value="">— Autor padrão do catálogo —</option>
+              {(teamList || []).map(t => (
+                <option key={t.email} value={t.email}>
+                  {t.name} ({t.email})
+                </option>
+              ))}
+            </select>
           </div>
         )}
 
