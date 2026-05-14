@@ -48,12 +48,12 @@ export default function CsCampaignDetail() {
     }
   }
 
-  // Carrega lista do time + catálogo de estudos (admin)
+  // Carrega lista do time (pra mostrar nome de pre_assignee + admin atribuir estudo)
   useEffect(() => {
+    endpoints.adminTeam()
+      .then(d => setTeamList(d.items || []))
+      .catch(() => setTeamList([]));
     if (isAdmin) {
-      endpoints.adminTeam()
-        .then(d => setTeamList(d.items || []))
-        .catch(() => setTeamList([]));
       endpoints.meStudiesCatalog()
         .then(d => setStudiesCatalog(d.items || []))
         .catch(() => setStudiesCatalog([]));
@@ -299,6 +299,20 @@ export default function CsCampaignDetail() {
           ? ['pre_campaign']
           : CATEGORY_ORDER;
 
+        // Info pra bloquear o bloco Pré Campanha do DONO quando atribuída a outro CS.
+        const assigneeEmail = (campaign.pre_campaign_assignee_email || '').toLowerCase();
+        const assigneeIsOther = !!assigneeEmail && assigneeEmail !== viewerEmail;
+        let assigneeName = null;
+        if (assigneeIsOther) {
+          const member = (teamList || []).find(t => (t.email || '').toLowerCase() === assigneeEmail);
+          assigneeName = member?.name || null;
+        }
+        const preAssigneeInfo = {
+          assigneeIsOther,
+          assigneeName,
+          assigneeEmail,
+        };
+
         return (
           <>
             {onlyPreCampaign && (
@@ -335,6 +349,7 @@ export default function CsCampaignDetail() {
                   currentStudyAssignee={campaign.study_assignee_email || null}
                   currentStudyId={campaign.study_id_override || null}
                   onAssignStudy={handleAssignStudy}
+                  preAssigneeInfo={preAssigneeInfo}
                 />
               );
             })}
@@ -418,9 +433,14 @@ export default function CsCampaignDetail() {
   );
 }
 
-function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, onEvidenceChange, metrics, isABS, onAbsChange, isAdmin, onAdminOverride, onSetupForce, teamList, studiesCatalog, currentStudyAssignee, currentStudyId, onAssignStudy }) {
+function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, onEvidenceChange, metrics, isABS, onAbsChange, isAdmin, onAdminOverride, onSetupForce, teamList, studiesCatalog, currentStudyAssignee, currentStudyId, onAssignStudy, preAssigneeInfo }) {
   const earnedCount = cat.items.filter(i => isEffectivelyEarned(i, manualChecks)).length;
   const isOptimization = catKey === 'optimization';
+
+  // Bloqueio de Pré Campanha quando atribuída a outro CS (do ponto de vista do dono).
+  // Não bloqueia o admin (que pode ver/editar tudo).
+  const preAssignedElsewhere = catKey === 'pre_campaign'
+    && preAssigneeInfo?.assigneeIsOther === true;
 
   // Shared evidence: link único da categoria. Aparece quando há item marcado.
   const evidenceMap = manualChecks.__evidence || {};
@@ -432,13 +452,17 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
   const sharedMissing = showSharedEvidence && !sharedLink.trim();
 
   return (
-    <Card className="category-block fade-up" style={{ marginBottom: 'var(--space-3)' }}>
+    <Card className={`category-block fade-up ${preAssignedElsewhere ? 'category-block--locked' : ''}`} style={{ marginBottom: 'var(--space-3)' }}>
       <button className="category-block__header" onClick={onToggleExpand}>
         <div className="category-block__title">
           {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
           <span>{cat.label}</span>
-          <Badge variant={cat.invalidated ? 'red' : 'neutral'}>
-            {cat.invalidated ? `0/${cat.items.length} (anulado)` : `${earnedCount}/${cat.items.length}`}
+          <Badge variant={cat.invalidated ? 'red' : (preAssignedElsewhere ? 'neutral' : 'neutral')}>
+            {cat.invalidated
+              ? `0/${cat.items.length} (anulado)`
+              : preAssignedElsewhere
+                ? 'atribuído'
+                : `${earnedCount}/${cat.items.length}`}
           </Badge>
         </div>
         <div className="category-block__total">
@@ -449,6 +473,16 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
 
       {expanded && (
         <div className="category-block__items">
+          {preAssignedElsewhere && (
+            <div className="category-block__pre-assigned-banner">
+              <Info size={14} />
+              <span>
+                Pré Campanha atribuída a{' '}
+                <strong>{preAssigneeInfo.assigneeName || preAssigneeInfo.assigneeEmail}</strong>.
+                Apenas este CS pode preencher os items desta seção. O bônus de Pré não conta pra você nesta campanha.
+              </span>
+            </div>
+          )}
           {cat.invalidated && cat.invalidation_reason && (
             <div className="category-block__invalidation">
               <AlertCircle size={16} />
@@ -581,6 +615,7 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
               currentStudyAssignee={currentStudyAssignee}
               currentStudyId={currentStudyId}
               onAssignStudy={onAssignStudy}
+              locked={preAssignedElsewhere}
             />
           ))}
           {cat.notes && (
@@ -594,7 +629,7 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
   );
 }
 
-function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS, invalidated, isAdmin, onAdminOverride, teamList, studiesCatalog, currentStudyAssignee, currentStudyId, onAssignStudy }) {
+function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS, invalidated, isAdmin, onAdminOverride, teamList, studiesCatalog, currentStudyAssignee, currentStudyId, onAssignStudy, locked }) {
   const isManual = item.source === 'manual';
   const isSemiAuto = item.source === 'semi_auto';
   const isAuto = item.source === 'auto';
@@ -630,15 +665,15 @@ function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS
   const isAdminForced = !!adminOv;
 
   return (
-    <div className={`item-row ${item.earned ? 'item-row--earned' : ''} ${invalidated && item.was_earned ? 'item-row--invalidated' : ''} ${isAdminForced ? 'item-row--admin-forced' : ''}`}>
+    <div className={`item-row ${item.earned ? 'item-row--earned' : ''} ${invalidated && item.was_earned ? 'item-row--invalidated' : ''} ${isAdminForced ? 'item-row--admin-forced' : ''} ${locked ? 'item-row--locked' : ''}`}>
       <div className="item-row__check">
-        {editable ? (
+        {editable && !locked ? (
           <input
             type="checkbox"
             checked={isChecked}
             onChange={() => onCheck(item.id)}
             className="item-row__checkbox"
-            disabled={invalidated}
+            disabled={invalidated || locked}
           />
         ) : item.earned ? (
           <CheckCircle2 size={18} className="item-row__icon item-row__icon--earned" />
@@ -789,7 +824,7 @@ function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS
             <Info size={12} /> Bônus deste estudo vai pro autor, não pra você
           </div>
         )}
-        {item.pre_assigned_to_other && (
+        {item.pre_assigned_to_other && !locked && (
           <div className="item-row__pre-assigned-note">
             <Info size={12} /> Pré Campanha atribuída a outro CS — bônus não vai pra você
           </div>
@@ -806,6 +841,7 @@ function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS
                 : 'Cole o link da evidência (Loom, Drive, etc)…'}
               value={evidenceLink}
               onChange={(e) => onEvidenceChange(item.id, e.target.value)}
+              disabled={locked}
             />
             {evidenceLink && (
               <a

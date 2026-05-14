@@ -1203,3 +1203,42 @@
   color: var(--hypr-red-500);
   border-color: var(--hypr-red-500);
 }
+
+/* ── Bloco bloqueado (pré atribuída a outro CS) ─────────────────── */
+
+.category-block--locked {
+  border-color: rgba(168, 85, 247, 0.3);
+  border-left: 3px solid #a855f7;
+  background: rgba(168, 85, 247, 0.02);
+}
+
+.category-block__pre-assigned-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  margin: 0 0 var(--space-3) 0;
+  background: rgba(168, 85, 247, 0.08);
+  border: 1px solid rgba(168, 85, 247, 0.24);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.category-block__pre-assigned-banner > svg {
+  color: #a855f7;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.item-row--locked {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.item-row--locked input,
+.item-row--locked select,
+.item-row--locked button {
+  cursor: not-allowed !important;
+}
