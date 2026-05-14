@@ -21,10 +21,12 @@ export async function setFloorOverride({ csEmail, quarter, monthsOff, note, byEm
      WHERE LOWER(cs_email) = LOWER(@cs) AND quarter = @q`,
     { cs: csEmail, q: quarter }
   );
+  // Usa CAST(@n AS STRING) + NULLIF pra contornar o bug do BQ:
+  // - BQ não infere tipo de null em params, daí mandamos '' e convertemos a NULL na query.
   await query(
     `INSERT INTO ${tableRef('commplan_floor_overrides')}
        (cs_email, quarter, months_off, note, updated_at, updated_by)
-     VALUES (LOWER(@cs), @q, @m, @n, CURRENT_TIMESTAMP(), @by)`,
-    { cs: csEmail, q: quarter, m: monthsOff, n: note || null, by: byEmail || null }
+     VALUES (LOWER(@cs), @q, @m, NULLIF(@n, ''), CURRENT_TIMESTAMP(), NULLIF(@by, ''))`,
+    { cs: csEmail, q: quarter, m: monthsOff, n: note || '', by: byEmail || '' }
   );
 }
