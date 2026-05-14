@@ -18,6 +18,7 @@ import './AppShell.css';
 
 const NAV_CS = [
   { to: '/cs',            label: 'Meu painel',  icon: Home },
+  { to: '/cs/visao-geral', label: 'Visão geral do time', icon: Users },
   { to: '/cs/historico',  label: 'Histórico',   icon: History },
 ];
 
