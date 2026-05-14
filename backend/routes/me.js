@@ -28,9 +28,8 @@ const VERSION_ID = '2026';
  * - Faz lookup por nome em commplan_studies_catalog
  * - Retorna array [{ name, id, author_email, author_name, link, ... }]
  */
-async function resolveStudiesInfo(campaign, studyAssigneeOverride = null) {
+async function resolveStudiesInfo(campaign, studyAssigneeOverride = null, studyIdOverride = null) {
   const studyNames = Array.isArray(campaign.studies_used) ? campaign.studies_used : [];
-  if (studyNames.length === 0) return [];
 
   // Parse studies_data_json (rico, do Command — name, cs, link, status)
   let extraData = [];
@@ -44,6 +43,33 @@ async function resolveStudiesInfo(campaign, studyAssigneeOverride = null) {
   } catch (_) { /* silent */ }
 
   const result = [];
+
+  // Caso especial: nenhum estudo no Command, mas admin atribuiu study_id_override.
+  // Cria uma entry sintética usando o catálogo.
+  if (studyNames.length === 0 && studyIdOverride) {
+    try {
+      const { getStudyById } = await import('../data/studies.js');
+      const study = await getStudyById(studyIdOverride, VERSION_ID);
+      if (study) {
+        result.push({
+          name: study.display_name,
+          id: study.id,
+          author_email: studyAssigneeOverride || study.author_email || null,
+          author_name: null,
+          link: null,
+          status: null,
+          delivery: null,
+          found_in_catalog: true,
+          assignee_overridden: !!studyAssigneeOverride,
+          id_overridden: true,
+        });
+      }
+    } catch (e) { console.warn(`getStudyById(${studyIdOverride}): ${e.message}`); }
+    return result;
+  }
+
+  if (studyNames.length === 0) return [];
+
   for (const name of studyNames) {
     if (!name) continue;
     let entry = {
@@ -56,6 +82,7 @@ async function resolveStudiesInfo(campaign, studyAssigneeOverride = null) {
       delivery: null,
       found_in_catalog: false,
       assignee_overridden: false,
+      id_overridden: false,
     };
     // Lookup no catálogo
     try {
@@ -66,7 +93,7 @@ async function resolveStudiesInfo(campaign, studyAssigneeOverride = null) {
         entry.found_in_catalog = true;
       }
     } catch (e) { console.warn(`findStudyByName(${name}): ${e.message}`); }
-    // Enriquece com dados do JSON do Command (cs name, link, etc)
+    // Enriquece com dados do JSON do Command
     const extra = extraData.find(d => (d.name || '').toLowerCase() === name.toLowerCase());
     if (extra) {
       entry.author_name = entry.author_name || extra.cs || null;
@@ -108,11 +135,27 @@ router.get('/features-catalog', (req, res) => {
 router.get('/studies-catalog', async (req, res) => {
   try {
     const items = await query(
-      `SELECT id, display_name, status
+      `SELECT id, display_name, status, author_email
        FROM ${tableRef('commplan_studies_catalog')}
        WHERE active = TRUE
        ORDER BY display_name`
     );
+    // Enriquece com nome do CS via team_members
+    const emails = [...new Set(items.map(s => s.author_email).filter(Boolean))];
+    if (emails.length > 0) {
+      try {
+        const teamRows = await query(
+          `SELECT email, name FROM \`site-hypr.hypr_sales_center.team_members\`
+           WHERE LOWER(email) IN UNNEST(@emails)`,
+          { emails: emails.map(e => e.toLowerCase()) }
+        );
+        const nameByEmail = {};
+        for (const t of teamRows) nameByEmail[(t.email || '').toLowerCase()] = t.name;
+        for (const s of items) {
+          s.author_name = nameByEmail[(s.author_email || '').toLowerCase()] || null;
+        }
+      } catch (_) { /* silent */ }
+    }
     res.json({ items });
   } catch (err) {
     console.error('GET /me/studies-catalog error:', err);
@@ -239,7 +282,7 @@ async function fetchManualChecks(shortToken, isLegacy) {
     const [row] = await query(
       `SELECT manual_checks, admin_overrides, admin_overrides_by, admin_overrides_at,
               pre_campaign_assignee_email, pre_campaign_assigned_at,
-              study_assignee_email
+              study_assignee_email, study_id_override
        FROM ${tableRef(table)}
        WHERE short_token = @t LIMIT 1`,
       { t: shortToken }
@@ -254,10 +297,11 @@ async function fetchManualChecks(shortToken, isLegacy) {
       preAssignee: row?.pre_campaign_assignee_email || null,
       preAssignedAt: row?.pre_campaign_assigned_at?.value || row?.pre_campaign_assigned_at || null,
       studyAssignee: row?.study_assignee_email || null,
+      studyIdOverride: row?.study_id_override || null,
     };
   } catch (err) {
     console.warn(`fetchManualChecks(${shortToken}): ${err.message}`);
-    return { manualChecks: {}, adminOverrides: {}, adminOverridesBy: null, adminOverridesAt: null, preAssignee: null, preAssignedAt: null, studyAssignee: null };
+    return { manualChecks: {}, adminOverrides: {}, adminOverridesBy: null, adminOverridesAt: null, preAssignee: null, preAssignedAt: null, studyAssignee: null, studyIdOverride: null };
   }
 }
 
@@ -301,20 +345,24 @@ router.get('/dashboard/:q', async (req, res) => {
     let manualChecksByToken = {};
     let adminOverridesByToken = {};
     let preAssigneeByToken = {};
+    let studyAssigneeByToken = {};
+    let studyIdOverrideByToken = {};
     let metricsByToken = {};
 
     if (tokens.length > 0) {
-      // Batch 1: manual_checks + admin_overrides + pre_assignee de overrides + assignments
+      // Batch 1: manual_checks + admin_overrides + pre_assignee + study override
       try {
         const [overrideRows, legacyRows] = await Promise.all([
           query(
-            `SELECT short_token, manual_checks, admin_overrides, pre_campaign_assignee_email
+            `SELECT short_token, manual_checks, admin_overrides,
+                    pre_campaign_assignee_email, study_assignee_email, study_id_override
              FROM ${tableRef('commplan_command_overrides')}
              WHERE short_token IN UNNEST(@toks)`,
             { toks: tokens }
           ),
           query(
-            `SELECT short_token, manual_checks, admin_overrides, pre_campaign_assignee_email
+            `SELECT short_token, manual_checks, admin_overrides,
+                    pre_campaign_assignee_email, study_assignee_email, study_id_override
              FROM ${tableRef('commplan_legacy_assignments')}
              WHERE short_token IN UNNEST(@toks)`,
             { toks: tokens }
@@ -331,6 +379,12 @@ router.get('/dashboard/:q', async (req, res) => {
           }
           if (r.pre_campaign_assignee_email) {
             preAssigneeByToken[r.short_token] = r.pre_campaign_assignee_email;
+          }
+          if (r.study_assignee_email) {
+            studyAssigneeByToken[r.short_token] = r.study_assignee_email;
+          }
+          if (r.study_id_override) {
+            studyIdOverrideByToken[r.short_token] = r.study_id_override;
           }
         }
       } catch (e) {
@@ -414,7 +468,11 @@ router.get('/dashboard/:q', async (req, res) => {
     const studiesInfoByToken = {};
     await Promise.all(campaigns.map(async (c) => {
       try {
-        studiesInfoByToken[c.short_token] = await resolveStudiesInfo(c);
+        studiesInfoByToken[c.short_token] = await resolveStudiesInfo(
+          c,
+          studyAssigneeByToken[c.short_token] || null,
+          studyIdOverrideByToken[c.short_token] || null,
+        );
       } catch (_) {
         studiesInfoByToken[c.short_token] = [];
       }
@@ -521,46 +579,64 @@ router.get('/dashboard/:q', async (req, res) => {
       );
       const myStudyNamesLower = myStudies.map(s => s.display_name.toLowerCase());
 
-      // 2) Busca campanhas no quarter:
-      //    - onde studies_used contém algum estudo cujo AUTOR PADRÃO é este CS
-      //    - OU onde admin atribuiu study_assignee_email = este CS
-      //    Em ambos os casos só interessa se este CS NÃO é o dono da campanha.
+      // 2) Busca campanhas no quarter onde este CS deve receber o bônus de estudos:
+      //    (a) admin atribuiu study_assignee_email = este CS (qualquer caso)
+      //    (b) studies_used contém algum estudo cujo AUTOR PADRÃO é este CS
+      //        E NÃO há override de assignee (override ganha)
+      //    (c) study_id_override aponta pra estudo cujo autor é este CS
+      //        E NÃO há override de assignee
+      const myStudyIds = myStudies.map(s => s.id);
       const studyCampaigns = await query(
         `SELECT
            c.short_token, c.client_name, c.campaign_name, c.cs_email, c.cs_name,
            c.start_date, c.end_date, c.is_legacy, c.total_value, c.studies_used,
-           IFNULL(o.study_assignee_email, la.study_assignee_email) AS study_assignee_email
+           IFNULL(o.study_assignee_email, la.study_assignee_email) AS study_assignee_email,
+           IFNULL(o.study_id_override, la.study_id_override) AS study_id_override
          FROM ${tableRef('commplan_checklists')} c
          LEFT JOIN ${tableRef('commplan_command_overrides')} o ON c.short_token = o.short_token
          LEFT JOIN ${tableRef('commplan_legacy_assignments')} la ON c.short_token = la.short_token
          WHERE LOWER(IFNULL(c.cs_email, '')) != @cs
            AND c.start_date >= @qStart AND c.start_date <= @qEnd
-           AND ARRAY_LENGTH(IFNULL(c.studies_used, [])) > 0
            AND (
+             -- (a) assignee_override aponta pra este CS
              LOWER(IFNULL(o.study_assignee_email, la.study_assignee_email)) = @cs
              OR (
+               -- Sem override de assignee: só conta se autor padrão é este CS
                IFNULL(o.study_assignee_email, la.study_assignee_email) IS NULL
-               AND EXISTS (
-                 SELECT 1 FROM UNNEST(c.studies_used) AS s
-                 WHERE LOWER(s) IN UNNEST(@names)
+               AND (
+                 -- (b) studies_used tem estudo do catálogo deste CS
+                 EXISTS (
+                   SELECT 1 FROM UNNEST(IFNULL(c.studies_used, [])) AS s
+                   WHERE LOWER(s) IN UNNEST(@names)
+                 )
+                 OR
+                 -- (c) study_id_override aponta pra estudo deste CS
+                 IFNULL(o.study_id_override, la.study_id_override) IN UNNEST(@ids)
                )
              )
            )`,
-        { cs: csEmail, qStart: qStart2, qEnd: qEnd2, names: myStudyNamesLower }
+        { cs: csEmail, qStart: qStart2, qEnd: qEnd2, names: myStudyNamesLower, ids: myStudyIds }
       );
 
       // 3) Calcula bonus de cada campanha pra este autor
       const STUDIES_PCT = 0.0030; // 0.30%
       for (const sc of studyCampaigns) {
-        // Identifica o nome do estudo: se houver override, pega o primeiro;
-        // senão, o que bate com o catálogo do CS.
+        // Identifica o nome do estudo:
+        // - se houver study_id_override: pega o display_name desse id
+        // - senão, se há studies_used: pega o que bate com o catálogo do CS (ou o primeiro)
         let studyName = null;
-        if (sc.study_assignee_email) {
-          studyName = (sc.studies_used || [])[0] || null;
-        } else {
-          studyName = (sc.studies_used || []).find(n =>
-            myStudyNamesLower.includes((n || '').toLowerCase())
-          ) || null;
+        if (sc.study_id_override) {
+          const s = myStudies.find(x => x.id === sc.study_id_override);
+          studyName = s?.display_name || null;
+        }
+        if (!studyName) {
+          if (sc.study_assignee_email) {
+            studyName = (sc.studies_used || [])[0] || '(estudo atribuído pelo admin)';
+          } else {
+            studyName = (sc.studies_used || []).find(n =>
+              myStudyNamesLower.includes((n || '').toLowerCase())
+            ) || null;
+          }
         }
         if (!studyName) continue;
 
@@ -697,7 +773,7 @@ router.get('/campaign/:token', async (req, res) => {
       fetchManualChecks(campaign.short_token, isLegacy),
       fetchPerformanceMetrics(campaign.short_token, campaign.client_name),
     ]);
-    const { manualChecks, adminOverrides, adminOverridesBy, adminOverridesAt, preAssignee, preAssignedAt, studyAssignee } = mcData;
+    const { manualChecks, adminOverrides, adminOverridesBy, adminOverridesAt, preAssignee, preAssignedAt, studyAssignee, studyIdOverride } = mcData;
 
     // Permissão: CS dono OU admin OU assignee de pre_campaign
     if (!isAdmin
@@ -707,7 +783,7 @@ router.get('/campaign/:token', async (req, res) => {
     }
 
     // Resolve estudos usados (nome → catálogo, com override de assignee se houver)
-    const studiesInfo = await resolveStudiesInfo(campaign, studyAssignee);
+    const studiesInfo = await resolveStudiesInfo(campaign, studyAssignee, studyIdOverride);
 
     // Calcula breakdown completo (com admin overrides + pre assignee + studies aplicados)
     const breakdown = computeBonus(campaign, manualChecks, metrics, adminOverrides, {
@@ -780,6 +856,7 @@ router.get('/campaign/:token', async (req, res) => {
 
       // Study assignee — admin pode atribuir bônus de estudo a outro CS
       study_assignee_email: studyAssignee,
+      study_id_override: studyIdOverride,
       viewer_is_study_assignee: (studyAssignee || '').toLowerCase() === csEmail,
 
       // Métricas pra Otimizações (se houver)
@@ -943,7 +1020,7 @@ router.put('/campaign/:token', async (req, res) => {
     const metrics = await fetchPerformanceMetrics(token, updated?.client_name);
     // Re-busca admin_overrides + pre_assignee (não mudam pelo PUT, mas garante consistência)
     const post = await fetchManualChecks(token, !!campaign.is_legacy);
-    const studiesInfoPost = await resolveStudiesInfo(updated, post.studyAssignee);
+    const studiesInfoPost = await resolveStudiesInfo(updated, post.studyAssignee, post.studyIdOverride);
     const breakdown = computeBonus(updated, manualChecks, metrics, post.adminOverrides || {}, {
       preAssignee: post.preAssignee,
       csOwner: csEmail,
@@ -1151,9 +1228,16 @@ router.delete('/campaign/:token/assign-pre', async (req, res) => {
 
 /**
  * POST /commplan/me/campaign/:token/assign-study
- * Admin atribui o bônus de Estudos desta campanha a um CS específico.
- * Sobrescreve o autor padrão do catálogo. Só admin pode.
- * Body: { cs_email: string|null }  → null limpa o override.
+ * Admin atribui o bônus de Estudos desta campanha a um CS específico,
+ * e opcionalmente marca qual estudo do catálogo está sendo aplicado
+ * (mesmo se o Command não cadastrou nada).
+ *
+ * Body: {
+ *   cs_email: string|null,    // null limpa
+ *   study_id: string|null,    // id do estudo no catálogo (opcional)
+ * }
+ *
+ * Se cs_email é null + study_id é null → limpa ambos.
  */
 router.post('/campaign/:token/assign-study', async (req, res) => {
   try {
@@ -1161,7 +1245,8 @@ router.post('/campaign/:token/assign-study', async (req, res) => {
     const { byEmail, isAdmin } = resolveTargetCs(req);
     if (!isAdmin) return res.status(403).json({ error: 'Apenas admin pode atribuir estudo' });
 
-    const newAssignee = (req.body?.cs_email || null) ? String(req.body.cs_email).toLowerCase() : null;
+    const newAssignee = (req.body?.cs_email || null) ? String(req.body.cs_email).toLowerCase() : '';
+    const newStudyId = req.body?.study_id || '';
 
     const [campaign] = await query(
       `SELECT short_token, is_legacy, cs_email
@@ -1175,11 +1260,12 @@ router.post('/campaign/:token/assign-study', async (req, res) => {
     if (campaign.is_legacy) {
       await query(
         `UPDATE ${tableRef(table)}
-         SET study_assignee_email = @a,
+         SET study_assignee_email = NULLIF(@a, ''),
+             study_id_override = NULLIF(@s, ''),
              updated_by = @by,
              updated_at = CURRENT_TIMESTAMP()
          WHERE short_token = @t`,
-        { t: token, a: newAssignee, by: byEmail }
+        { t: token, a: newAssignee, s: newStudyId, by: byEmail }
       );
     } else {
       await query(
@@ -1187,18 +1273,20 @@ router.post('/campaign/:token/assign-study', async (req, res) => {
          USING (SELECT @t AS short_token) S
          ON T.short_token = S.short_token
          WHEN MATCHED THEN UPDATE SET
-           study_assignee_email = @a,
+           study_assignee_email = NULLIF(@a, ''),
+           study_id_override = NULLIF(@s, ''),
            updated_at = CURRENT_TIMESTAMP(),
            updated_by = @by
          WHEN NOT MATCHED THEN INSERT
-           (short_token, cs_email, study_assignee_email,
+           (short_token, cs_email, study_assignee_email, study_id_override,
             reviewed, created_at, updated_at, updated_by)
-         VALUES (@t, @csOriginal, @a, FALSE, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), @by)`,
-        { t: token, a: newAssignee, by: byEmail, csOriginal: campaign.cs_email || byEmail }
+         VALUES (@t, @csOriginal, NULLIF(@a, ''), NULLIF(@s, ''),
+                 FALSE, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), @by)`,
+        { t: token, a: newAssignee, s: newStudyId, by: byEmail, csOriginal: campaign.cs_email || byEmail }
       );
     }
 
-    res.json({ ok: true, study_assignee_email: newAssignee });
+    res.json({ ok: true, study_assignee_email: newAssignee || null, study_id_override: newStudyId || null });
   } catch (err) {
     console.error('POST assign-study error:', err);
     res.status(500).json({ error: err.message });

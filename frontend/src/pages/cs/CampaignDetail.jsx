@@ -29,6 +29,7 @@ export default function CsCampaignDetail() {
   const [expandedCategories, setExpandedCategories] = useState(new Set(CATEGORY_ORDER));
   const [showReplicateModal, setShowReplicateModal] = useState(false);
   const [teamList, setTeamList] = useState([]);
+  const [studiesCatalog, setStudiesCatalog] = useState([]);
 
   // Helpers de impersonação
   const opts = impersonateEmail ? { as: impersonateEmail } : {};
@@ -47,18 +48,21 @@ export default function CsCampaignDetail() {
     }
   }
 
-  // Carrega lista do time (pra admin atribuir estudo)
+  // Carrega lista do time + catálogo de estudos (admin)
   useEffect(() => {
     if (isAdmin) {
       endpoints.adminTeam()
         .then(d => setTeamList(d.items || []))
         .catch(() => setTeamList([]));
+      endpoints.meStudiesCatalog()
+        .then(d => setStudiesCatalog(d.items || []))
+        .catch(() => setStudiesCatalog([]));
     }
   }, [isAdmin]);
 
-  async function handleAssignStudy(csEmail) {
+  async function handleAssignStudy({ study_id, cs_email }) {
     try {
-      await endpoints.assignStudy(token, csEmail, opts);
+      await endpoints.assignStudy(token, cs_email, study_id, opts);
       await load();
     } catch (e) {
       alert(`Erro ao atribuir estudo: ${e.message}`);
@@ -327,7 +331,9 @@ export default function CsCampaignDetail() {
                   onAdminOverride={handleAdminOverride}
                   onSetupForce={handleSetupForce}
                   teamList={teamList}
+                  studiesCatalog={studiesCatalog}
                   currentStudyAssignee={campaign.study_assignee_email || null}
+                  currentStudyId={campaign.study_id_override || null}
                   onAssignStudy={handleAssignStudy}
                 />
               );
@@ -412,7 +418,7 @@ export default function CsCampaignDetail() {
   );
 }
 
-function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, onEvidenceChange, metrics, isABS, onAbsChange, isAdmin, onAdminOverride, onSetupForce, teamList, currentStudyAssignee, onAssignStudy }) {
+function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, onEvidenceChange, metrics, isABS, onAbsChange, isAdmin, onAdminOverride, onSetupForce, teamList, studiesCatalog, currentStudyAssignee, currentStudyId, onAssignStudy }) {
   const earnedCount = cat.items.filter(i => isEffectivelyEarned(i, manualChecks)).length;
   const isOptimization = catKey === 'optimization';
 
@@ -571,7 +577,9 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
               isAdmin={isAdmin}
               onAdminOverride={onAdminOverride}
               teamList={teamList}
+              studiesCatalog={studiesCatalog}
               currentStudyAssignee={currentStudyAssignee}
+              currentStudyId={currentStudyId}
               onAssignStudy={onAssignStudy}
             />
           ))}
@@ -586,7 +594,7 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
   );
 }
 
-function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS, invalidated, isAdmin, onAdminOverride, teamList, currentStudyAssignee, onAssignStudy }) {
+function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS, invalidated, isAdmin, onAdminOverride, teamList, studiesCatalog, currentStudyAssignee, currentStudyId, onAssignStudy }) {
   const isManual = item.source === 'manual';
   const isSemiAuto = item.source === 'semi_auto';
   const isAuto = item.source === 'auto';
@@ -691,23 +699,48 @@ function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS
           </div>
         )}
 
-        {/* Admin: dropdown pra atribuir estudo a outro CS */}
-        {isAdmin && item.id === 'ex_estudos' && item.studies_info && item.studies_info.length > 0 && (
+        {/* Admin: dropdowns pra atribuir estudo + CS (sempre visível no ex_estudos) */}
+        {isAdmin && item.id === 'ex_estudos' && (
           <div className="item-row__study-assign">
             <label>
-              <Shield size={11} /> Atribuir bônus deste estudo:
+              <Shield size={11} /> Atribuição manual (admin):
             </label>
-            <select
-              value={currentStudyAssignee || ''}
-              onChange={(e) => onAssignStudy?.(e.target.value || null)}
-            >
-              <option value="">— Autor padrão do catálogo —</option>
-              {(teamList || []).map(t => (
-                <option key={t.email} value={t.email}>
-                  {t.name} ({t.email})
-                </option>
-              ))}
-            </select>
+            <div className="item-row__study-assign-row">
+              <select
+                value={currentStudyId || ''}
+                onChange={(e) => onAssignStudy?.({ study_id: e.target.value || null, cs_email: currentStudyAssignee })}
+                title="Estudo do catálogo"
+              >
+                <option value="">— Estudo do catálogo —</option>
+                {(studiesCatalog || []).map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.display_name} ({s.author_name || s.author_email})
+                  </option>
+                ))}
+              </select>
+              <select
+                value={currentStudyAssignee || ''}
+                onChange={(e) => onAssignStudy?.({ study_id: currentStudyId, cs_email: e.target.value || null })}
+                title="CS que recebe o bônus"
+              >
+                <option value="">— CS que recebe (default: autor) —</option>
+                {(teamList || []).map(t => (
+                  <option key={t.email} value={t.email}>
+                    {t.name} ({t.email})
+                  </option>
+                ))}
+              </select>
+              {(currentStudyAssignee || currentStudyId) && (
+                <button
+                  type="button"
+                  className="item-row__study-clear"
+                  onClick={() => onAssignStudy?.({ study_id: null, cs_email: null })}
+                  title="Limpar atribuição manual"
+                >
+                  <X size={11} />
+                </button>
+              )}
+            </div>
           </div>
         )}
 

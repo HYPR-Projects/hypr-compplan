@@ -25,11 +25,12 @@ const NET_FACTOR = 1 - TAX_RATE;
  * Infere quais items AUTOMÁTICOS e SEMI_AUTO estão atingidos baseado no checklist.
  * Retorna Set de ids inferidos.
  */
-function inferAutoItems(campaign) {
+function inferAutoItems(campaign, opts = {}) {
   const earned = new Set();
   const features = Array.isArray(campaign.features) ? campaign.features : [];
   const products = Array.isArray(campaign.products) ? campaign.products : [];
   const formats = Array.isArray(campaign.formats) ? campaign.formats : [];
+  const { studiesInfo = [] } = opts;
 
   // Pré Campanha — TUDO manual agora (CS marca o que fez).
   // (Removidos inferências automáticas de audiences e features.)
@@ -78,13 +79,12 @@ function inferAutoItems(campaign) {
   // Anexa pra ser usado lá fora (return value-like)
   earned.__featuresByTier = featuresByTier;
 
-  // Extras — Estudos: marca ex_estudos como earned se há algum estudo usado.
-  // O bônus VAI ser zero pro CS dono (ele NÃO recebe — vai pro autor via orchestrator),
-  // mas a UI precisa mostrar como "feito" pra clareza visual.
-  // Quando o engine for chamado pro author_email do estudo (orchestrator de quarter),
-  // aí value_brl conta normalmente.
+  // Extras — Estudos: marca ex_estudos como earned se há algum estudo:
+  //   - vindo do Command (studies_used não vazio), OU
+  //   - atribuído manualmente pelo admin via studiesInfo (override).
+  // O bônus pro CS dono fica zero quando ele NÃO é o autor — vai pro autor.
   const studies = Array.isArray(campaign.studies_used) ? campaign.studies_used : [];
-  if (studies.length > 0) earned.add('ex_estudos');
+  if (studies.length > 0 || studiesInfo.length > 0) earned.add('ex_estudos');
 
   return earned;
 }
@@ -208,7 +208,7 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
   const preGoesToOwner = !preAssigneeLower || preAssigneeLower === csOwnerLower;
 
   // 1. Items inferidos do checklist (auto + semi_auto)
-  const inferred = inferAutoItems(campaign);
+  const inferred = inferAutoItems(campaign, { studiesInfo });
   // Captura features por tier (anexado pelo inferAutoItems)
   const featuresByTier = inferred.__featuresByTier || { tier1: [], tier2: [], tier3: [], unknown: [] };
 

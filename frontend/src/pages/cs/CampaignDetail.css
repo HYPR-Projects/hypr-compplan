@@ -1168,3 +1168,38 @@
   flex-shrink: 0;
   margin-top: 2px;
 }
+
+/* ── Admin: 2 dropdowns (estudo + CS) ─────────────────────────── */
+
+.item-row__study-assign-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+}
+
+.item-row__study-assign-row > select {
+  flex: 1;
+  min-width: 200px;
+}
+
+.item-row__study-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.item-row__study-clear:hover {
+  color: var(--hypr-red-500);
+  border-color: var(--hypr-red-500);
+}

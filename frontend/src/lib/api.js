@@ -148,9 +148,10 @@ export const endpoints = {
       { months_off, note });
   },
 
-  // Assign-study (admin atribui bônus de estudo a outro CS)
-  assignStudy(token, cs_email, opts = {}) {
-    return api.post(`/commplan/me/campaign/${token}/assign-study${asQuery(opts)}`, { cs_email });
+  // Assign-study (admin atribui bônus de estudo a outro CS, opcionalmente com study_id)
+  assignStudy(token, cs_email, study_id, opts = {}) {
+    return api.post(`/commplan/me/campaign/${token}/assign-study${asQuery(opts)}`,
+      { cs_email, study_id });
   },
 
   pendingEvidences()     { return api.get('/commplan/admin/evidences/pending'); },
