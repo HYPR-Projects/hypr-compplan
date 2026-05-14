@@ -128,6 +128,7 @@ export const endpoints = {
 
   // Admin
   adminOverview(q)       { return api.get(`/commplan/admin/overview/${q}`); },
+  teamOverview(q)        { return api.get(`/commplan/me/team-overview/${q}`); },
   adminCampaigns(q)      { return api.get(`/commplan/admin/campaigns/${q}`); },
   adminPending(q)        { return api.get(`/commplan/admin/pending/${q}`); },
   adminTeam()            { return api.get(`/commplan/admin/team`); },

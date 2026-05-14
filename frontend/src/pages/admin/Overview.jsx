@@ -38,7 +38,11 @@ export default function AdminOverview() {
   useEffect(() => {
     let cancelled = false;
     setData(null);
-    endpoints.adminOverview(quarter)
+    const isAdmin = (auth.getUser()?.role === 'admin');
+    const fetcher = isAdmin
+      ? endpoints.adminOverview(quarter)
+      : endpoints.teamOverview(quarter);
+    fetcher
       .then(d => { if (!cancelled) setData(d); })
       .catch(e => { if (!cancelled) setError(e.message); });
     return () => { cancelled = true; };
