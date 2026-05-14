@@ -541,21 +541,23 @@ router.get('/dashboard/:q', async (req, res) => {
         const breakdown = computeBonus(pc, mc, null, ao, { preAssignee: csEmail, csOwner: csEmail });
         // Mas só pega o subtotal de pre_campaign (não conta setup/etc das campanhas de outros)
         const preSubtotal = breakdown.by_category?.pre_campaign?.subtotal_brl || 0;
-        if (preSubtotal > 0) {
-          preAssignedBonusBrl += preSubtotal;
-          preAssignedItems.push({
-            short_token: pc.short_token,
-            client_name: pc.client_name,
-            campaign_name: pc.campaign_name,
-            owner_cs_email: pc.cs_email,
-            owner_cs_name: pc.cs_name,
-            start_date: pc.start_date?.value || pc.start_date,
-            end_date: pc.end_date?.value || pc.end_date,
-            is_legacy: !!pc.is_legacy,
-            pre_subtotal_brl: preSubtotal,
-            pre_subtotal_pct: breakdown.by_category.pre_campaign.subtotal_pct,
-          });
-        }
+        // SEMPRE mostra a campanha atribuída (mesmo se subtotal=0, pra CS poder preencher).
+        // Só soma no bonus_pre_assigned se houver subtotal.
+        preAssignedBonusBrl += preSubtotal;
+        preAssignedItems.push({
+          short_token: pc.short_token,
+          client_name: pc.client_name,
+          campaign_name: pc.campaign_name,
+          owner_cs_email: pc.cs_email,
+          owner_cs_name: pc.cs_name,
+          start_date: pc.start_date?.value || pc.start_date,
+          end_date: pc.end_date?.value || pc.end_date,
+          is_legacy: !!pc.is_legacy,
+          pre_subtotal_brl: preSubtotal,
+          pre_subtotal_pct: breakdown.by_category?.pre_campaign?.subtotal_pct || 0,
+          // Bruto da campanha — útil pra UI mostrar o potencial
+          total_value: Number(pc.total_value) || 0,
+        });
       }
     } catch (e) {
       console.warn(`Erro buscando pre-assigned: ${e.message}`);
