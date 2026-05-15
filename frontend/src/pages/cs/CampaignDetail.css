@@ -1242,3 +1242,13 @@
 .item-row--locked button {
   cursor: not-allowed !important;
 }
+
+/* Rascunho: mesmo layout do success, mas amarelo/laranja em vez de verde */
+.form-success.form-success--draft {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: var(--hypr-yellow-700);
+}
+.form-success.form-success--draft > svg {
+  color: var(--hypr-yellow-700);
+}

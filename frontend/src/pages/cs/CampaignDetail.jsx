@@ -25,6 +25,7 @@ export default function CsCampaignDetail() {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
+  const [savedAs, setSavedAs] = useState(null);  // 'draft' | 'reviewed'
   const [manualChecks, setManualChecks] = useState({});
   const [expandedCategories, setExpandedCategories] = useState(new Set(CATEGORY_ORDER));
   const [showReplicateModal, setShowReplicateModal] = useState(false);
@@ -127,6 +128,7 @@ export default function CsCampaignDetail() {
         reviewed: markReviewed,
       }, opts);
       setSavedAt(new Date());
+      setSavedAs(markReviewed ? 'reviewed' : 'draft');
       setCampaign(prev => prev ? { ...prev, breakdown: result.breakdown, reviewed: result.reviewed } : prev);
     } catch (e) {
       setError(`Erro ao salvar: ${e.message}`);
@@ -364,8 +366,11 @@ export default function CsCampaignDetail() {
       )}
 
       {savedAt && (
-        <div className="form-success">
-          <CheckCircle2 size={14} /> Salvo às {savedAt.toLocaleTimeString('pt-BR')}
+        <div className={`form-success ${savedAs === 'draft' ? 'form-success--draft' : ''}`}>
+          <CheckCircle2 size={14} />
+          {savedAs === 'draft'
+            ? `Rascunho salvo às ${savedAt.toLocaleTimeString('pt-BR')}`
+            : `Revisão salva às ${savedAt.toLocaleTimeString('pt-BR')}`}
         </div>
       )}
 
