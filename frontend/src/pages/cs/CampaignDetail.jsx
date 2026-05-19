@@ -944,6 +944,10 @@ function RoTags({ label, items, variant = 'neutral' }) {
 // ─── Helpers ───────────────────────────────────────────────────────
 
 function isEffectivelyEarned(item, manualChecks) {
+  // Admin override tem prioridade absoluta sobre qualquer outra fonte.
+  if (item.admin_override && typeof item.admin_override.earned === 'boolean') {
+    return item.admin_override.earned;
+  }
   if (item.source === 'manual') return !!manualChecks[item.id];
   if (item.source === 'semi_auto') {
     if (Object.prototype.hasOwnProperty.call(manualChecks, item.id)) {
@@ -992,8 +996,14 @@ function recomputeLocally(serverBreakdown, manualChecks, metrics, effectiveIsAbs
       let wouldEarn;
 
       if (item.source === 'metrics') {
-        // Otimização: usa o cálculo local baseado no is_abs atual
-        wouldEarn = optMetricEarned.has(item.id);
+        // Admin override tem palavra final, mesmo em items de Otimização.
+        // Se admin forçou true/false, ignora cálculo por métricas.
+        if (item.admin_override && typeof item.admin_override.earned === 'boolean') {
+          wouldEarn = item.admin_override.earned;
+        } else {
+          // Otimização: usa o cálculo local baseado no is_abs atual
+          wouldEarn = optMetricEarned.has(item.id);
+        }
       } else {
         wouldEarn = isEffectivelyEarned(item, manualChecks);
       }
