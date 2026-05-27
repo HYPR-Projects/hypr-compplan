@@ -91,12 +91,18 @@ router.post('/assign', async (req, res, next) => {
     } = req.body;
 
     if (!short_token) return res.status(400).json({ error: 'short_token obrigatório' });
-    if (!cs_email)    return res.status(400).json({ error: 'cs_email obrigatório' });
+    if (!cs_email || typeof cs_email !== 'string' || !cs_email.trim()) {
+      return res.status(400).json({ error: 'cs_email é obrigatório e não pode ser vazio' });
+    }
+    const csEmailNormalized = cs_email.toLowerCase().trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(csEmailNormalized)) {
+      return res.status(400).json({ error: `cs_email inválido: "${csEmailNormalized}"` });
+    }
 
     const adminEmail = req.user.email;
     await upsertAssignment({
       short_token,
-      cs_email: cs_email.toLowerCase().trim(),
+      cs_email: csEmailNormalized,
       features_manual,
       products_manual,
       audiences_count,
@@ -134,14 +140,30 @@ router.post('/assign-batch', async (req, res, next) => {
     const adminEmail = req.user.email;
     const results = [];
 
+    // Pré-valida: separa itens inválidos antes de tentar processar
+    const invalidEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const validAssignments = [];
+    for (const a of assignments) {
+      if (!a.short_token) {
+        results.push({ short_token: null, ok: false, error: 'short_token ausente' });
+        continue;
+      }
+      const e = (a.cs_email || '').toLowerCase().trim();
+      if (!e || !invalidEmailRegex.test(e)) {
+        results.push({ short_token: a.short_token, ok: false, error: `cs_email inválido: "${e}"` });
+        continue;
+      }
+      validAssignments.push({ ...a, cs_email: e });
+    }
+
     // Limita concurrency a 10 pra não sobrecarregar BQ
     const CHUNK = 10;
-    for (let i = 0; i < assignments.length; i += CHUNK) {
-      const slice = assignments.slice(i, i + CHUNK);
+    for (let i = 0; i < validAssignments.length; i += CHUNK) {
+      const slice = validAssignments.slice(i, i + CHUNK);
       const settled = await Promise.allSettled(
         slice.map(a => upsertAssignment({
           short_token: a.short_token,
-          cs_email: (a.cs_email || '').toLowerCase().trim(),
+          cs_email: a.cs_email,
           features_manual: a.features_manual ?? null,
           products_manual: a.products_manual ?? null,
           audiences_count: a.audiences_count ?? null,

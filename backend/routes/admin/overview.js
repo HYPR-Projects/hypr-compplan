@@ -18,6 +18,7 @@ import { authRequired, adminRequired } from '../../middleware/auth.js';
 import { query, tableRef, bq, DATASET } from '../../lib/bigquery.js';
 import { parseQuarter } from '../../engine/quarter-resolver.js';
 import { computeBonus } from '../../engine/compplan-engine.js';
+import { computeCsBonus } from '../../lib/bonus-calc.js';
 import { getSalaryForCs } from '../../data/cs-config.js';
 import { getFloorOverride } from '../../data/floor-overrides.js';
 
@@ -107,76 +108,18 @@ export async function overviewHandler(req, res) {
       const floorMonths = Math.max(0, 2 - monthsWaived);
       const fixoQuarter = monthlySalary * floorMonths;
 
-      // Campanhas desse CS (precisa pra calcular bônus)
-      const campaigns = await query(
-        `SELECT
-           c.short_token, c.is_legacy, c.total_value, c.features, c.products,
-           c.formats, c.audiences, c.studies_used, c.pracas_type,
-           o.manual_checks AS o_mc, la.manual_checks AS la_mc
-         FROM ${tableRef('commplan_checklists')} c
-         LEFT JOIN ${tableRef('commplan_command_overrides')} o ON c.short_token = o.short_token
-         LEFT JOIN ${tableRef('commplan_legacy_assignments')} la ON c.short_token = la.short_token
-         WHERE c.start_date >= @s AND c.start_date <= @e
-           AND LOWER(c.cs_email) = @cs`,
-        { s: startDate, e: endDate, cs: csRow.cs_email.toLowerCase() }
-      );
-
-      // Métricas em batch
-      const tokens = campaigns.map(c => c.short_token);
-      let metricsByToken = {};
-      if (tokens.length > 0) {
-        try {
-          const [perfRows, contractedRows] = await Promise.all([
-            query(
-              `SELECT short_token,
-                 SUM(IF(LOWER(media_type) = 'display', impressions, 0))           AS display_imps,
-                 SUM(IF(LOWER(media_type) = 'display', viewable_impressions, 0))  AS display_viewable,
-                 SUM(IF(LOWER(media_type) = 'display', clicks, 0))                AS display_clicks,
-                 SUM(IF(LOWER(media_type) = 'display', total_cost, 0))            AS display_cost
-               FROM \`site-hypr.prod_assets.unified_daily_performance_metrics\`
-               WHERE short_token IN UNNEST(@toks)
-                 AND LOWER(IFNULL(line_name, '')) NOT LIKE '%survey%'
-                 AND LOWER(IFNULL(line_name, '')) NOT LIKE '%controle%'
-                 AND LOWER(IFNULL(line_name, '')) NOT LIKE '%exposto%'
-               GROUP BY short_token`,
-              { toks: tokens },
-              'US'
-            ),
-            query(
-              `SELECT short_token,
-                 IFNULL(o2o_display_impressions, 0)
-               + IFNULL(bonus_o2o_display_impressions, 0)
-               + IFNULL(ooh_display_impressions, 0)
-               + IFNULL(bonus_ooh_display_impressions, 0) AS display_contracted
-               FROM ${tableRef('commplan_checklists')}
-               WHERE short_token IN UNNEST(@toks)`,
-              { toks: tokens }
-            ),
-          ]);
-          const contractedMap = {};
-          for (const r of contractedRows) contractedMap[r.short_token] = Number(r.display_contracted) || 0;
-          for (const r of perfRows) {
-            const dc = contractedMap[r.short_token] || 0;
-            const di = Number(r.display_imps) || 0;
-            const dv = Number(r.display_viewable) || 0;
-            const dk = Number(r.display_clicks) || 0;
-            const cc = Number(r.display_cost) || 0;
-            metricsByToken[r.short_token] = {
-              ecpm: di > 0 ? (cc / di) * 1000 : 0,
-              ctr: dv > 0 ? dk / dv : 0,
-              over_percent: dc > 0 ? ((dv / dc) - 1) * 100 : 0,
-            };
-          }
-        } catch (_) { /* silent */ }
-      }
-
+      // ⚙️  Bônus bruto: usa MESMA função que /me/dashboard (computeCsBonus).
+      // Antes era um cálculo inline simplificado que ignorava adminOverrides,
+      // preAssignee e studiesInfo — causando divergência entre painel e overview.
       let totalBonus = 0;
-      for (const c of campaigns) {
-        let mc = {};
-        const mcStr = c.is_legacy ? c.la_mc : c.o_mc;
-        if (mcStr) { try { mc = JSON.parse(mcStr); } catch (_) {} }
-        const breakdown = computeBonus(c, mc, metricsByToken[c.short_token] || null);
-        totalBonus += breakdown.total_brl;
+      try {
+        const result = await computeCsBonus({
+          csEmail: csRow.cs_email,
+          startDate, endDate,
+        });
+        totalBonus = result.total_brl;
+      } catch (e) {
+        console.warn(`computeCsBonus(${csRow.cs_email}):`, e.message);
       }
 
       const bonusLiquido = Math.max(0, totalBonus - fixoQuarter);
@@ -356,11 +299,15 @@ router.post('/pending/:token/assign', adminRequired, async (req, res) => {
     const { token } = req.params;
     const { cs_email } = req.body || {};
 
-    if (!cs_email || typeof cs_email !== 'string') {
-      return res.status(400).json({ error: 'cs_email é obrigatório' });
+    if (!cs_email || typeof cs_email !== 'string' || !cs_email.trim()) {
+      return res.status(400).json({ error: 'cs_email é obrigatório e não pode ser vazio' });
     }
 
     const csEmail = cs_email.toLowerCase().trim();
+    // Validação extra: formato básico de email (evita lixo tipo "isaac" sem domínio)
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(csEmail)) {
+      return res.status(400).json({ error: `cs_email inválido: "${csEmail}"` });
+    }
     const adminEmail = (req.user?.email || 'system').toLowerCase();
 
     // Valida que o CS existe e é ativo
@@ -457,6 +404,113 @@ router.post('/cs/:email/floor-override/:q', adminRequired, async (req, res) => {
     res.json({ ok: true, months_off: m });
   } catch (err) {
     console.error('POST floor-override:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /admin/diag/campaign/:token ───────────────────────────────────
+// Endpoint de diagnóstico: mostra o estado de uma campanha em TODAS as
+// fontes (sales_center.checklists, legacy_assignments, command_overrides,
+// checklist_info_snapshot, view final commplan_checklists). Usado quando
+// uma campanha aparenta estar em "limbo" (sumiu de pendentes E sem CS).
+router.get('/diag/campaign/:token', adminRequired, async (req, res) => {
+  try {
+    const { token } = req.params;
+    const result = { short_token: token };
+
+    // 1. sales_center.checklists (fonte do Command novo)
+    try {
+      const [r1] = await query(
+        `SELECT short_token, client, cs_email, cs_name, start_date, end_date,
+                CAST(investment AS FLOAT64) AS total_value
+         FROM \`site-hypr.hypr_sales_center.checklists\`
+         WHERE short_token = @t LIMIT 1`,
+        { t: token }
+      );
+      result.sales_center = r1 || null;
+    } catch (e) { result.sales_center_error = e.message; }
+
+    // 2. commplan_legacy_assignments
+    try {
+      const [r2] = await query(
+        `SELECT short_token, cs_email, attributed_by, attributed_at, updated_at, updated_by, notes
+         FROM ${tableRef('commplan_legacy_assignments')}
+         WHERE short_token = @t LIMIT 1`,
+        { t: token }
+      );
+      result.legacy_assignment = r2 || null;
+    } catch (e) { result.legacy_assignment_error = e.message; }
+
+    // 3. commplan_command_overrides
+    try {
+      const [r3] = await query(
+        `SELECT short_token, cs_email, reviewed, reviewed_at, updated_at, updated_by
+         FROM ${tableRef('commplan_command_overrides')}
+         WHERE short_token = @t LIMIT 1`,
+        { t: token }
+      );
+      result.command_override = r3 || null;
+    } catch (e) { result.command_override_error = e.message; }
+
+    // 4. checklist_info_snapshot
+    try {
+      const [r4] = await query(
+        `SELECT short_token, client_name, salesman AS cp_name, start_date, end_date, total_value
+         FROM ${tableRef('checklist_info_snapshot')}
+         WHERE short_token = @t LIMIT 1`,
+        { t: token }
+      );
+      result.checklist_info_snapshot = r4 || null;
+    } catch (e) { result.checklist_info_snapshot_error = e.message; }
+
+    // 5. View final commplan_checklists (o que o sistema realmente "vê")
+    try {
+      const [r5] = await query(
+        `SELECT short_token, source, client_name, cs_email, cs_name, start_date, end_date, total_value, is_legacy
+         FROM ${tableRef('commplan_checklists')}
+         WHERE short_token = @t LIMIT 1`,
+        { t: token }
+      );
+      result.view_commplan_checklists = r5 || null;
+    } catch (e) { result.view_commplan_checklists_error = e.message; }
+
+    // 6. View commplan_pending_legacy
+    try {
+      const [r6] = await query(
+        `SELECT short_token, client_name, campaign_name, start_date
+         FROM ${tableRef('commplan_pending_legacy')}
+         WHERE short_token = @t LIMIT 1`,
+        { t: token }
+      );
+      result.pending_legacy = r6 || null;
+    } catch (e) { result.pending_legacy_error = e.message; }
+
+    // Diagnóstico interpretativo
+    const inSalesCenter = !!result.sales_center;
+    const inLegacyAssign = !!result.legacy_assignment;
+    const inSnapshot = !!result.checklist_info_snapshot;
+    const inView = !!result.view_commplan_checklists;
+    const inPending = !!result.pending_legacy;
+    const csEmailFinal = result.view_commplan_checklists?.cs_email || null;
+
+    let diagnosis = null;
+    if (!inView && !inPending) {
+      diagnosis = 'NOT_FOUND: campanha não existe em nenhuma fonte';
+    } else if (inView && csEmailFinal) {
+      diagnosis = `OK: campanha aparece com cs_email=${csEmailFinal} (source=${result.view_commplan_checklists.source})`;
+    } else if (inView && !csEmailFinal && inSalesCenter && !result.sales_center.cs_email) {
+      diagnosis = 'LIMBO: campanha está em sales_center.checklists mas SEM cs_email preenchido no Command. O CP precisa atribuir o CS no Command, ou admin pode atribuir manualmente aqui (criando legacy_assignment temporário).';
+    } else if (inPending) {
+      diagnosis = 'PENDENTE: aparece em commplan_pending_legacy aguardando atribuição admin';
+    } else if (inView && !csEmailFinal) {
+      diagnosis = 'LIMBO: aparece em commplan_checklists mas cs_email é NULL — investigar';
+    }
+    result.diagnosis = diagnosis;
+    result.flags = { inSalesCenter, inLegacyAssign, inSnapshot, inView, inPending, csEmailFinal };
+
+    res.json(result);
+  } catch (err) {
+    console.error('GET /admin/diag/campaign/:token error:', err);
     res.status(500).json({ error: err.message });
   }
 });
