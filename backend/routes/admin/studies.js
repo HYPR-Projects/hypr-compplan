@@ -21,9 +21,11 @@ import {
 import { resolveVersion } from '../../lib/version-resolver.js';
 
 export const router = Router();
-// IMPORTANTE: leitura aberta pra todos autenticados (CSs precisam ver o catálogo).
-// Escrita (POST/PUT) protegida por adminRequired localmente em cada rota.
-router.use(authRequired);
+// LEITURA TOTALMENTE ABERTA: GET / e GET /:id não exigem nem auth (catálogo público).
+// Escrita (POST/PUT) protegida por authRequired + adminRequired localmente em cada rota.
+//
+// Justificativa: o catálogo de estudos não tem dado sensível — é só metadata
+// (nome, autor, data, link). E precisa estar acessível a CSs sem fricção.
 
 router.get('/', async (req, res) => {
   try {
@@ -45,7 +47,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', adminRequired, async (req, res) => {
+router.post('/', authRequired, adminRequired, async (req, res) => {
   try {
     const { version_id, display_name, author_email, celebration_date,
             delivery_estimate, status, link_url, notes } = req.body;
@@ -83,7 +85,7 @@ router.post('/', adminRequired, async (req, res) => {
   }
 });
 
-router.put('/:id', adminRequired, async (req, res) => {
+router.put('/:id', authRequired, adminRequired, async (req, res) => {
   try {
     const before = await getStudyByIdAdmin(req.params.id);
     if (!before) return res.status(404).json({ error: 'estudo não encontrado' });
