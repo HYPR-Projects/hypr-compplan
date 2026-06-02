@@ -119,16 +119,27 @@ function inferMetricItems(campaign, metrics, manualChecks = {}) {
 
 /**
  * Verifica se o setup deve ser zerado.
- * Retorna { invalidated: bool, reason: string|null } baseado nas métricas.
+ * Retorna { invalidated: bool, reason: string|null, pending: bool } baseado nas métricas.
+ *
+ * Regras:
+ *   - Super-over (>50%): anula a QUALQUER momento (mesmo durante a campanha).
+ *   - Under (entregou menos que contratado): anula APENAS se já passou >=1 dia
+ *     do fim da campanha. Antes disso, a UI mostra "em andamento" (cinza neutro)
+ *     e o setup conta como aprovado se as demais condições estiverem OK — porque
+ *     entregar menos que contratado é normal em campanhas em curso.
+ *
+ * @param {object} metrics
+ * @param {object} campaign - precisa de campaign.end_date (DATE 'YYYY-MM-DD' ou objeto BQ {value})
+ * @returns {{ invalidated: boolean, reason: string|null, pending?: boolean }}
  */
-function validateSetup(metrics) {
+function validateSetup(metrics, campaign = {}) {
   if (!metrics) {
     return { invalidated: false, reason: null };
   }
 
   const over = Number(metrics.over_percent) || 0;
 
-  // 1. Over > 50%
+  // 1. Super-over (>50%) — anula sempre, independente de quando.
   if (over > 50) {
     return {
       invalidated: true,
@@ -136,8 +147,28 @@ function validateSetup(metrics) {
     };
   }
 
-  // 2. Under: entregou menos que contratado
+  // 2. Under — só anula se já passou >=1 dia do fim da campanha.
   if (over < 0) {
+    const endRaw = campaign?.end_date;
+    const endStr = (endRaw && typeof endRaw === 'object' && 'value' in endRaw) ? endRaw.value : endRaw;
+    const endDate = endStr ? new Date(`${endStr}T23:59:59Z`) : null;
+    const now = new Date();
+
+    // Considera "encerrada e madura" se passou pelo menos 1 dia inteiro após o fim.
+    // Ex: end_date = 2026-05-31 → só conta como under a partir de 2026-06-02 00:00.
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const isMature = endDate && (now.getTime() - endDate.getTime() >= ONE_DAY_MS);
+
+    if (!isMature) {
+      // Campanha ainda em curso (ou recém-encerrada) — ignora o under.
+      // Setup conta como aprovado se demais condições estiverem OK.
+      return {
+        invalidated: false,
+        reason: null,
+        pending: true,  // sinaliza pra UI mostrar "em andamento" (cinza neutro)
+      };
+    }
+
     return {
       invalidated: true,
       reason: `Setup anulado: campanha em under (entregou ${(100 + over).toFixed(1)}% do contratado).`,
@@ -260,7 +291,7 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
   applyConstraints(earned, allItems, adminOverriddenItems);
 
   // 5. Valida setup (over > 50%, criative fee, under) + admin force
-  const autoSetupValidation = validateSetup(metrics);
+  const autoSetupValidation = validateSetup(metrics, campaign);
   const setupForce = adminOverrides.__setup_force || 'auto';
   let setupValidation = autoSetupValidation;
   let setupForcedBy = null;
@@ -366,6 +397,9 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
       invalidation_reason: isSetupInvalidated ? setupValidation.reason : null,
       setup_forced: catKey === 'setup' ? (setupValidation.forced || false) : false,
       setup_force_meta: catKey === 'setup' ? setupForcedBy : null,
+      // Setup em "em andamento": campanha ainda rodando ou recém-encerrada
+      // (under tolerado até 1 dia após end_date). UI mostra cinza neutro.
+      setup_pending: catKey === 'setup' ? (setupValidation.pending || false) : false,
       pre_assigned_to: catKey === 'pre_campaign' ? (preAssignee || null) : null,
       pre_blocked_for_owner: isPreCampaignBlocked,
     };

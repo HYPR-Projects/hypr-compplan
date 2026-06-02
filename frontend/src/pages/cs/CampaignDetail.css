@@ -438,6 +438,24 @@
   margin-top: 2px;
 }
 
+/* Estado "em andamento": cinza neutro — campanha ainda rodando, under tolerado */
+.category-block__pending {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2, rgba(148, 163, 184, 0.08));
+  color: var(--text-secondary, #94a3b8);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.category-block__pending > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
 /* Items que SERIAM atingidos mas foram invalidados */
 
 .item-row--invalidated {

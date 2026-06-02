@@ -465,9 +465,11 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
           <Badge variant={cat.invalidated ? 'red' : (preAssignedElsewhere ? 'neutral' : 'neutral')}>
             {cat.invalidated
               ? `0/${cat.items.length} (anulado)`
-              : preAssignedElsewhere
-                ? 'atribuído'
-                : `${earnedCount}/${cat.items.length}`}
+              : cat.setup_pending
+                ? `${earnedCount}/${cat.items.length} (em andamento)`
+                : preAssignedElsewhere
+                  ? 'atribuído'
+                  : `${earnedCount}/${cat.items.length}`}
           </Badge>
         </div>
         <div className="category-block__total">
@@ -485,6 +487,15 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
                 Pré Campanha atribuída a{' '}
                 <strong>{preAssigneeInfo.assigneeName || preAssigneeInfo.assigneeEmail}</strong>.
                 Apenas este CS pode preencher os items desta seção. O bônus de Pré não conta pra você nesta campanha.
+              </span>
+            </div>
+          )}
+          {cat.setup_pending && (
+            <div className="category-block__pending">
+              <Info size={16} />
+              <span>
+                Setup em andamento: campanha ainda em curso (ou encerrada há menos de 1 dia).
+                Under da entrega ainda não é considerado — o setup conta normalmente.
               </span>
             </div>
           )}
