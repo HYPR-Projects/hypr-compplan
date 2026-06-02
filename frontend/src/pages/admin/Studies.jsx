@@ -6,13 +6,16 @@ import { Badge } from '../../components/ui/Badge.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { Input, Textarea } from '../../components/ui/Input.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
-import { endpoints } from '../../lib/api.js';
+import { endpoints, auth } from '../../lib/api.js';
 import { fmt } from '../../lib/format.js';
 import './Studies.css';
 
 const VERSION = '2026';
 
 export default function StudiesPage() {
+  // Aba acessível por todos autenticados; mas só admin vê controles de escrita.
+  const isAdmin = auth.getUser()?.role === 'admin';
+
   const [list, setList] = useState(null);
   const [error, setError] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -51,9 +54,11 @@ export default function StudiesPage() {
             <strong> 0,30%</strong> da líquida da campanha vai pro <strong>autor do estudo</strong>.
           </div>
         </div>
-        <Button onClick={() => setShowAdd(true)} icon={Plus}>
-          Cadastrar estudo
-        </Button>
+        {isAdmin && (
+          <Button onClick={() => setShowAdd(true)} icon={Plus}>
+            Cadastrar estudo
+          </Button>
+        )}
       </header>
 
       <Card variant="info" className="studies-info fade-up">
@@ -84,7 +89,10 @@ export default function StudiesPage() {
       ) : list.length === 0 ? (
         <Card>
           <p className="card__subtitle">
-            Nenhum estudo cadastrado. Clique em <strong>Cadastrar estudo</strong> pra começar.
+            {isAdmin
+              ? <>Nenhum estudo cadastrado. Clique em <strong>Cadastrar estudo</strong> pra começar.</>
+              : <>Nenhum estudo cadastrado ainda.</>
+            }
           </p>
         </Card>
       ) : (
@@ -98,8 +106,11 @@ export default function StudiesPage() {
               <div
                 key={s.id}
                 className="study-card stagger"
-                style={{ '--i': Math.min(i, 20) }}
-                onClick={() => setEditing(s)}
+                style={{
+                  '--i': Math.min(i, 20),
+                  cursor: isAdmin ? 'pointer' : 'default',
+                }}
+                onClick={isAdmin ? () => setEditing(s) : undefined}
               >
                 <div className={`study-card__stripe is-${s.status || 'planned'}`}></div>
                 <div className="study-card__main">
@@ -121,7 +132,7 @@ export default function StudiesPage() {
                     </div>
                   )}
                 </div>
-                <Edit3 size={16} className="study-card__edit" />
+                {isAdmin && <Edit3 size={16} className="study-card__edit" />}
               </div>
             ))}
           </div>

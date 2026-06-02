@@ -21,7 +21,9 @@ import {
 import { resolveVersion } from '../../lib/version-resolver.js';
 
 export const router = Router();
-router.use(authRequired, adminRequired);
+// IMPORTANTE: leitura aberta pra todos autenticados (CSs precisam ver o catálogo).
+// Escrita (POST/PUT) protegida por adminRequired localmente em cada rota.
+router.use(authRequired);
 
 router.get('/', async (req, res) => {
   try {
@@ -43,7 +45,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', adminRequired, async (req, res) => {
   try {
     const { version_id, display_name, author_email, celebration_date,
             delivery_estimate, status, link_url, notes } = req.body;
@@ -81,7 +83,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', adminRequired, async (req, res) => {
   try {
     const before = await getStudyByIdAdmin(req.params.id);
     if (!before) return res.status(404).json({ error: 'estudo não encontrado' });

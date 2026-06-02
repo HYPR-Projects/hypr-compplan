@@ -62,6 +62,8 @@ export default function App() {
         <Route path="/cs/visao-geral"        element={<ProtectedRoute><AdminOverview /></ProtectedRoute>} />
         <Route path="/cs/campanha/:token"    element={<ProtectedRoute><CsCampaignDetail /></ProtectedRoute>} />
         <Route path="/cs/historico"          element={<ProtectedRoute><CsHistory /></ProtectedRoute>} />
+        {/* Estudos: leitura pra todos autenticados (componente esconde botões pra não-admins) */}
+        <Route path="/cs/estudos"            element={<ProtectedRoute><AdminStudies /></ProtectedRoute>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
