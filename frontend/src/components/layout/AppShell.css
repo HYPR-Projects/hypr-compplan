@@ -76,6 +76,19 @@
   text-align: center;
 }
 
+/* Modifier mais saturado pra alertas críticos (retornos do admin não-vistos).
+   Anima sutilmente pra chamar atenção sem ser irritante. */
+.shell__nav-badge--alert {
+  background: #E24B4A;
+  box-shadow: 0 0 0 0 rgba(226, 75, 74, 0.4);
+  animation: shell-nav-badge-pulse 2s ease-in-out infinite;
+}
+
+@keyframes shell-nav-badge-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(226, 75, 74, 0); }
+  50%      { box-shadow: 0 0 0 4px rgba(226, 75, 74, 0.15); }
+}
+
 .shell__sidebar-footer {
   padding-top: var(--space-4);
   border-top: 1px solid var(--border-subtle);

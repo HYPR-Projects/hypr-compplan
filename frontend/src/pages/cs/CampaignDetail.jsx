@@ -384,6 +384,30 @@ export default function CsCampaignDetail() {
         </div>
       )}
 
+      {/* Caixa de decisão do admin sobre o pedido de análise.
+          Aparece quando admin aprovou/recusou. Cor varia por decisão. */}
+      {campaign.review_decision && (
+        <div className={`cs-review-decision cs-review-decision--${campaign.review_decision}`}>
+          <div className="cs-review-decision__header">
+            {campaign.review_decision === 'approved'
+              ? <CheckCircle2 size={18} />
+              : <X size={18} />}
+            <strong>
+              Análise {campaign.review_decision === 'approved' ? 'aprovada' : 'recusada'} pelo admin
+            </strong>
+          </div>
+          <div className="cs-review-decision__comment">
+            {campaign.review_decision_comment || '—'}
+          </div>
+          <div className="cs-review-decision__meta">
+            {campaign.review_decision_by} · {fmt.date(campaign.review_decision_at)}
+            {campaign.review_decision_seen_at && (
+              <> · <CheckCircle2 size={11} /> Visto em {fmt.date(campaign.review_decision_seen_at)}</>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Bloco de observação CS - pedido de análise */}
       <Card className="cs-notes-block">
         <div className="cs-notes-block__header">

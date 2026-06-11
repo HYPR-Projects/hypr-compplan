@@ -202,8 +202,11 @@ export const endpoints = {
   adminReviewRequests() {
     return api.get('/commplan/admin/review-requests');
   },
-  adminReviewRequestSetHandled(token, handled) {
-    return api.put(`/commplan/admin/review-requests/${token}/handled`, { handled });
+  adminReviewRequestSetDecision(token, decision, comment) {
+    return api.put(`/commplan/admin/review-requests/${token}/decision`, { decision, comment });
+  },
+  meBadges() {
+    return api.get('/commplan/me/badges');
   },
 
   meReplicateSources(token, opts = {}) {

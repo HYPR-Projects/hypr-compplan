@@ -18,6 +18,7 @@ import { Router } from 'express';
 import { authRequired, adminRequired } from '../../middleware/auth.js';
 import { query, tableRef } from '../../lib/bigquery.js';
 import { logAudit } from '../../lib/audit.js';
+import { sendEmail } from '../../lib/email.js';
 
 export const router = Router();
 router.use(authRequired, adminRequired);
@@ -164,13 +165,19 @@ router.get('/review-requests', async (req, res) => {
 
     const all = [...overrideRows, ...legacyRows].map(r => {
       let notes = '';
-      let handledAt = null;
-      let handledBy = null;
+      let decision = null;
+      let decisionAt = null;
+      let decisionBy = null;
+      let decisionComment = null;
+      let decisionSeenAt = null;
       try {
         const mc = r.manual_checks ? JSON.parse(r.manual_checks) : {};
         notes = mc.__review_notes || '';
-        handledAt = mc.__review_handled_at || null;
-        handledBy = mc.__review_handled_by || null;
+        decision = mc.__review_decision || null;
+        decisionAt = mc.__review_decision_at || null;
+        decisionBy = mc.__review_decision_by || null;
+        decisionComment = mc.__review_decision_comment || null;
+        decisionSeenAt = mc.__review_decision_seen_at || null;
       } catch (_) {}
       return {
         short_token: r.short_token,
@@ -184,8 +191,12 @@ router.get('/review-requests', async (req, res) => {
         requested_by: r.updated_by,
         requested_at: r.updated_at?.value || r.updated_at,
         notes,
-        handled_at: handledAt,
-        handled_by: handledBy,
+        // Status do pedido (substituiu o "handled"/tick)
+        decision,                  // 'approved' | 'rejected' | null
+        decision_at: decisionAt,
+        decision_by: decisionBy,
+        decision_comment: decisionComment,
+        decision_seen_at: decisionSeenAt,
       };
     });
 
@@ -196,25 +207,39 @@ router.get('/review-requests', async (req, res) => {
   }
 });
 
-/** PUT /admin/review-requests/:token/handled
- *  Body: { handled: bool }
+/** PUT /admin/review-requests/:token/decision
+ *  Body: { decision: 'approved' | 'rejected' | null, comment: string }
  *
- *  Marca/desmarca um pedido de análise como "visto/lido" pelo admin.
- *  - handled=true  → grava manual_checks.__review_handled_at + __review_handled_by
- *  - handled=false → remove esses campos
+ *  Substitui o antigo /handled. Admin marca um pedido de análise como
+ *  APROVADO ou RECUSADO com comentário obrigatório. Notifica CS dono
+ *  por email e dispara badge no painel CS.
+ *
+ *  - decision=null  → desfaz a decisão (limpa todos os campos __review_decision_*)
+ *  - decision=approved/rejected + comment → grava decisão, dispara email
  *
  *  IMPORTANTE: NÃO mexe em __review_requested. O pedido continua existindo;
- *  só sinaliza que o admin já passou os olhos. Card no frontend vira cinza.
+ *  só agrega a decisão do admin sobre ele. "Aprovado" é só etiqueta —
+ *  override real do bônus continua manual via /admin/campaign/:token/override.
  */
-router.put('/review-requests/:token/handled', async (req, res) => {
+router.put('/review-requests/:token/decision', async (req, res) => {
   try {
     const { token } = req.params;
-    const handled = req.body?.handled === true;
+    const decision = req.body?.decision; // 'approved' | 'rejected' | null
+    const comment = (req.body?.comment || '').trim();
     const adminEmail = (req.user?.email || 'system').toLowerCase();
 
-    // Descobre se a campanha está no override (não-legacy) ou no legacy
+    // Valida entrada
+    if (decision !== null && decision !== 'approved' && decision !== 'rejected') {
+      return res.status(400).json({ error: 'decision precisa ser "approved", "rejected" ou null' });
+    }
+    if (decision !== null && comment.length < 5) {
+      return res.status(400).json({ error: 'comentário precisa ter pelo menos 5 caracteres' });
+    }
+
+    // Descobre tabela (override ou legacy) e info da campanha pra usar no email
     const [meta] = await query(
-      `SELECT is_legacy FROM ${tableRef('commplan_checklists')}
+      `SELECT is_legacy, cs_email, client_name, campaign_name
+       FROM ${tableRef('commplan_checklists')}
        WHERE short_token = @t LIMIT 1`,
       { t: token }
     );
@@ -237,17 +262,26 @@ router.put('/review-requests/:token/handled', async (req, res) => {
     let mc = {};
     try { mc = existing.manual_checks ? JSON.parse(existing.manual_checks) : {}; } catch (_) {}
 
-    // Aplica a mudança
-    if (handled) {
-      mc.__review_handled_at = new Date().toISOString();
-      mc.__review_handled_by = adminEmail;
+    // Aplica a decisão
+    if (decision === null) {
+      // Limpa decisão
+      delete mc.__review_decision;
+      delete mc.__review_decision_at;
+      delete mc.__review_decision_by;
+      delete mc.__review_decision_comment;
+      delete mc.__review_decision_seen_at;
+      delete mc.__review_decision_seen_by;
     } else {
-      delete mc.__review_handled_at;
-      delete mc.__review_handled_by;
+      mc.__review_decision = decision;
+      mc.__review_decision_at = new Date().toISOString();
+      mc.__review_decision_by = adminEmail;
+      mc.__review_decision_comment = comment;
+      // Reseta o "visto" — toda nova decisão precisa ser vista de novo
+      delete mc.__review_decision_seen_at;
+      delete mc.__review_decision_seen_by;
     }
 
-    // Persiste — usa parameterized query pra evitar problemas de escape
-    // com caracteres especiais no JSON (aspas, quebras de linha, etc).
+    // Persiste — parameterized query
     const mcJson = JSON.stringify(mc);
     await query(
       `UPDATE ${tableRef(tableName)}
@@ -258,23 +292,55 @@ router.put('/review-requests/:token/handled', async (req, res) => {
       { t: token, by: adminEmail, mc: mcJson }
     );
 
+    // Notifica CS por email (se aplicável)
+    if (decision !== null && meta.cs_email) {
+      try {
+        const decisionLabel = decision === 'approved' ? 'APROVADO' : 'RECUSADO';
+        const decisionColor = decision === 'approved' ? '#16a34a' : '#f43f5e';
+        const subject = `[Compplan] Análise ${decisionLabel}: ${meta.client_name || token}`;
+        const html = `
+          <h2 style="color: ${decisionColor};">Análise ${decisionLabel}</h2>
+          <p><strong>Campanha:</strong> ${meta.campaign_name || ''} (${token})</p>
+          <p><strong>Cliente:</strong> ${meta.client_name || '—'}</p>
+          <p><strong>Analisado por:</strong> ${adminEmail}</p>
+          <p><strong>Comentário do admin:</strong></p>
+          <blockquote style="border-left: 3px solid ${decisionColor}; padding-left: 12px; color: #555; font-style: italic;">
+            ${comment.replace(/</g, '&lt;').replace(/\n/g, '<br>')}
+          </blockquote>
+          <p><a href="https://hypr-compplan.vercel.app/cs/campanha/${token}" style="display: inline-block; padding: 8px 16px; background: ${decisionColor}; color: white; text-decoration: none; border-radius: 6px;">
+            Abrir campanha →
+          </a></p>
+        `;
+        await sendEmail({
+          to: meta.cs_email,
+          subject,
+          html,
+          text: `Análise ${decisionLabel} por ${adminEmail}: ${comment}`,
+        });
+      } catch (e) {
+        console.warn('Falha ao notificar CS por email:', e.message);
+        // Não bloqueia a resposta — decisão já foi salva
+      }
+    }
+
     await logAudit({
       entityType: 'review_request',
       entityId: token,
-      action: handled ? 'mark_handled' : 'unmark_handled',
+      action: decision === null ? 'clear_decision' : `decision_${decision}`,
       changedBy: adminEmail,
-      after: { handled, at: mc.__review_handled_at || null },
+      after: { decision, comment, at: mc.__review_decision_at || null },
     });
 
     res.json({
       ok: true,
       short_token: token,
-      handled,
-      handled_at: mc.__review_handled_at || null,
-      handled_by: mc.__review_handled_by || null,
+      decision,
+      decision_at: mc.__review_decision_at || null,
+      decision_by: mc.__review_decision_by || null,
+      decision_comment: mc.__review_decision_comment || null,
     });
   } catch (err) {
-    console.error('PUT /admin/review-requests/:token/handled error:', err);
+    console.error('PUT /admin/review-requests/:token/decision error:', err);
     res.status(500).json({ error: err.message });
   }
 });

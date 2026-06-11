@@ -1,10 +1,11 @@
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Home, Calendar, FileText, Users, BookOpen, Shield,
   Settings, LogOut, Sun, Moon, History, Sparkles, Archive, MessageSquare,
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.jsx';
-import { auth } from '../../lib/api.js';
+import { auth, endpoints } from '../../lib/api.js';
 import Logo from '../ui/Logo.jsx';
 import Avatar from '../ui/Avatar.jsx';
 import './AppShell.css';
@@ -17,7 +18,7 @@ import './AppShell.css';
  */
 
 const NAV_CS = [
-  { to: '/cs',            label: 'Meu painel',  icon: Home },
+  { to: '/cs',            label: 'Meu painel',  icon: Home, badge: 'review_decisions' },
   { to: '/cs/visao-geral', label: 'Visão geral do time', icon: Users },
   { to: '/cs/estudos',    label: 'Estudos',     icon: BookOpen },
   { to: '/cs/historico',  label: 'Histórico',   icon: History },
@@ -41,6 +42,22 @@ export default function AppShell({ children, pendingEvidences = 0, pendingCount 
 
   // Aceita pendingCount (novo nome) ou pendingEvidences (legado)
   const badgeCount = pendingCount || pendingEvidences || 0;
+
+  // Badge de "retornos do admin não vistos" — só pra CS
+  const [reviewDecisionsUnseen, setReviewDecisionsUnseen] = useState(0);
+  useEffect(() => {
+    if (isAdmin) return; // admin não vê esse badge
+    let cancelled = false;
+    const fetchBadges = () => {
+      endpoints.meBadges()
+        .then(d => { if (!cancelled) setReviewDecisionsUnseen(d.review_decisions_unseen || 0); })
+        .catch(() => { /* badge cosmético, falha silenciosa */ });
+    };
+    fetchBadges();
+    // Refresh a cada 60s pra pegar novas decisões enquanto CS tá com a aba aberta
+    const interval = setInterval(fetchBadges, 60_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [isAdmin]);
 
   const items = isAdmin ? NAV_ADMIN : NAV_CS;
 
@@ -70,6 +87,9 @@ export default function AppShell({ children, pendingEvidences = 0, pendingCount 
               <span>{item.label}</span>
               {item.badge === 'pending' && badgeCount > 0 && (
                 <span className="shell__nav-badge mono">{badgeCount}</span>
+              )}
+              {item.badge === 'review_decisions' && reviewDecisionsUnseen > 0 && (
+                <span className="shell__nav-badge shell__nav-badge--alert mono">{reviewDecisionsUnseen}</span>
               )}
             </NavLink>
           ))}

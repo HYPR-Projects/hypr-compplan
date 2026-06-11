@@ -163,6 +163,53 @@ router.get('/studies-catalog', async (req, res) => {
   }
 });
 
+/** GET /me/badges
+ *  Retorna contadores leves pra UI mostrar badges no menu:
+ *   - review_decisions_unseen: quantas decisões de admin (aprovado/recusado)
+ *     o CS ainda NÃO viu nas campanhas dele.
+ *
+ *  Endpoint deliberadamente enxuto — é chamado frequentemente pelo AppShell.
+ */
+router.get('/badges', async (req, res) => {
+  try {
+    const { csEmail } = resolveTargetCs(req);
+    if (!csEmail) return res.json({ review_decisions_unseen: 0 });
+
+    // Conta nas duas tabelas (override + legacy) decisões não-vistas das
+    // campanhas onde o CS é dono.
+    const [{ unseen_count } = { unseen_count: 0 }] = await query(
+      `WITH owned AS (
+         SELECT short_token FROM ${tableRef('commplan_checklists')}
+         WHERE LOWER(cs_email) = @cs
+       )
+       SELECT
+         COUNTIF(decision IS NOT NULL AND seen_at IS NULL) AS unseen_count
+       FROM (
+         SELECT
+           JSON_VALUE(o.manual_checks, '$.__review_decision')         AS decision,
+           JSON_VALUE(o.manual_checks, '$.__review_decision_seen_at') AS seen_at
+         FROM ${tableRef('commplan_command_overrides')} o
+         INNER JOIN owned USING (short_token)
+         UNION ALL
+         SELECT
+           JSON_VALUE(la.manual_checks, '$.__review_decision')         AS decision,
+           JSON_VALUE(la.manual_checks, '$.__review_decision_seen_at') AS seen_at
+         FROM ${tableRef('commplan_legacy_assignments')} la
+         INNER JOIN owned USING (short_token)
+       )`,
+      { cs: csEmail.toLowerCase() }
+    );
+
+    res.json({
+      review_decisions_unseen: Number(unseen_count) || 0,
+    });
+  } catch (err) {
+    console.warn('GET /me/badges error:', err.message);
+    // Falha silenciosa — badge é cosmético, não bloqueia UI
+    res.json({ review_decisions_unseen: 0 });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────
 // Helper: busca métricas de performance pra calcular Otimizações.
 // Agrega TODAS as linhas da campanha em campaign_results, filtra display
@@ -822,6 +869,28 @@ router.get('/campaign/:token', async (req, res) => {
       reviewedAt = campaign.o_reviewed_at?.value || campaign.o_reviewed_at;
     }
 
+    // Auto-mark "visto": se o CS DONO (não admin impersonando) abre a campanha
+    // e existe uma decisão de admin não-vista, marca como vista automaticamente.
+    // Atualização async (não bloqueia a resposta).
+    const isOwner = (campaign.cs_email || '').toLowerCase() === csEmail;
+    const hasUnseenDecision = !!manualChecks.__review_decision
+                            && !manualChecks.__review_decision_seen_at;
+    if (isOwner && !isAdmin && hasUnseenDecision) {
+      const seenAt = new Date().toISOString();
+      manualChecks.__review_decision_seen_at = seenAt;
+      manualChecks.__review_decision_seen_by = csEmail;
+
+      // Persiste no banco em background — não bloqueia a resposta
+      const tableName = isLegacy ? 'commplan_legacy_assignments' : 'commplan_command_overrides';
+      const mcJson = JSON.stringify(manualChecks);
+      query(
+        `UPDATE ${tableRef(tableName)}
+         SET manual_checks = @mc
+         WHERE short_token = @t`,
+        { t: campaign.short_token, mc: mcJson }
+      ).catch(e => console.warn(`Falha ao marcar decisão como vista (${campaign.short_token}):`, e.message));
+    }
+
     res.json({
       short_token: campaign.short_token,
       is_legacy: isLegacy,
@@ -866,6 +935,14 @@ router.get('/campaign/:token', async (req, res) => {
       admin_overrides_at: adminOverridesAt,
       review_requested: !!manualChecks.__review_requested,
       review_request_notes: manualChecks.__review_notes || '',
+
+      // Decisão do admin sobre o pedido de análise (caixa que aparece pro CS)
+      review_decision: manualChecks.__review_decision || null,
+      review_decision_at: manualChecks.__review_decision_at || null,
+      review_decision_by: manualChecks.__review_decision_by || null,
+      review_decision_comment: manualChecks.__review_decision_comment || null,
+      review_decision_seen_at: manualChecks.__review_decision_seen_at || null,
+      review_decision_seen_by: manualChecks.__review_decision_seen_by || null,
 
       // Pré Campanha — atribuída a outro CS?
       pre_campaign_assignee_email: preAssignee,
