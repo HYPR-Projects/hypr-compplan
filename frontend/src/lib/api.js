@@ -209,6 +209,14 @@ export const endpoints = {
     return api.get('/commplan/me/badges');
   },
 
+  // Auditoria de campanhas
+  adminAudit(quarter) {
+    return api.get(`/commplan/admin/audit/${quarter}`);
+  },
+  adminAuditMark(token, status, notes) {
+    return api.put(`/commplan/admin/audit/${token}/mark`, { status, notes });
+  },
+
   meReplicateSources(token, opts = {}) {
     const q = opts.as ? `?as=${encodeURIComponent(opts.as)}` : '';
     return api.get(`/commplan/me/campaign/${token}/replicate-sources${q}`);

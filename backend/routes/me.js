@@ -563,6 +563,8 @@ router.get('/dashboard/:q', async (req, res) => {
         is_legacy: !!c.is_legacy,
         reviewed: !!c.reviewed,
         review_requested: !!mc.__review_requested,
+        // Flag de "sinalizada na auditoria pelo admin" — mostra badge no card
+        audit_flagged: mc.__audit_status === 'issue',
         bruto: Number(c.total_value) || 0,
         liquido: (Number(c.total_value) || 0) * NET_FACTOR,
         bonus_brl: breakdown.total_brl,
@@ -958,6 +960,14 @@ router.get('/campaign/:token', async (req, res) => {
       review_decision_comment: manualChecks.__review_decision_comment || null,
       review_decision_seen_at: manualChecks.__review_decision_seen_at || null,
       review_decision_seen_by: manualChecks.__review_decision_seen_by || null,
+
+      // Marca de auditoria: se admin sinalizou problema, mostra pro CS
+      audit_mark: manualChecks.__audit_status === 'issue' ? {
+        status: 'issue',
+        at: manualChecks.__audit_at || null,
+        by: manualChecks.__audit_by || null,
+        notes: manualChecks.__audit_notes || null,
+      } : null,
 
       // Pré Campanha — atribuída a outro CS?
       pre_campaign_assignee_email: preAssignee,

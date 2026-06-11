@@ -408,6 +408,25 @@ export default function CsCampaignDetail() {
         </div>
       )}
 
+      {/* Caixa de problema sinalizado pelo admin via Auditoria.
+          Aparece se admin marcou status=issue na campanha. */}
+      {campaign.audit_mark && campaign.audit_mark.status === 'issue' && (
+        <div className="cs-review-decision cs-review-decision--rejected">
+          <div className="cs-review-decision__header">
+            <AlertTriangle size={18} />
+            <strong>Admin sinalizou um problema</strong>
+          </div>
+          {campaign.audit_mark.notes && (
+            <div className="cs-review-decision__comment">
+              {campaign.audit_mark.notes}
+            </div>
+          )}
+          <div className="cs-review-decision__meta">
+            {campaign.audit_mark.by} · {fmt.date(campaign.audit_mark.at)}
+          </div>
+        </div>
+      )}
+
       {/* Bloco de observação CS - pedido de análise */}
       <Card className="cs-notes-block">
         <div className="cs-notes-block__header">

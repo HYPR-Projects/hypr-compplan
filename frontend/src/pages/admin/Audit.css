@@ -1,0 +1,438 @@
+/**
+ * Audit.css — página de auditoria de campanhas admin.
+ *
+ * Agrupada por urgência (Setup anulado → Otim. fora meta → Evid. faltando → OK).
+ * Cada grupo é colapsável. Dentro do grupo, cada campanha pode ser expandida
+ * inline mostrando detalhes (3 cards Setup/Otim/Evidências + links).
+ */
+
+/* ─── Toolbar (quarter selector + search) ──────────────────────────── */
+.audit-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.audit-quarter-select {
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+/* ─── Container de grupos ──────────────────────────────────────────── */
+.audit-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ─── Grupo (header colorido + body com campanhas) ─────────────────── */
+.audit-group {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface-card);
+}
+
+.audit-group__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background 120ms ease;
+}
+
+.audit-group__header:hover { background: var(--surface-hover, rgba(0,0,0,0.02)); }
+
+.audit-group__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.audit-group__count {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-left: auto;
+}
+
+/* Cor por urgência */
+.audit-group--red .audit-group__header {
+  background: rgba(226, 75, 74, 0.06);
+  color: #A32D2D;
+}
+.audit-group--red .audit-group__label,
+.audit-group--red svg { color: #A32D2D; }
+
+.audit-group--amber .audit-group__header {
+  background: rgba(245, 165, 36, 0.06);
+}
+.audit-group--amber .audit-group__label,
+.audit-group--amber svg { color: #854F0B; }
+
+.audit-group--green .audit-group__header {
+  background: rgba(22, 163, 74, 0.04);
+}
+.audit-group--green .audit-group__label,
+.audit-group--green svg { color: #3B6D11; }
+
+.audit-group__body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Linha colapsada ──────────────────────────────────────────────── */
+.audit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 120ms ease;
+}
+
+.audit-row:last-child { border-bottom: none; }
+.audit-row:hover { background: var(--surface-hover, rgba(0,0,0,0.02)); }
+
+.audit-row__toggle {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+}
+
+.audit-row__main {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.audit-row__title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.audit-row__title strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.audit-row__campaign {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.audit-row__meta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.audit-row__summary {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Linha marcada (OK ou issue) muda cor sutil */
+.audit-row--ok    { background: rgba(22, 163, 74, 0.03); }
+.audit-row--issue { background: rgba(226, 75, 74, 0.03); }
+
+/* ─── Chip compacto na linha colapsada ─────────────────────────────── */
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill, 999px);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-chip__label {
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 9px;
+}
+
+.status-chip__value {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.status-chip--ok {
+  background: rgba(22, 163, 74, 0.08);
+  color: #3B6D11;
+}
+
+.status-chip--bad {
+  background: rgba(226, 75, 74, 0.08);
+  color: #A32D2D;
+}
+
+/* ─── Card expandido ───────────────────────────────────────────────── */
+.audit-card {
+  padding: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-card);
+}
+
+.audit-card:last-child { border-bottom: none; }
+
+.audit-card--ok    { background: rgba(22, 163, 74, 0.02); }
+.audit-card--issue { background: rgba(226, 75, 74, 0.02); }
+
+.audit-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.audit-card__title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 1;
+}
+
+.audit-card__title strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.audit-card__campaign {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.audit-card__meta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  width: 100%;
+  margin-top: 4px;
+}
+
+.audit-card__head .audit-card__title {
+  display: block;
+}
+
+/* ─── Bloco de stats (Setup / Otim / Evid) ─────────────────────────── */
+.audit-card__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.stat-block {
+  padding: 10px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+}
+
+.stat-block--ok {
+  background: rgba(22, 163, 74, 0.06);
+}
+
+.stat-block--bad {
+  background: rgba(226, 75, 74, 0.06);
+}
+
+.stat-block__title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  color: var(--text-tertiary);
+}
+
+.stat-block__value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.stat-block--bad .stat-block__value { color: #A32D2D; }
+.stat-block--ok .stat-block__value { color: #3B6D11; }
+
+.stat-block__sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.stat-block__sub > div {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.stat-block__reason {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.evid-missing {
+  margin-top: 4px;
+  color: #854F0B;
+  font-weight: 500;
+}
+
+/* ─── Lista de links ───────────────────────────────────────────────── */
+.audit-card__links {
+  padding: 10px 12px;
+  background: var(--surface-elevated, rgba(0,0,0,0.02));
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+}
+
+.audit-card__links-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+}
+
+.audit-card__links-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.audit-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--accent-blue, #185FA5);
+  text-decoration: none;
+  padding: 3px 0;
+  transition: color 120ms ease;
+}
+
+.audit-link:hover {
+  color: var(--accent-blue-dark, #0C447C);
+  text-decoration: underline;
+}
+
+.audit-link__label {
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.audit-link__url {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-link--missing {
+  color: #854F0B;
+}
+
+.audit-link--missing:hover { color: #854F0B; text-decoration: none; }
+
+/* ─── Marca de auditoria (já marcou) ───────────────────────────────── */
+.audit-card__mark {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.audit-card__mark--ok {
+  background: rgba(22, 163, 74, 0.08);
+  color: #3B6D11;
+}
+
+.audit-card__mark--issue {
+  background: rgba(226, 75, 74, 0.08);
+  color: #A32D2D;
+}
+
+.audit-card__mark-notes {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: var(--surface-card);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-style: italic;
+  font-size: 12px;
+}
+
+/* ─── Ações ────────────────────────────────────────────────────────── */
+.audit-card__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.audit-card__action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.audit-card__action-btn:disabled { cursor: wait; opacity: 0.5; }
+
+.audit-card__action-btn--issue {
+  color: #A32D2D;
+  border-color: rgba(226, 75, 74, 0.4);
+}
+.audit-card__action-btn--issue:hover:not(:disabled) {
+  background: rgba(226, 75, 74, 0.08);
+}
+
+.audit-card__action-btn--ok {
+  color: #3B6D11;
+  border-color: rgba(22, 163, 74, 0.4);
+}
+.audit-card__action-btn--ok:hover:not(:disabled) {
+  background: rgba(22, 163, 74, 0.08);
+}

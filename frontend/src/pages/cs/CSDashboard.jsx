@@ -518,6 +518,9 @@ function CampaignRowNew({ campaign, onClick, i }) {
           {campaign.review_requested && (
             <Badge variant="yellow">📋 Pedido de análise</Badge>
           )}
+          {campaign.audit_flagged && (
+            <Badge variant="red">⚠ Sinalizada</Badge>
+          )}
         </div>
         <div className="cs-campaign-card__campaign">{campaign.campaign_name}</div>
         <div className="cs-campaign-card__meta">
