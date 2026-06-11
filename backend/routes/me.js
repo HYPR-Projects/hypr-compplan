@@ -771,6 +771,18 @@ router.get('/dashboard/:q', async (req, res) => {
       } catch (_) { /* silent */ }
     }
 
+    // Score: média % nas campanhas FINALIZADAS + REVISADAS
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const scoreEligible = items.filter(i =>
+      i.reviewed
+      && i.end_date
+      && (typeof i.end_date === 'string' ? i.end_date : i.end_date) < todayStr
+      && i.liquido > 0
+    );
+    const scorePct = scoreEligible.length > 0
+      ? scoreEligible.reduce((acc, i) => acc + (i.bonus_pct || 0), 0) / scoreEligible.length
+      : null;
+
     res.json({
       quarter,
       cs_email: csEmail,
@@ -794,6 +806,9 @@ router.get('/dashboard/:q', async (req, res) => {
         bonus_mensal: bonusMensal,
         hit_floor: hitFloor,
         tax_rate: TAX_RATE,
+        // Score: média % nas campanhas finalizadas + revisadas
+        score_pct: scorePct,
+        score_n_campaigns: scoreEligible.length,
       },
       items,
       pre_assigned_items: preAssignedItems,

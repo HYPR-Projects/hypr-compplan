@@ -157,6 +157,14 @@ export default function CsDashboard() {
             )}
             <span className="page-subtitle__sep">·</span>
             {quarter}
+            {kpis.score_pct != null && (
+              <span
+                className="cs-score-badge"
+                title={`Média de % nas ${kpis.score_n_campaigns} campanhas finalizadas + revisadas`}
+              >
+                Score {quarter}: <strong>{kpis.score_pct.toFixed(2)}%</strong>
+              </span>
+            )}
           </div>
         </div>
         <Button variant="ghost" icon={UserPlus} onClick={() => setShowAssignPreModal(true)}>

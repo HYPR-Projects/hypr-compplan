@@ -26,6 +26,7 @@ import { findStudyByName, getStudyById } from '../data/studies.js';
 const VERSION_ID = '2026';
 const TAX_RATE = 0.1653;
 const NET_FACTOR = 1 - TAX_RATE; // 0.8347
+export { TAX_RATE, NET_FACTOR };
 const STUDIES_PCT = 0.0030;       // 0.30% — bônus de estudo autorado
 
 /**
@@ -147,14 +148,21 @@ export async function computeCsBonus({ csEmail, startDate, endDate }) {
  */
 async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
   // 1. Campanhas do CS
+  // Inclui is_reviewed (override.reviewed OU legacy.updated_at > attributed_at)
+  // pra que callers (ex.: cálculo de score) possam filtrar só as revisadas.
   const campaigns = await query(
     `SELECT
        c.short_token, c.client_name, c.is_legacy,
        c.total_value, c.features, c.products,
        c.formats, c.audiences, c.studies_used, c.pracas_type,
        c.o2o_display_impressions, c.bonus_o2o_display_impressions,
-       c.ooh_display_impressions, c.bonus_ooh_display_impressions
+       c.ooh_display_impressions, c.bonus_ooh_display_impressions,
+       c.end_date,
+       (IFNULL(o.reviewed, FALSE) = TRUE
+        OR (la.updated_at IS NOT NULL AND la.updated_at > la.attributed_at)) AS is_reviewed
      FROM ${tableRef('commplan_checklists')} c
+     LEFT JOIN ${tableRef('commplan_command_overrides')}   o  ON c.short_token = o.short_token
+     LEFT JOIN ${tableRef('commplan_legacy_assignments')}  la ON c.short_token = la.short_token
      WHERE LOWER(c.cs_email) = @cs
        AND c.start_date >= @s AND c.start_date <= @e`,
     { cs: csEmail, s: startDate, e: endDate }
@@ -316,7 +324,13 @@ async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
     });
 
     total += breakdown.total_brl;
-    byCampaign.push({ short_token: c.short_token, bonus_brl: breakdown.total_brl });
+    byCampaign.push({
+      short_token: c.short_token,
+      bonus_brl: breakdown.total_brl,
+      total_value: Number(c.total_value) || 0,
+      is_reviewed: !!c.is_reviewed,
+      end_date: c.end_date?.value || c.end_date,
+    });
   }
 
   return { total_brl: total, by_campaign: byCampaign };
@@ -433,4 +447,62 @@ async function _computeStudyAuthoredBonus({ csEmail, startDate, endDate }) {
     console.warn('_computeStudyAuthoredBonus:', e.message);
     return 0;
   }
+}
+
+/**
+ * Calcula o "score" de um CS — a % média de bônus que ele fez nas campanhas
+ * FINALIZADAS + REVISADAS do período.
+ *
+ * Definição (acordada com Matheus):
+ *  - Pega as campanhas onde o CS é dono no período
+ *  - Filtra: end_date < hoje (finalizadas) E is_reviewed = TRUE
+ *  - Pra cada uma: pct = (bonus_brl / (total_value × NET_FACTOR)) × 100
+ *  - Score = média simples das pcts
+ *
+ * Retorna { score_pct, n_campaigns } onde:
+ *  - score_pct: número (ex: 0.85 = 0,85%). Null se sem campanhas elegíveis.
+ *  - n_campaigns: quantas entraram no cálculo (zero = score null)
+ *
+ * Não chama BQ — recebe by_campaign já enriquecido do computeCsBonus().
+ *
+ * Aceita também opção { today } pra testabilidade.
+ */
+export function computeCsScore(byCampaign, opts = {}) {
+  if (!Array.isArray(byCampaign) || byCampaign.length === 0) {
+    return { score_pct: null, n_campaigns: 0 };
+  }
+
+  const today = opts.today instanceof Date ? opts.today : new Date();
+  const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
+
+  const eligible = byCampaign.filter(c => {
+    if (!c.is_reviewed) return false;
+    if (!c.end_date) return false;
+    // end_date pode vir como string 'YYYY-MM-DD' ou Date
+    const ed = typeof c.end_date === 'string' ? c.end_date : c.end_date.toISOString().slice(0, 10);
+    return ed < todayStr;
+  });
+
+  if (eligible.length === 0) {
+    return { score_pct: null, n_campaigns: 0 };
+  }
+
+  let sumPct = 0;
+  let validCount = 0;
+  for (const c of eligible) {
+    const liquido = (Number(c.total_value) || 0) * NET_FACTOR;
+    if (liquido <= 0) continue; // proteção contra divisão por zero
+    const pct = (Number(c.bonus_brl) || 0) / liquido * 100;
+    sumPct += pct;
+    validCount += 1;
+  }
+
+  if (validCount === 0) {
+    return { score_pct: null, n_campaigns: 0 };
+  }
+
+  return {
+    score_pct: sumPct / validCount,
+    n_campaigns: validCount,
+  };
 }

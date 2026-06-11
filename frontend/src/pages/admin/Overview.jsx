@@ -128,9 +128,11 @@ export default function AdminOverview() {
           variant="neutral"
         />
         <KpiBig
-          label="Fixo total Q"
-          value={fmt.brl(kpis.fixo_total || 0)}
-          sub={`${kpis.n_cs} CSs × 2 meses`}
+          label="Score médio do time"
+          value={kpis.team_score_pct != null ? `${kpis.team_score_pct.toFixed(2)}%` : '—'}
+          sub={kpis.team_score_pct != null
+            ? `${kpis.team_score_n_cs} CS${kpis.team_score_n_cs === 1 ? '' : 's'} com campanhas revisadas`
+            : 'Sem campanhas finalizadas + revisadas'}
           variant="neutral"
         />
         <KpiBig
@@ -255,6 +257,17 @@ function CsCard({ cs, i, onClick, style }) {
         <div className="admin-cs-card__stat">
           <span className="label">Budget gerenciado</span>
           <span className="mono">{fmt.brl(cs.bruto)}</span>
+        </div>
+        <div className="admin-cs-card__stat">
+          <span className="label">Score</span>
+          <span className="mono">
+            {cs.score_pct != null ? `${cs.score_pct.toFixed(2)}%` : '—'}
+            {cs.score_n_campaigns > 0 && (
+              <span className="admin-cs-card__sub">
+                {' '}· {cs.score_n_campaigns} camp.
+              </span>
+            )}
+          </span>
         </div>
       </div>
 

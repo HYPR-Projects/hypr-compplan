@@ -18,7 +18,7 @@ import { authRequired, adminRequired } from '../../middleware/auth.js';
 import { query, tableRef, bq, DATASET } from '../../lib/bigquery.js';
 import { parseQuarter } from '../../engine/quarter-resolver.js';
 import { computeBonus } from '../../engine/compplan-engine.js';
-import { computeCsBonus } from '../../lib/bonus-calc.js';
+import { computeCsBonus, computeCsScore } from '../../lib/bonus-calc.js';
 import { getSalaryForCs } from '../../data/cs-config.js';
 import { getFloorOverride } from '../../data/floor-overrides.js';
 
@@ -112,12 +112,15 @@ export async function overviewHandler(req, res) {
       // Antes era um cálculo inline simplificado que ignorava adminOverrides,
       // preAssignee e studiesInfo — causando divergência entre painel e overview.
       let totalBonus = 0;
+      let scoreInfo = { score_pct: null, n_campaigns: 0 };
       try {
         const result = await computeCsBonus({
           csEmail: csRow.cs_email,
           startDate, endDate,
         });
         totalBonus = result.total_brl;
+        // Score: média das % nas campanhas FINALIZADAS + REVISADAS
+        scoreInfo = computeCsScore(result.by_campaign || []);
       } catch (e) {
         console.warn(`computeCsBonus(${csRow.cs_email}):`, e.message);
       }
@@ -145,8 +148,17 @@ export async function overviewHandler(req, res) {
         floor_override_note: floorOverride?.note || null,
         bonus_liquido: bonusLiquido,
         hit_floor: hitFloor,
+        // Score: média % nas campanhas finalizadas+revisadas (null se sem dados)
+        score_pct: scoreInfo.score_pct,
+        score_n_campaigns: scoreInfo.n_campaigns,
       };
     }));
+
+    // Score médio do time: média simples dos scores dos CSs que têm score
+    const csWithScore = byCs.filter(c => c.score_pct !== null);
+    const teamScore = csWithScore.length > 0
+      ? csWithScore.reduce((acc, c) => acc + c.score_pct, 0) / csWithScore.length
+      : null;
 
     res.json({
       quarter,
@@ -163,6 +175,9 @@ export async function overviewHandler(req, res) {
         bonus_bruto_total: totalBonusBrutoAll,
         fixo_total: totalFixoAll,
         bonus_liquido_total: totalLiquidoAll,
+        // Score médio do time (null se ninguém tem score)
+        team_score_pct: teamScore,
+        team_score_n_cs: csWithScore.length,
       },
       by_cs: byCs,
     });
