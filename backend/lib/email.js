@@ -30,8 +30,15 @@ function getTransporter() {
   return transporter;
 }
 
-/** Envia e-mail. Falha não quebra a operação principal — apenas loga. */
+/** Envia e-mail. Falha não quebra a operação principal — apenas loga.
+ *  Se EMAIL_PASS não estiver configurado, retorna silenciosamente
+ *  (não loga erro — é estado esperado quando email está desativado).
+ */
 export async function sendEmail({ to, subject, html, text }) {
+  // Sem credencial → desativado, retorna silenciosamente
+  if (!process.env.EMAIL_PASS) {
+    return { ok: false, skipped: true };
+  }
   try {
     const t = getTransporter();
     const info = await t.sendMail({
