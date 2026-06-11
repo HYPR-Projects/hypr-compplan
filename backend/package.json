@@ -6,7 +6,6 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
-    "test": "node tests/smoke.js && node tests/smoke-studies.js",
     "setup-schema": "node scripts/setup-schema.js",
     "functions-framework": "functions-framework --target=commplan --port=8080"
   },

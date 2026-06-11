@@ -147,11 +147,6 @@ export const endpoints = {
   meCampaigns(q)       { return api.get(`/commplan/me/campaigns/${q}`); },
   meHistory()          { return api.get(`/commplan/me/history`); },
 
-  // Evidences (claims)
-  createEvidence(body) { return api.post('/commplan/evidences', body); },
-  updateEvidence(id, body) { return api.put(`/commplan/evidences/${id}`, body); },
-  deleteEvidence(id)   { return api.delete(`/commplan/evidences/${id}`); },
-
   // Studies (CP usa no Command, CS pode ver)
   studiesAvailable(version='2026') { return api.get(`/commplan/studies/available?version=${version}`); },
 
@@ -174,10 +169,6 @@ export const endpoints = {
   adminAssignPending(token, cs_email) {
     return api.post(`/commplan/admin/pending/${token}/assign`, { cs_email });
   },
-  adminQuarter(q)        { return api.get(`/commplan/admin/quarter/${q}`); },
-  computeQuarter(q)      { return api.post(`/commplan/admin/quarter/${q}/compute`); },
-  approveQuarter(q, cs)  { return api.put(`/commplan/admin/quarter/${q}/${encodeURIComponent(cs)}/approve`); },
-  markPaidQuarter(q, cs) { return api.put(`/commplan/admin/quarter/${q}/${encodeURIComponent(cs)}/mark-paid`); },
 
   // Floor override (admin tira meses do piso de um CS)
   getFloorOverride(csEmail, q) {
@@ -194,24 +185,12 @@ export const endpoints = {
       { cs_email, study_id });
   },
 
-  pendingEvidences()     { return api.get('/commplan/admin/evidences/pending'); },
-  approveEvidence(id, notes) { return api.put(`/commplan/admin/evidences/${id}/approve`, { review_notes: notes }); },
-  rejectEvidence(id, notes)  { return api.put(`/commplan/admin/evidences/${id}/reject`,  { review_notes: notes }); },
-
   listMembers(role)      { return api.get(`/commplan/admin/team-members${role ? `?role=${role}&with_salary=true` : '?with_salary=true'}`); },
   getMember(email)       { return api.get(`/commplan/admin/team-members/${encodeURIComponent(email)}`); },
   createMember(body)     { return api.post('/commplan/admin/team-members', body); },
   updateMember(email, body) { return api.put(`/commplan/admin/team-members/${encodeURIComponent(email)}`, body); },
   setMemberRole(email, role) { return api.put(`/commplan/admin/team-members/${encodeURIComponent(email)}/role`, { role }); },
   deactivateMember(email) { return api.delete(`/commplan/admin/team-members/${encodeURIComponent(email)}`); },
-
-  listRules(version='2026') { return api.get(`/commplan/admin/rules?version=${version}`); },
-  updateRule(id, body)   { return api.put(`/commplan/admin/rules/${id}`, body); },
-  createRule(body)       { return api.post('/commplan/admin/rules', body); },
-
-  listAbsClients()       { return api.get('/commplan/admin/abs-clients'); },
-  addAbsClient(body)     { return api.post('/commplan/admin/abs-clients', body); },
-  removeAbsClient(id)    { return api.delete(`/commplan/admin/abs-clients/${encodeURIComponent(id)}`); },
 
   listOverExceptions()        { return api.get('/commplan/admin/over-exceptions'); },
   addOverException(body)      { return api.post('/commplan/admin/over-exceptions', body); },
@@ -251,25 +230,7 @@ export const endpoints = {
     return api.delete(`/commplan/me/campaign/${token}/assign-pre${q}`);
   },
 
-  listMentorships()      { return api.get('/commplan/admin/mentorships'); },
-  createMentorship(body) { return api.post('/commplan/admin/mentorships', body); },
-  endMentorship(id)      { return api.delete(`/commplan/admin/mentorships/${id}`); },
-
   listStudies(version='2026') { return api.get(`/commplan/admin/studies?version=${version}`); },
   createStudy(body)      { return api.post('/commplan/admin/studies', body); },
   updateStudy(id, body)  { return api.put(`/commplan/admin/studies/${id}`, body); },
-
-  audit(filters={})      {
-    const qs = new URLSearchParams(filters).toString();
-    return api.get(`/commplan/admin/audit${qs ? '?' + qs : ''}`);
-  },
-
-  // Legacy assignments (campanhas pré-Command)
-  legacyPending()        { return api.get('/commplan/admin/legacy/pending'); },
-  legacyAll()            { return api.get('/commplan/admin/legacy/all'); },
-  legacyAssign(body)     { return api.post('/commplan/admin/legacy/assign', body); },
-  legacyAssignBatch(assignments) {
-    return api.post('/commplan/admin/legacy/assign-batch', { assignments });
-  },
-  legacyUnassign(token)  { return api.delete(`/commplan/admin/legacy/${encodeURIComponent(token)}`); },
 };

@@ -7,7 +7,6 @@ import Button from '../../components/ui/Button.jsx';
 import { Input, Textarea } from '../../components/ui/Input.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { endpoints, auth } from '../../lib/api.js';
-import { fmt } from '../../lib/format.js';
 import './Studies.css';
 
 const VERSION = '2026';

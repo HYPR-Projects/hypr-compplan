@@ -18,21 +18,13 @@ import cors from 'cors';
 
 import { router as authRouter } from './routes/auth.js';
 import { router as meRouter } from './routes/me.js';
-import { router as evidencesRouter } from './routes/evidences.js';
 import { router as studiesPublicRouter } from './routes/studies-public.js';
 
 import { router as adminCsConfig } from './routes/admin/cs-config.js';
-import { router as adminRules } from './routes/admin/rules.js';
-import { router as adminQuarter } from './routes/admin/quarter.js';
-import { router as adminMentorships } from './routes/admin/mentorships.js';
-import { router as adminAbsClients } from './routes/admin/abs-clients.js';
 import { router as adminOverExceptions } from './routes/admin/over-exceptions.js';
 import { router as adminCampaignOverrides } from './routes/admin/campaign-overrides.js';
-import { router as adminEvidencesReview } from './routes/admin/evidences-review.js';
-import { router as adminAudit } from './routes/admin/audit.js';
 import { router as adminStudies } from './routes/admin/studies.js';
 import { router as adminTeamMembers } from './routes/admin/team-members.js';
-import { router as adminLegacyAssignments } from './routes/admin/legacy-assignments.js';
 import { router as adminOverview } from './routes/admin/overview.js';
 
 const app = express();
@@ -69,22 +61,14 @@ app.use('/auth', authRouter);
 
 // ─── CS-side ─────────────────────────────────────────────────────────────
 app.use('/commplan/me', meRouter);
-app.use('/commplan/evidences', evidencesRouter);
 app.use('/commplan/studies', studiesPublicRouter);
 
 // ─── Admin-side ──────────────────────────────────────────────────────────
 app.use('/commplan/admin/cs-config', adminCsConfig);
-app.use('/commplan/admin/rules', adminRules);
-app.use('/commplan/admin/quarter', adminQuarter);
-app.use('/commplan/admin/mentorships', adminMentorships);
-app.use('/commplan/admin/abs-clients', adminAbsClients);
 app.use('/commplan/admin/over-exceptions', adminOverExceptions);
 app.use('/commplan/admin', adminCampaignOverrides);
-app.use('/commplan/admin/evidences', adminEvidencesReview);
-app.use('/commplan/admin/audit', adminAudit);
 app.use('/commplan/admin/studies', adminStudies);
 app.use('/commplan/admin/team-members', adminTeamMembers);
-app.use('/commplan/admin/legacy', adminLegacyAssignments);
 app.use('/commplan/admin', adminOverview);
 
 // ─── Error handler ───────────────────────────────────────────────────────

@@ -246,15 +246,16 @@ router.put('/review-requests/:token/handled', async (req, res) => {
       delete mc.__review_handled_by;
     }
 
-    // Persiste
-    const mcJson = JSON.stringify(mc).replace(/'/g, "\\'");
+    // Persiste — usa parameterized query pra evitar problemas de escape
+    // com caracteres especiais no JSON (aspas, quebras de linha, etc).
+    const mcJson = JSON.stringify(mc);
     await query(
       `UPDATE ${tableRef(tableName)}
-       SET manual_checks = '${mcJson}',
+       SET manual_checks = @mc,
            updated_at = CURRENT_TIMESTAMP(),
            updated_by = @by
        WHERE short_token = @t`,
-      { t: token, by: adminEmail }
+      { t: token, by: adminEmail, mc: mcJson }
     );
 
     await logAudit({

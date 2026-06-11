@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Plus, Trash2, Shield, Info, AlertCircle } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
-import { Badge } from '../../components/ui/Badge.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { Input, Textarea } from '../../components/ui/Input.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
