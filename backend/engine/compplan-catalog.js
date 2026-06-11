@@ -91,9 +91,11 @@ export const COMPPLAN_CATALOG = {
   optimization: {
     label: 'Otimizações',
     items: [
-      // Apenas 1 das duas: com ou sem ABS. Dependem das métricas.
+      // Display (campanhas com Display, inclui Display+Video). Apenas 1 das duas paga.
       { id: 'opt_with_abs',    label: 'Com ABS — Over ≤ 25% E eCPM ≤ R$ 1,50 E CTR ≥ 0,50%', pct: 0.0030, source: 'metrics', constraint: 'oneof_group:opt', help: 'Calculado automaticamente após a campanha fechar.' },
       { id: 'opt_without_abs', label: 'Sem ABS — Over ≤ 25% E eCPM ≤ R$ 0,70 E CTR ≥ 0,70%', pct: 0.0030, source: 'metrics', constraint: 'oneof_group:opt', help: 'Calculado automaticamente após a campanha fechar.' },
+      // Vídeo (SÓ campanhas exclusivamente de vídeo, sem display)
+      { id: 'opt_video',       label: 'Vídeo — Tech Cost ≤ 3% E VTR ≥ 85%',                pct: 0.0030, source: 'metrics', constraint: 'oneof_group:opt', help: 'Calculado automaticamente após a campanha fechar. Aparece apenas em campanhas exclusivamente de vídeo.' },
     ],
   },
 

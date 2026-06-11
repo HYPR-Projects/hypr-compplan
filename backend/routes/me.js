@@ -168,7 +168,7 @@ router.get('/studies-catalog', async (req, res) => {
 // Agrega TODAS as linhas da campanha em campaign_results, filtra display
 // pro cálculo de over.
 // ─────────────────────────────────────────────────────────────────────
-async function fetchPerformanceMetrics(shortToken, clientName = null) {
+async function fetchPerformanceMetrics(shortToken, clientName = null, totalValue = 0) {
   try {
     // 1. Busca métricas brutas da campanha em prod_assets.unified_daily_performance_metrics (US).
     //
@@ -185,6 +185,10 @@ async function fetchPerformanceMetrics(shortToken, clientName = null) {
          SUM(IF(LOWER(media_type) = 'display', viewable_impressions, 0))  AS display_viewable,
          SUM(IF(LOWER(media_type) = 'display', clicks, 0))                AS display_clicks,
          SUM(IF(LOWER(media_type) = 'display', total_cost, 0))            AS display_cost,
+         -- Video (pra otimização de vídeo: VTR + Tech Cost)
+         SUM(IF(LOWER(media_type) = 'video',   video_starts, 0))            AS video_starts,
+         SUM(IF(LOWER(media_type) = 'video',   video_view_100_complete, 0)) AS video_completions,
+         SUM(IF(LOWER(media_type) = 'video',   total_cost, 0))              AS video_cost,
          -- Totais (display + video) pra contexto
          SUM(impressions)            AS total_impressions,
          SUM(viewable_impressions)   AS total_viewable,
@@ -222,6 +226,10 @@ async function fetchPerformanceMetrics(shortToken, clientName = null) {
     const displayViewable    = Number(perfRow.display_viewable) || 0;
     const displayClicks      = Number(perfRow.display_clicks) || 0;
     const displayCost        = Number(perfRow.display_cost) || 0;
+    const videoStarts        = Number(perfRow.video_starts) || 0;
+    const videoCompletions   = Number(perfRow.video_completions) || 0;
+    const videoCost          = Number(perfRow.video_cost) || 0;
+    const totalValueNum      = Number(totalValue) || 0;
 
     // Exceções de OVER (Pepsico, Amazon, ...) usam impressões TOTAIS no numerador.
     // Só o OVER muda. eCPM, CTR e todos os limites continuam idênticos pra esses clientes.
@@ -241,6 +249,15 @@ async function fetchPerformanceMetrics(shortToken, clientName = null) {
       display_clicks: displayClicks,
       display_cost: displayCost,
       display_contracted: displayContracted,
+
+      // Métricas que entram nas regras (video — pra item opt_video em campanhas só de vídeo)
+      // VTR = (views 100% / starts) * 100
+      // Tech Cost = (custo total das lines de video / valor total da campanha) * 100
+      video_starts: videoStarts,
+      video_completions: videoCompletions,
+      video_cost: videoCost,
+      video_vtr_pct: videoStarts > 0 ? (videoCompletions / videoStarts) * 100 : 0,
+      video_tech_cost_pct: totalValueNum > 0 ? (videoCost / totalValueNum) * 100 : 0,
 
       // Totais (display + video) — só pra contexto
       total_impressions: Number(perfRow.total_impressions) || 0,
@@ -773,7 +790,7 @@ router.get('/campaign/:token', async (req, res) => {
     // Pega manual_checks e métricas em paralelo
     const [mcData, metrics] = await Promise.all([
       fetchManualChecks(campaign.short_token, isLegacy),
-      fetchPerformanceMetrics(campaign.short_token, campaign.client_name),
+      fetchPerformanceMetrics(campaign.short_token, campaign.client_name, campaign.total_value),
     ]);
     const { manualChecks, adminOverrides, adminOverridesBy, adminOverridesAt, preAssignee, preAssignedAt, studyAssignee, studyIdOverride } = mcData;
 
@@ -1019,7 +1036,7 @@ router.put('/campaign/:token', async (req, res) => {
        WHERE c.short_token = @t LIMIT 1`,
       { t: token }
     );
-    const metrics = await fetchPerformanceMetrics(token, updated?.client_name);
+    const metrics = await fetchPerformanceMetrics(token, updated?.client_name, updated?.total_value);
     // Re-busca admin_overrides + pre_assignee (não mudam pelo PUT, mas garante consistência)
     const post = await fetchManualChecks(token, !!campaign.is_legacy);
     const studiesInfoPost = await resolveStudiesInfo(updated, post.studyAssignee, post.studyIdOverride);

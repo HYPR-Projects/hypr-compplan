@@ -16,8 +16,7 @@
   background: var(--surface-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease, opacity 200ms ease;
   overflow: hidden;
 }
 
@@ -25,6 +24,28 @@
   border-color: var(--accent-yellow, #f5a524);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* Estado "visto/lido": card vira cinza neutro */
+.review-card--handled {
+  opacity: 0.55;
+}
+.review-card--handled .review-card__stripe {
+  background: var(--text-tertiary, #94a3b8);
+}
+.review-card--handled:hover {
+  opacity: 0.85;
+  border-color: var(--text-tertiary, #94a3b8);
+}
+.review-card--handled:hover .review-card__arrow {
+  color: var(--text-tertiary, #94a3b8);
+}
+.review-card--handled .review-card__notes {
+  background: rgba(148, 163, 184, 0.05);
+  border-left-color: var(--text-tertiary, #94a3b8);
+}
+.review-card--handled .review-card__notes > svg {
+  color: var(--text-tertiary, #94a3b8);
 }
 
 .review-card__stripe {
@@ -106,4 +127,48 @@
 .review-card:hover .review-card__arrow {
   color: var(--accent-yellow, #f5a524);
   transform: translateX(2px);
+}
+
+/* Botão de tick — marcar/desmarcar como visto */
+.review-card__tick {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-right: 6px;
+  padding: 0;
+  background: transparent;
+  border: 1.5px solid var(--border-subtle);
+  border-radius: 50%;
+  color: var(--text-tertiary, #94a3b8);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+.review-card__tick:hover:not(:disabled) {
+  border-color: var(--accent-green, #16a34a);
+  color: var(--accent-green, #16a34a);
+  background: rgba(22, 163, 74, 0.08);
+  transform: scale(1.05);
+}
+
+.review-card__tick:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+/* Quando já está marcado: verde preenchido */
+.review-card__tick.is-handled {
+  background: var(--accent-green, #16a34a);
+  border-color: var(--accent-green, #16a34a);
+  color: white;
+}
+
+.review-card__tick.is-handled:hover:not(:disabled) {
+  background: var(--accent-red, #f43f5e);
+  border-color: var(--accent-red, #f43f5e);
+  color: white;
 }

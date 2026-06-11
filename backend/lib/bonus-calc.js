@@ -205,7 +205,7 @@ async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
     console.warn('_computeOwnCampaignsBonus overlays:', e.message);
   }
 
-  // 3. Batch: métricas
+  // 3. Batch: métricas (display + video)
   let metricsByToken = {};
   try {
     const [perfRows, contractedRows] = await Promise.all([
@@ -214,7 +214,11 @@ async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
            SUM(IF(LOWER(media_type) = 'display', impressions, 0))           AS display_imps,
            SUM(IF(LOWER(media_type) = 'display', viewable_impressions, 0))  AS display_viewable,
            SUM(IF(LOWER(media_type) = 'display', clicks, 0))                AS display_clicks,
-           SUM(IF(LOWER(media_type) = 'display', total_cost, 0))            AS display_cost
+           SUM(IF(LOWER(media_type) = 'display', total_cost, 0))            AS display_cost,
+           -- Video (pra otimização de vídeo: VTR + Tech Cost)
+           SUM(IF(LOWER(media_type) = 'video',   video_starts, 0))            AS video_starts,
+           SUM(IF(LOWER(media_type) = 'video',   video_view_100_complete, 0)) AS video_completions,
+           SUM(IF(LOWER(media_type) = 'video',   total_cost, 0))              AS video_cost
          FROM \`site-hypr.prod_assets.unified_daily_performance_metrics\`
          WHERE short_token IN UNNEST(@toks)
            AND LOWER(IFNULL(line_name, '')) NOT LIKE '%survey%'
@@ -239,7 +243,11 @@ async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
     for (const r of contractedRows) contractedMap[r.short_token] = Number(r.display_contracted) || 0;
 
     const clientByToken = {};
-    for (const c of campaigns) clientByToken[c.short_token] = c.client_name;
+    const totalValueByToken = {};
+    for (const c of campaigns) {
+      clientByToken[c.short_token] = c.client_name;
+      totalValueByToken[c.short_token] = Number(c.total_value) || 0;
+    }
 
     for (const r of perfRows) {
       const displayContracted = contractedMap[r.short_token] || 0;
@@ -247,11 +255,16 @@ async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
       const displayViewable = Number(r.display_viewable) || 0;
       const displayClicks = Number(r.display_clicks) || 0;
       const displayCost = Number(r.display_cost) || 0;
+      const videoStarts = Number(r.video_starts) || 0;
+      const videoCompletions = Number(r.video_completions) || 0;
+      const videoCost = Number(r.video_cost) || 0;
+      const totalValue = totalValueByToken[r.short_token] || 0;
 
       const usesTotalImps = await isOverException(clientByToken[r.short_token]);
       const overNumerator = usesTotalImps ? displayImps : displayViewable;
 
       metricsByToken[r.short_token] = {
+        // Display
         ecpm: displayImps > 0 ? (displayCost / displayImps) * 1000 : 0,
         ctr: displayViewable > 0 ? displayClicks / displayViewable : 0,
         over_percent: displayContracted > 0 ? ((overNumerator / displayContracted) - 1) * 100 : 0,
@@ -262,6 +275,12 @@ async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
         display_cost: displayCost,
         display_contracted: displayContracted,
         creative_fee_estimate: null,
+        // Video (pra item opt_video)
+        video_starts: videoStarts,
+        video_completions: videoCompletions,
+        video_cost: videoCost,
+        video_vtr_pct: videoStarts > 0 ? (videoCompletions / videoStarts) * 100 : 0,
+        video_tech_cost_pct: totalValue > 0 ? (videoCost / totalValue) * 100 : 0,
       };
     }
   } catch (e) {

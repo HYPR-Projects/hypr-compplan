@@ -343,6 +343,16 @@ export default function CsCampaignDetail() {
                   metrics={campaign.metrics}
                   isABS={effectiveIsAbs}
                   onAbsChange={(newAbs) => setManualChecks(prev => ({ ...prev, __is_abs: newAbs }))}
+                  isVideoOnly={(() => {
+                    // Detecta campanha exclusivamente de vídeo (sem display, sem OOH).
+                    // Em campanhas só de vídeo, o toggle Com ABS / Sem ABS NÃO aparece
+                    // — porque o item de otimização é opt_video (Tech Cost / VTR), não display.
+                    const fmts = Array.isArray(campaign.formats) ? campaign.formats : [];
+                    const hasVideo = fmts.some(f => /video/i.test(f));
+                    const hasDisplay = fmts.some(f => /display/i.test(f));
+                    const hasOoh = fmts.some(f => /ooh/i.test(f));
+                    return hasVideo && !hasDisplay && !hasOoh;
+                  })()}
                   isAdmin={isAdmin}
                   onAdminOverride={handleAdminOverride}
                   onSetupForce={handleSetupForce}
@@ -438,7 +448,7 @@ export default function CsCampaignDetail() {
   );
 }
 
-function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, onEvidenceChange, metrics, isABS, onAbsChange, isAdmin, onAdminOverride, onSetupForce, teamList, studiesCatalog, currentStudyAssignee, currentStudyId, onAssignStudy, preAssigneeInfo }) {
+function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, onEvidenceChange, metrics, isABS, onAbsChange, isVideoOnly, isAdmin, onAdminOverride, onSetupForce, teamList, studiesCatalog, currentStudyAssignee, currentStudyId, onAssignStudy, preAssigneeInfo }) {
   const earnedCount = cat.items.filter(i => isEffectivelyEarned(i, manualChecks)).length;
   const isOptimization = catKey === 'optimization';
 
@@ -546,7 +556,7 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
               </div>
             </div>
           )}
-          {isOptimization && onAbsChange && (
+          {isOptimization && onAbsChange && !isVideoOnly && (
             <div className="abs-toggle">
               <div className="abs-toggle__label">
                 <span>Esta campanha é</span>
@@ -571,6 +581,16 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
                 {isABS
                   ? 'Limites: eCPM ≤ R$ 1,50 · CTR ≥ 0,5%'
                   : 'Limites: eCPM ≤ R$ 0,70 · CTR ≥ 0,7%'}
+              </div>
+            </div>
+          )}
+          {isOptimization && isVideoOnly && (
+            <div className="abs-toggle">
+              <div className="abs-toggle__label">
+                <span>Campanha exclusivamente de vídeo</span>
+              </div>
+              <div className="abs-toggle__hint">
+                Limites: Tech Cost ≤ 3% · VTR ≥ 85%
               </div>
             </div>
           )}
@@ -973,6 +993,24 @@ function formatMetricInfo(item, metrics, isABS) {
   if (!metrics) {
     return 'Aguardando dados de performance (calcula automaticamente após campanha fechar).';
   }
+
+  // Item de vídeo (campanhas só de vídeo) — mostra Tech Cost + VTR
+  if (item.id === 'opt_video') {
+    const vtr = Number(metrics.video_vtr_pct) || 0;
+    const techCost = Number(metrics.video_tech_cost_pct) || 0;
+    const starts = Number(metrics.video_starts) || 0;
+
+    if (starts === 0) {
+      return 'Aguardando dados de vídeo (sem starts registrados ainda).';
+    }
+
+    const techOK = techCost <= 3 ? '✓' : '✗';
+    const vtrOK = vtr >= 85 ? '✓' : '✗';
+
+    return `Tech Cost: ${techCost.toFixed(2)}% ${techOK} (limite 3%) · VTR: ${vtr.toFixed(1)}% ${vtrOK} (mín 85%)`;
+  }
+
+  // Items de display (opt_with_abs, opt_without_abs)
   const over = Number(metrics.over_percent) || 0;
   const ecpm = Number(metrics.ecpm) || 0;
   const ctr = (Number(metrics.ctr) * 100).toFixed(2);
@@ -1043,10 +1081,22 @@ function recomputeLocally(serverBreakdown, manualChecks, metrics, effectiveIsAbs
 }
 
 // Espelho local da função do backend pra Otimizações
-function computeOptimizationEarned(metrics, isABS) {
+function computeOptimizationEarned(metrics, isABS, isVideoOnly = false) {
   const earned = new Set();
   if (!metrics) return earned;
 
+  // Campanha só de vídeo → avalia Tech Cost + VTR
+  if (isVideoOnly) {
+    const vtr = Number(metrics.video_vtr_pct) || 0;
+    const techCost = Number(metrics.video_tech_cost_pct);
+    const hasData = Number(metrics.video_starts) > 0 && (techCost !== null && techCost !== undefined);
+    if (hasData && techCost <= 3 && vtr >= 85) {
+      earned.add('opt_video');
+    }
+    return earned;
+  }
+
+  // Campanha com display
   const over = Number(metrics.over_percent) || 0;
   const ecpm = Number(metrics.ecpm) || 0;
   const ctr = Number(metrics.ctr) || 0;

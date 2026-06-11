@@ -223,6 +223,9 @@ export const endpoints = {
   adminReviewRequests() {
     return api.get('/commplan/admin/review-requests');
   },
+  adminReviewRequestSetHandled(token, handled) {
+    return api.put(`/commplan/admin/review-requests/${token}/handled`, { handled });
+  },
 
   meReplicateSources(token, opts = {}) {
     const q = opts.as ? `?as=${encodeURIComponent(opts.as)}` : '';

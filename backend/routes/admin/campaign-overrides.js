@@ -164,9 +164,13 @@ router.get('/review-requests', async (req, res) => {
 
     const all = [...overrideRows, ...legacyRows].map(r => {
       let notes = '';
+      let handledAt = null;
+      let handledBy = null;
       try {
         const mc = r.manual_checks ? JSON.parse(r.manual_checks) : {};
         notes = mc.__review_notes || '';
+        handledAt = mc.__review_handled_at || null;
+        handledBy = mc.__review_handled_by || null;
       } catch (_) {}
       return {
         short_token: r.short_token,
@@ -180,12 +184,96 @@ router.get('/review-requests', async (req, res) => {
         requested_by: r.updated_by,
         requested_at: r.updated_at?.value || r.updated_at,
         notes,
+        handled_at: handledAt,
+        handled_by: handledBy,
       };
     });
 
     res.json({ count: all.length, items: all });
   } catch (err) {
     console.error('GET /admin/review-requests error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** PUT /admin/review-requests/:token/handled
+ *  Body: { handled: bool }
+ *
+ *  Marca/desmarca um pedido de análise como "visto/lido" pelo admin.
+ *  - handled=true  → grava manual_checks.__review_handled_at + __review_handled_by
+ *  - handled=false → remove esses campos
+ *
+ *  IMPORTANTE: NÃO mexe em __review_requested. O pedido continua existindo;
+ *  só sinaliza que o admin já passou os olhos. Card no frontend vira cinza.
+ */
+router.put('/review-requests/:token/handled', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const handled = req.body?.handled === true;
+    const adminEmail = (req.user?.email || 'system').toLowerCase();
+
+    // Descobre se a campanha está no override (não-legacy) ou no legacy
+    const [meta] = await query(
+      `SELECT is_legacy FROM ${tableRef('commplan_checklists')}
+       WHERE short_token = @t LIMIT 1`,
+      { t: token }
+    );
+    if (!meta) {
+      return res.status(404).json({ error: 'campanha não encontrada' });
+    }
+
+    const tableName = meta.is_legacy ? 'commplan_legacy_assignments' : 'commplan_command_overrides';
+
+    // Lê o manual_checks atual
+    const [existing] = await query(
+      `SELECT manual_checks FROM ${tableRef(tableName)}
+       WHERE short_token = @t LIMIT 1`,
+      { t: token }
+    );
+    if (!existing) {
+      return res.status(404).json({ error: 'pedido de análise não encontrado pra essa campanha' });
+    }
+
+    let mc = {};
+    try { mc = existing.manual_checks ? JSON.parse(existing.manual_checks) : {}; } catch (_) {}
+
+    // Aplica a mudança
+    if (handled) {
+      mc.__review_handled_at = new Date().toISOString();
+      mc.__review_handled_by = adminEmail;
+    } else {
+      delete mc.__review_handled_at;
+      delete mc.__review_handled_by;
+    }
+
+    // Persiste
+    const mcJson = JSON.stringify(mc).replace(/'/g, "\\'");
+    await query(
+      `UPDATE ${tableRef(tableName)}
+       SET manual_checks = '${mcJson}',
+           updated_at = CURRENT_TIMESTAMP(),
+           updated_by = @by
+       WHERE short_token = @t`,
+      { t: token, by: adminEmail }
+    );
+
+    await logAudit({
+      entityType: 'review_request',
+      entityId: token,
+      action: handled ? 'mark_handled' : 'unmark_handled',
+      changedBy: adminEmail,
+      after: { handled, at: mc.__review_handled_at || null },
+    });
+
+    res.json({
+      ok: true,
+      short_token: token,
+      handled,
+      handled_at: mc.__review_handled_at || null,
+      handled_by: mc.__review_handled_by || null,
+    });
+  } catch (err) {
+    console.error('PUT /admin/review-requests/:token/handled error:', err);
     res.status(500).json({ error: err.message });
   }
 });

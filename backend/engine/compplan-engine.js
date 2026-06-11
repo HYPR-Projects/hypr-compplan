@@ -90,13 +90,65 @@ function inferAutoItems(campaign, opts = {}) {
 }
 
 /**
+ * Detecta se uma campanha é EXCLUSIVAMENTE de vídeo (sem display, sem OOH).
+ * Usa o campo `formats` da commplan_checklists, que é ARRAY<STRING>.
+ *
+ * Valores reais no BQ (verificado em prod):
+ *   'Display'                → não é só video
+ *   'Display,Video'          → não é só video (tem display)
+ *   'Video,Display'          → não é só video (tem display)
+ *   'Video'                  → É só video ✅
+ */
+function isVideoOnlyCampaign(campaign) {
+  const formats = Array.isArray(campaign.formats) ? campaign.formats : [];
+  if (formats.length === 0) return false;
+  const hasVideo = formats.some(f => /video/i.test(f));
+  const hasDisplay = formats.some(f => /display/i.test(f));
+  const hasOoh = formats.some(f => /ooh/i.test(f));
+  return hasVideo && !hasDisplay && !hasOoh;
+}
+
+/**
  * Items dependentes de métricas (Otimizações).
+ *
+ * Regras:
+ *   - Campanha SÓ Display ou Display+Video → avalia opt_with_abs / opt_without_abs (display)
+ *   - Campanha SÓ Video                    → avalia opt_video (Tech Cost / VTR)
+ *
+ * Tolerância "em andamento": se a campanha ainda está rodando (ou encerrou
+ * há menos de 1 dia) E não tem dado de métrica, o item conta como aprovado
+ * (mesma lógica do Setup). Evita penalizar campanha que mal começou.
  */
 function inferMetricItems(campaign, metrics, manualChecks = {}) {
   const earned = new Set();
+  const videoOnly = isVideoOnlyCampaign(campaign);
+
+  if (videoOnly) {
+    // ── Campanha SÓ video → avalia Tech Cost + VTR ─────────────────────
+    const vtr = Number(metrics?.video_vtr_pct) || 0;
+    const techCost = Number(metrics?.video_tech_cost_pct);
+    const hasStarts = Number(metrics?.video_starts) > 0;
+    const hasCost = Number(metrics?.video_cost) >= 0 && metrics?.video_cost !== null && metrics?.video_cost !== undefined;
+
+    // "Em andamento": sem dado e campanha rodando OU encerrou há < 1 dia.
+    // Nesses casos, dá o item por aprovado (não penaliza início de campanha).
+    if (!hasStarts || !hasCost) {
+      if (isCampaignStillInGracePeriod(campaign)) {
+        earned.add('opt_video');
+      }
+      // se já passou da grace period e ainda não tem dado, NÃO paga.
+      return earned;
+    }
+
+    if (techCost <= 3 && vtr >= 85) {
+      earned.add('opt_video');
+    }
+    return earned;
+  }
+
+  // ── Campanha com display (sozinho ou com video) → avalia display ───
   if (!metrics) return earned;
 
-  // is_abs: prioriza override manual do CS. Se não, fallback pro campo do checklist.
   const hasOverride = Object.prototype.hasOwnProperty.call(manualChecks, '__is_abs');
   const isABS = hasOverride ? !!manualChecks.__is_abs : !!campaign.is_abs;
 
@@ -115,6 +167,21 @@ function inferMetricItems(campaign, metrics, manualChecks = {}) {
   }
 
   return earned;
+}
+
+/**
+ * Retorna TRUE se a campanha ainda está em "grace period" (rodando ou
+ * encerrou há menos de 1 dia). Usado pra tolerar falta de dados em
+ * itens de métricas (mesma lógica do Setup pending).
+ */
+function isCampaignStillInGracePeriod(campaign) {
+  const endRaw = campaign?.end_date;
+  const endStr = (endRaw && typeof endRaw === 'object' && 'value' in endRaw) ? endRaw.value : endRaw;
+  if (!endStr) return false;
+  const endDate = new Date(`${endStr}T23:59:59Z`);
+  const now = new Date();
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+  return (now.getTime() - endDate.getTime() < ONE_DAY_MS);
 }
 
 /**
@@ -316,7 +383,18 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
     // Pré Campanha: se atribuída a outro CS, items aparecem mas value_brl=0 pro dono
     const isPreCampaignBlocked = catKey === 'pre_campaign' && !preGoesToOwner;
 
-    const items = cat.items.map(item => {
+    // Filtra items relevantes pra esta campanha. Hoje só Otimizações tem
+    // variação por tipo: campanhas só de vídeo veem apenas opt_video;
+    // campanhas com display (sozinho ou +video) veem apenas opt_with_abs / opt_without_abs.
+    const filteredItems = cat.items.filter(item => {
+      if (catKey !== 'optimization') return true;
+      const videoOnly = isVideoOnlyCampaign(campaign);
+      if (item.id === 'opt_video') return videoOnly;
+      // opt_with_abs / opt_without_abs: só pra campanhas com display
+      return !videoOnly;
+    });
+
+    const items = filteredItems.map(item => {
       const wasEarned = earned.has(item.id);
 
       // ex_estudos: bônus vai pro AUTOR. Se o csOwner observador NÃO é o autor de algum
