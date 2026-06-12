@@ -985,6 +985,12 @@ router.get('/campaign/:token', async (req, res) => {
         ecpm: Number(metrics.ecpm) || 0,
         ctr: Number(metrics.ctr) || 0,
         over_percent: Number(metrics.over_percent) || 0,
+        // Campos de vídeo (campanhas só de vídeo precisam pra UI calcular Tech Cost + VTR)
+        video_starts: Number(metrics.video_starts) || 0,
+        video_completions: Number(metrics.video_completions) || 0,
+        video_cost: Number(metrics.video_cost) || 0,
+        video_vtr_pct: Number(metrics.video_vtr_pct) || 0,
+        video_tech_cost_pct: Number(metrics.video_tech_cost_pct) || 0,
       } : null,
 
       // Breakdown completo
