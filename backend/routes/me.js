@@ -464,7 +464,11 @@ router.get('/dashboard/:q', async (req, res) => {
                SUM(IF(LOWER(media_type) = 'display', impressions, 0))           AS display_imps,
                SUM(IF(LOWER(media_type) = 'display', viewable_impressions, 0))  AS display_viewable,
                SUM(IF(LOWER(media_type) = 'display', clicks, 0))                AS display_clicks,
-               SUM(IF(LOWER(media_type) = 'display', total_cost, 0))            AS display_cost
+               SUM(IF(LOWER(media_type) = 'display', total_cost, 0))            AS display_cost,
+               -- Video (pra otimização de vídeo: VTR + Tech Cost)
+               SUM(IF(LOWER(media_type) = 'video',   video_starts, 0))            AS video_starts,
+               SUM(IF(LOWER(media_type) = 'video',   video_view_100_complete, 0)) AS video_completions,
+               SUM(IF(LOWER(media_type) = 'video',   total_cost, 0))              AS video_cost
              FROM \`site-hypr.prod_assets.unified_daily_performance_metrics\`
              WHERE short_token IN UNNEST(@toks)
                AND LOWER(IFNULL(line_name, '')) NOT LIKE '%survey%'
@@ -491,9 +495,13 @@ router.get('/dashboard/:q', async (req, res) => {
         const contractedMap = {};
         for (const r of contractedRows) contractedMap[r.short_token] = Number(r.display_contracted) || 0;
 
-        // Mapa de client_name por token pra checar ABS
+        // Mapa de client_name + total_value por token (pra ABS e tech_cost)
         const clientByToken = {};
-        for (const c of campaigns) clientByToken[c.short_token] = c.client_name;
+        const totalValueByToken = {};
+        for (const c of campaigns) {
+          clientByToken[c.short_token] = c.client_name;
+          totalValueByToken[c.short_token] = Number(c.total_value) || 0;
+        }
 
         for (const r of perfRows) {
           const displayContracted = contractedMap[r.short_token] || 0;
@@ -501,6 +509,10 @@ router.get('/dashboard/:q', async (req, res) => {
           const displayViewable = Number(r.display_viewable) || 0;
           const displayClicks = Number(r.display_clicks) || 0;
           const displayCost = Number(r.display_cost) || 0;
+          const videoStarts = Number(r.video_starts) || 0;
+          const videoCompletions = Number(r.video_completions) || 0;
+          const videoCost = Number(r.video_cost) || 0;
+          const totalValue = totalValueByToken[r.short_token] || 0;
 
           // Exceções de OVER: usa impressões totais no numerador (só OVER muda)
           const usesTotalImps = await isOverException(clientByToken[r.short_token]);
@@ -516,6 +528,12 @@ router.get('/dashboard/:q', async (req, res) => {
             display_clicks: displayClicks,
             display_cost: displayCost,
             display_contracted: displayContracted,
+            // Métricas de vídeo (pra opt_video em campanhas só de vídeo)
+            video_starts: videoStarts,
+            video_completions: videoCompletions,
+            video_cost: videoCost,
+            video_vtr_pct: videoStarts > 0 ? (videoCompletions / videoStarts) * 100 : 0,
+            video_tech_cost_pct: totalValue > 0 ? (videoCost / totalValue) * 100 : 0,
             creative_fee_estimate: null,
           };
         }
@@ -774,6 +792,8 @@ router.get('/dashboard/:q', async (req, res) => {
     }
 
     // Score: média % nas campanhas FINALIZADAS + REVISADAS
+    // bonus_pct vem em escala 0-1 (ex: 0.022 = 2.20%), multiplica por 100
+    // pra ficar em escala 0-100 igual computeCsScore() do admin.
     const todayStr = new Date().toISOString().slice(0, 10);
     const scoreEligible = items.filter(i =>
       i.reviewed
@@ -782,7 +802,7 @@ router.get('/dashboard/:q', async (req, res) => {
       && i.liquido > 0
     );
     const scorePct = scoreEligible.length > 0
-      ? scoreEligible.reduce((acc, i) => acc + (i.bonus_pct || 0), 0) / scoreEligible.length
+      ? scoreEligible.reduce((acc, i) => acc + (i.bonus_pct || 0) * 100, 0) / scoreEligible.length
       : null;
 
     res.json({
