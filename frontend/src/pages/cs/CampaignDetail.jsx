@@ -1078,8 +1078,13 @@ function recomputeLocally(serverBreakdown, manualChecks, metrics, effectiveIsAbs
   const liquido = serverBreakdown.liquido;
   let totalPct = 0;
 
-  // Recalcula items de Otimização baseado no is_abs efetivo
-  const optMetricEarned = computeOptimizationEarned(metrics, effectiveIsAbs);
+  // Detecta se é campanha só vídeo olhando se existe item opt_video no breakdown.
+  // O backend só inclui opt_video se isVideoOnlyCampaign() retorna true.
+  const optCat = serverBreakdown.by_category?.optimization;
+  const isVideoOnly = !!(optCat?.items?.some(i => i.id === 'opt_video'));
+
+  // Recalcula items de Otimização baseado no is_abs efetivo + tipo da campanha
+  const optMetricEarned = computeOptimizationEarned(metrics, effectiveIsAbs, isVideoOnly);
 
   const newByCategory = {};
   for (const [catKey, cat] of Object.entries(serverBreakdown.by_category)) {
