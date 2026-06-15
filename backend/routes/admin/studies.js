@@ -47,7 +47,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', authRequired, adminRequired, async (req, res) => {
+router.post('/', authRequired, async (req, res) => {
   try {
     const { version_id, display_name, author_email, celebration_date,
             delivery_estimate, status, link_url, notes } = req.body;

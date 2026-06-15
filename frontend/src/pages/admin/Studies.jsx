@@ -53,11 +53,9 @@ export default function StudiesPage() {
             <strong> 0,30%</strong> da líquida da campanha vai pro <strong>autor do estudo</strong>.
           </div>
         </div>
-        {isAdmin && (
-          <Button onClick={() => setShowAdd(true)} icon={Plus}>
-            Cadastrar estudo
-          </Button>
-        )}
+        <Button onClick={() => setShowAdd(true)} icon={Plus}>
+          Cadastrar estudo
+        </Button>
       </header>
 
       <Card variant="info" className="studies-info fade-up">
@@ -88,10 +86,7 @@ export default function StudiesPage() {
       ) : list.length === 0 ? (
         <Card>
           <p className="card__subtitle">
-            {isAdmin
-              ? <>Nenhum estudo cadastrado. Clique em <strong>Cadastrar estudo</strong> pra começar.</>
-              : <>Nenhum estudo cadastrado ainda.</>
-            }
+            Nenhum estudo cadastrado. Clique em <strong>Cadastrar estudo</strong> pra começar.
           </p>
         </Card>
       ) : (
