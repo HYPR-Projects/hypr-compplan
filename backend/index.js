@@ -67,10 +67,13 @@ app.use('/commplan/studies', studiesPublicRouter);
 // ─── Admin-side ──────────────────────────────────────────────────────────
 app.use('/commplan/admin/cs-config', adminCsConfig);
 app.use('/commplan/admin/over-exceptions', adminOverExceptions);
-app.use('/commplan/admin', adminCampaignOverrides);
 app.use('/commplan/admin/studies', adminStudies);
 app.use('/commplan/admin/team-members', adminTeamMembers);
 app.use('/commplan/admin/audit', adminAudit);
+// Mais genéricos por último (eles têm router.use(adminRequired) global,
+// e Express casa por prefixo — então routers de path mais específico
+// devem vir antes pra não serem interceptados.
+app.use('/commplan/admin', adminCampaignOverrides);
 app.use('/commplan/admin', adminOverview);
 
 // ─── Error handler ───────────────────────────────────────────────────────
