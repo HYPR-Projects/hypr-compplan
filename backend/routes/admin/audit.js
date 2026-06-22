@@ -228,7 +228,8 @@ router.get('/:q', async (req, res) => {
       const optDetails = [];
       if (optCat?.items) {
         for (const it of optCat.items) {
-          if (!it.applicable) continue;
+          // Items presentes na lista JÁ são aplicáveis (engine já filtrou por
+          // formato da campanha). Não filtrar por it.applicable (que é undefined).
           optTotal += 1;
           if (it.earned) optEarned += 1;
           optDetails.push({

@@ -228,6 +228,10 @@ async function fetchAuditCampaigns({ quarter, tokenFilter, includeUnfinished = t
 /**
  * Monta as 2 estruturas de dados pra export (resumo + detalhe).
  * Retorna { summaryRows, detailRows } onde cada row é um array de strings/números.
+ *
+ * NOTA: A engine retorna em `by_category.items[]` SÓ items que são aplicáveis pra
+ * a campanha (já filtra OOH/Display/Video conforme formatos). Não existe campo
+ * `item.applicable` — TODO item presente JÁ É aplicável. Não filtrar por isso.
  */
 function buildExportRows(campaigns) {
   // ─── ABA RESUMO ──────────────────────────────────────────────────
@@ -244,10 +248,15 @@ function buildExportRows(campaigns) {
   const todayStr = new Date().toISOString().slice(0, 10);
 
   // ─── ABA DETALHE ─────────────────────────────────────────────────
+  // Estrutura: 1 linha por (campanha + item), agrupado por categoria, ordem do catálogo.
+  // Mostra TODOS os items aplicáveis (não filtra por earned).
   const detailHeader = [
     'Token', 'Cliente', 'Campanha', 'CS',
-    'Categoria', 'Etapa', '% do líquido',
-    'Earned', 'Valor ganho (R$)', 'Motivo', 'Link evidência',
+    'Categoria', 'Etapa',
+    '% da etapa', 'Valor possível (R$)',
+    'Earned', 'Valor ganho (R$)',
+    'Subtotal categoria (R$)',
+    'Motivo (se não earned)', 'Link evidência',
   ];
   const detailRows = [];
 
@@ -260,7 +269,7 @@ function buildExportRows(campaigns) {
     if (endDate && endDate < todayStr) {
       const reviewed = c.is_legacy
         ? !!c.manual_checks_parsed.__reviewed_by
-        : false; // simplificação — admin pode ter feito review via override
+        : false;
       status = reviewed ? 'Revisada' : 'Finalizada';
     } else {
       status = 'Em andamento';
@@ -278,19 +287,17 @@ function buildExportRows(campaigns) {
       : 'Válido';
     const overPct = c.metrics?.over_percent || 0;
 
-    // Otimização
+    // Otimização — conta TODOS items presentes (já são aplicáveis)
     const optCat = c.breakdown.by_category?.optimization;
     let optEarned = 0, optTotal = 0;
     if (optCat?.items) {
       for (const it of optCat.items) {
-        if (it.applicable) {
-          optTotal += 1;
-          if (it.earned) optEarned += 1;
-        }
+        optTotal += 1;
+        if (it.earned) optEarned += 1;
       }
     }
 
-    // Evidências
+    // Evidências necessárias e preenchidas
     const evidenceMap = c.manual_checks_parsed.__evidence || {};
     let evFilled = 0, evTotal = 0;
     for (const [catKey, cat] of Object.entries(COMPPLAN_CATALOG)) {
@@ -321,28 +328,40 @@ function buildExportRows(campaigns) {
       totalValue,
       liquido,
       bonusTotal,
-      pctLiquido,                // já em escala 0-1 (vai ser formatado como %)
+      pctLiquido,                // escala 0-1
       setupStatus,
-      overPct / 100,             // escala 0-1 pra formato %
+      overPct / 100,             // escala 0-1
       optEarned,
       optTotal,
       evFilled,
       evTotal,
     ]);
 
-    // Linhas de detalhe (todas etapas applicable)
+    // ─── DETALHE: 1 linha por item aplicável de cada categoria ─────────
     for (const [catKey, cat] of Object.entries(COMPPLAN_CATALOG)) {
       const catBreakdown = c.breakdown.by_category?.[catKey];
-      if (!catBreakdown?.items) continue;
+      if (!catBreakdown?.items || catBreakdown.items.length === 0) continue;
+
       const catLabel = cat.label || catKey;
+      const subtotalBrl = catBreakdown.subtotal_brl || 0;
 
       for (const item of catBreakdown.items) {
-        if (!item.applicable) continue;
-
         const itemPct = item.pct || 0;
         const earnedFlag = item.earned ? 'Sim' : 'Não';
-        const valorGanho = item.earned ? (liquido * itemPct) : 0;
-        const reason = item.reason || '';
+        const valorPossivel = liquido * itemPct;
+        const valorGanho = item.earned ? valorPossivel : 0;
+
+        // Motivo (quando não earned): tenta extrair info útil
+        let motivo = '';
+        if (!item.earned) {
+          if (item.invalidated) motivo = 'Setup anulado por OVER';
+          else if (item.pre_assigned_to_other) motivo = 'Pré-Campanha atribuída a outro CS';
+          else if (item.study_goes_to_other) motivo = 'Bônus de estudo vai pro autor';
+          else if (item.admin_overridden) motivo = `Admin forçou: ${item.admin_override?.value === false ? 'Não' : 'Sim'}`;
+          else motivo = 'Não marcado';
+        }
+
+        // Link de evidência
         const evidenceLink = evidenceMap[item.id]
           || (cat.shared_evidence && evidenceMap[cat.shared_evidence.key])
           || '';
@@ -354,10 +373,12 @@ function buildExportRows(campaigns) {
           c.cs_name || c.cs_email || '',
           catLabel,
           item.label || item.id,
-          itemPct,            // escala 0-1
+          itemPct,                // escala 0-1 (formatado como %)
+          valorPossivel,          // R$ que daria se earnar
           earnedFlag,
-          valorGanho,
-          reason,
+          valorGanho,             // R$ efetivo (0 se não earned)
+          subtotalBrl,            // R$ acumulado dessa categoria pra essa campanha
+          motivo,
           evidenceLink,
         ]);
       }
@@ -449,11 +470,14 @@ async function buildXlsxBuffer({ summaryHeader, summaryRows, detailHeader, detai
   for (const r of detailRows) ws2.addRow(r);
 
   // Header: Token(1) Cliente(2) Campanha(3) CS(4) Categoria(5) Etapa(6)
-  //         %(7) Earned(8) Valor ganho(9) Motivo(10) Link(11)
+  //         % da etapa(7) Valor possível(8) Earned(9) Valor ganho(10)
+  //         Subtotal categoria(11) Motivo(12) Link(13)
   ws2.getColumn(7).numFmt = '0.00%';
-  ws2.getColumn(9).numFmt = '"R$" #,##0.00';
+  ws2.getColumn(8).numFmt = '"R$" #,##0.00';
+  ws2.getColumn(10).numFmt = '"R$" #,##0.00';
+  ws2.getColumn(11).numFmt = '"R$" #,##0.00';
   ws2.columns.forEach((col, idx) => {
-    col.width = [8, 22, 30, 26, 18, 36, 10, 8, 14, 38, 38][idx] || 14;
+    col.width = [8, 22, 30, 26, 18, 40, 10, 14, 8, 14, 16, 30, 40][idx] || 14;
   });
 
   return await wb.xlsx.writeBuffer();
