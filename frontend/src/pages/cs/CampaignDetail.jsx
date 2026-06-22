@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle2, AlertCircle, Save, Info,
   ChevronDown, ChevronRight, Sparkles, Zap, Eye, Link2, AlertTriangle,
-  MessageSquare, Shield, Copy, BookOpen, X,
+  MessageSquare, Shield, Copy, BookOpen, X, Download, FileSpreadsheet,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
@@ -216,6 +216,26 @@ export default function CsCampaignDetail() {
             </div>
           )}
         </div>
+        {isAdmin && (
+          <>
+            <Button
+              variant="ghost"
+              icon={FileSpreadsheet}
+              onClick={() => endpoints.adminExportCampaign(campaign.short_token, 'xlsx').catch(e => alert(`Falha no export: ${e.message}`))}
+              title="Exporta esta campanha pra Excel (2 abas)"
+            >
+              Excel
+            </Button>
+            <Button
+              variant="ghost"
+              icon={Download}
+              onClick={() => endpoints.adminExportCampaign(campaign.short_token, 'csv').catch(e => alert(`Falha no export: ${e.message}`))}
+              title="Exporta esta campanha pra CSV (zipado)"
+            >
+              CSV
+            </Button>
+          </>
+        )}
         <Button
           variant="ghost"
           icon={Copy}

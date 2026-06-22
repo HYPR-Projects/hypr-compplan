@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Shield, ChevronRight, ChevronDown, ExternalLink, AlertTriangle,
-  Check, X, RotateCcw, Search, Clock, CircleX,
+  Check, X, RotateCcw, Search, Clock, CircleX, Download, FileSpreadsheet,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
@@ -198,6 +198,22 @@ export default function AuditPage() {
             onChange={(e) => setSearch(e.target.value)}
             style={{ width: 220 }}
           />
+          <Button
+            variant="ghost"
+            icon={FileSpreadsheet}
+            onClick={() => endpoints.adminExportAudit(quarter, 'xlsx').catch(e => setError(`Falha no export: ${e.message}`))}
+            title="Baixa 1 arquivo XLSX com 2 abas (Resumo + Detalhe)"
+          >
+            Excel
+          </Button>
+          <Button
+            variant="ghost"
+            icon={Download}
+            onClick={() => endpoints.adminExportAudit(quarter, 'csv').catch(e => setError(`Falha no export: ${e.message}`))}
+            title="Baixa ZIP com 2 CSVs (resumo + detalhe)"
+          >
+            CSV
+          </Button>
         </div>
       </header>
 

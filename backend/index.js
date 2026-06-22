@@ -27,6 +27,7 @@ import { router as adminStudies } from './routes/admin/studies.js';
 import { router as adminTeamMembers } from './routes/admin/team-members.js';
 import { router as adminOverview } from './routes/admin/overview.js';
 import { router as adminAudit } from './routes/admin/audit.js';
+import { router as adminExport } from './routes/admin/export.js';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -70,6 +71,7 @@ app.use('/commplan/admin/over-exceptions', adminOverExceptions);
 app.use('/commplan/admin/studies', adminStudies);
 app.use('/commplan/admin/team-members', adminTeamMembers);
 app.use('/commplan/admin/audit', adminAudit);
+app.use('/commplan/admin/export', adminExport);
 // Mais genéricos por último (eles têm router.use(adminRequired) global,
 // e Express casa por prefixo — então routers de path mais específico
 // devem vir antes pra não serem interceptados.

@@ -116,6 +116,39 @@ export const api = {
   post(path, body)  { return request('POST', path, body); },
   put(path, body)   { return request('PUT', path, body); },
   delete(path)      { return request('DELETE', path); },
+
+  /**
+   * Baixa um arquivo binário (XLSX, ZIP, etc) e dispara download no browser.
+   * Não passa por JSON parsing. Usa o token JWT como qualquer outra request.
+   */
+  async download(path, filename) {
+    const url = `${API_BASE}${path}`;
+    const headers = {};
+    const token = auth.getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(url, { method: 'GET', headers, cache: 'no-store' });
+    if (res.status === 401) { auth.logout(); throw new Error('Sessão expirada'); }
+    if (!res.ok) {
+      // Tenta extrair erro JSON
+      try {
+        const data = await res.json();
+        throw new Error(data?.error || `Erro ${res.status}`);
+      } catch {
+        throw new Error(`Erro ${res.status}`);
+      }
+    }
+
+    const blob = await res.blob();
+    const downloadUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+  },
 };
 
 // ─── Endpoints tipados (atalhos) ──────────────────────────────────────
@@ -215,6 +248,18 @@ export const endpoints = {
   },
   adminAuditMark(token, status, notes) {
     return api.put(`/commplan/admin/audit/${token}/mark`, { status, notes });
+  },
+
+  // Export de auditoria (XLSX ou CSV-zipado)
+  adminExportAudit(quarter, format = 'xlsx') {
+    const ext = format === 'csv' ? 'zip' : 'xlsx';
+    const filename = `audit_${quarter}.${ext}`;
+    return api.download(`/commplan/admin/export/audit/${quarter}?format=${format}`, filename);
+  },
+  adminExportCampaign(token, format = 'xlsx') {
+    const ext = format === 'csv' ? 'zip' : 'xlsx';
+    const filename = `audit_campanha_${token}.${ext}`;
+    return api.download(`/commplan/admin/export/campaign/${token}?format=${format}`, filename);
   },
 
   meReplicateSources(token, opts = {}) {
