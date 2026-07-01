@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Shield, ChevronRight, ChevronDown, ExternalLink, AlertTriangle,
   Check, X, RotateCcw, Search, Clock, CircleX, Download, FileSpreadsheet,
+  LayoutList, Table2,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
@@ -34,6 +35,7 @@ export default function AuditPage() {
   const [collapsedGroups, setCollapsedGroups] = useState(new Set(['all_ok'])); // OK colapsado por padrão
   const [issueModalToken, setIssueModalToken] = useState(null);
   const [busyToken, setBusyToken] = useState(null);
+  const [viewMode, setViewMode] = useState('grouped'); // grouped | table
 
   useEffect(() => {
     setError(null);
@@ -170,6 +172,24 @@ export default function AuditPage() {
           </div>
         </div>
         <div className="audit-toolbar">
+          <div className="audit-view-toggle">
+            <button
+              type="button"
+              className={viewMode === 'grouped' ? 'is-active' : ''}
+              onClick={() => setViewMode('grouped')}
+              title="Visão agrupada por urgência"
+            >
+              <LayoutList size={14} /> Agrupada
+            </button>
+            <button
+              type="button"
+              className={viewMode === 'table' ? 'is-active' : ''}
+              onClick={() => setViewMode('table')}
+              title="Visão em tabela"
+            >
+              <Table2 size={14} /> Tabela
+            </button>
+          </div>
           <QuarterSelect
             value={quarter}
             options={quarterOptions}
@@ -210,7 +230,14 @@ export default function AuditPage() {
         </Card>
       )}
 
-      {totals.total > 0 && (
+      {totals.total > 0 && viewMode === 'table' && (
+        <AuditTable
+          groups={filteredGroups}
+          onOpenDetail={(c) => navigate(`/admin/cs/${encodeURIComponent(c.cs_email)}/campanha/${c.short_token}`)}
+        />
+      )}
+
+      {totals.total > 0 && viewMode === 'grouped' && (
         <div className="audit-groups">
           {GROUPS_META.map(g => {
             const items = filteredGroups[g.key] || [];
@@ -268,6 +295,95 @@ export default function AuditPage() {
 // ─────────────────────────────────────────────────────────────────────
 // Sub-componentes
 // ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Visão em tabela: uma linha por campanha, com colunas financeiras e
+ * valor por categoria (Setup | Pré | Otim | AM | Extras).
+ * Junta todas as campanhas de todos os grupos numa lista só.
+ */
+function AuditTable({ groups, onOpenDetail }) {
+  // Achata todos os grupos numa lista única
+  const allCampaigns = [];
+  for (const key of Object.keys(groups)) {
+    for (const c of groups[key] || []) allCampaigns.push(c);
+  }
+  // Ordena por bônus (R$) desc
+  allCampaigns.sort((a, b) => (b.total_brl || 0) - (a.total_brl || 0));
+
+  if (allCampaigns.length === 0) {
+    return <Card><p className="card__subtitle">Nenhuma campanha pra exibir.</p></Card>;
+  }
+
+  return (
+    <div className="audit-table-wrap fade-up">
+      <table className="audit-table">
+        <thead>
+          <tr>
+            <th>Campanha</th>
+            <th>Anunciante</th>
+            <th>CS</th>
+            <th className="num">Valor</th>
+            <th className="num">Líquido</th>
+            <th className="num">Score</th>
+            <th className="num">Comp</th>
+            <th className="num">Setup</th>
+            <th className="num">Pré</th>
+            <th className="num">Otim</th>
+            <th className="num">AM</th>
+            <th className="num">Extras</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {allCampaigns.map(c => {
+            const cat = c.by_category_brl || {};
+            return (
+              <tr key={c.short_token}>
+                <td className="audit-table__camp">
+                  <span className="audit-table__camp-name">{c.campaign_name}</span>
+                  <span className="audit-table__token">
+                    {c.short_token}
+                    {c.admin_overrides && c.admin_overrides.length > 0 && (
+                      <span
+                        className="audit-table__override-badge"
+                        title={c.admin_overrides.map(o =>
+                          `${o.label}: ${o.forced}${o.reason ? ` — ${o.reason}` : ''} (${o.by || '?'})`
+                        ).join('\n')}
+                      >
+                        ⚡ {c.admin_overrides.length} override{c.admin_overrides.length > 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </span>
+                </td>
+                <td>{c.client_name}</td>
+                <td className="audit-table__cs">{c.cs_name || c.cs_email}</td>
+                <td className="num">{fmt.brlCompact(c.total_value)}</td>
+                <td className="num">{fmt.brlCompact(c.liquido)}</td>
+                <td className="num">{((c.total_pct || 0) * 100).toFixed(2)}%</td>
+                <td className="num audit-table__comp">{fmt.brl(c.total_brl)}</td>
+                <td className="num">{cat.setup ? fmt.brlCompact(cat.setup) : '—'}</td>
+                <td className="num">{cat.pre_campaign ? fmt.brlCompact(cat.pre_campaign) : '—'}</td>
+                <td className="num">{cat.optimization ? fmt.brlCompact(cat.optimization) : '—'}</td>
+                <td className="num">{cat.account_management ? fmt.brlCompact(cat.account_management) : '—'}</td>
+                <td className="num">{cat.extras ? fmt.brlCompact(cat.extras) : '—'}</td>
+                <td className="num">
+                  <button
+                    type="button"
+                    className="audit-table__open"
+                    onClick={() => onOpenDetail(c)}
+                    title="Abrir campanha"
+                  >
+                    <ExternalLink size={14} />
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function AuditCampaignRow({ campaign: c, expanded, onToggle, onOpenDetail, onMarkOk, onMarkIssue, onClearMark, busy }) {
   const setupBad = c.setup.status === 'invalid';
@@ -350,6 +466,16 @@ function AuditCampaignRow({ campaign: c, expanded, onToggle, onOpenDetail, onMar
             {optBad ? <AlertTriangle size={14} /> : <Check size={14} />}
             {c.optimization.total === 0 ? '—' : `${c.optimization.earned}/${c.optimization.total} earned`}
           </div>
+          {c.optimization.total > 0 && (
+            <div className="stat-block__metrics">
+              Over: {c.optimization.over_pct != null ? `${c.optimization.over_pct.toFixed(1)}%` : '—'}
+              {' · '}eCPM: {c.optimization.ecpm ? fmt.brl(c.optimization.ecpm) : '—'}
+              {' · '}CTR: {c.optimization.ctr ? `${(c.optimization.ctr * 100).toFixed(2)}%` : '—'}
+              {c.optimization.video_vtr_pct > 0 && (
+                <> · VTR: {c.optimization.video_vtr_pct.toFixed(1)}%</>
+              )}
+            </div>
+          )}
           <div className="stat-block__sub">
             {c.optimization.details.length === 0 && 'Sem otimizações aplicáveis'}
             {c.optimization.details.map(d => (
@@ -401,6 +527,30 @@ function AuditCampaignRow({ campaign: c, expanded, onToggle, onOpenDetail, onMar
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Overrides feitos por admin (com nota) */}
+      {c.admin_overrides && c.admin_overrides.length > 0 && (
+        <div className="audit-card__overrides">
+          <div className="audit-card__overrides-label">
+            <Shield size={12} /> Overrides admin
+          </div>
+          {c.admin_overrides.map((ov, i) => (
+            <div key={i} className="audit-override">
+              <span className="audit-override__badge">
+                {ov.kind === 'setup'
+                  ? (ov.forced === 'valid' ? 'Setup forçado válido' : 'Setup forçado anulado')
+                  : `${ov.label}: forçado ${ov.forced === 'earned' ? 'OK' : 'Não'}`}
+              </span>
+              <span className="audit-override__meta">
+                por {ov.by || '—'}{ov.at && ` · ${fmt.date(ov.at)}`}
+              </span>
+              {ov.reason && (
+                <div className="audit-override__reason">"{ov.reason}"</div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 

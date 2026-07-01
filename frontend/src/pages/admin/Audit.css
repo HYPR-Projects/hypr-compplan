@@ -287,6 +287,14 @@
   line-height: 1.4;
 }
 
+.stat-block__metrics {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 4px 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+
 .stat-block__sub > div {
   display: flex;
   align-items: center;
@@ -435,4 +443,162 @@
 }
 .audit-card__action-btn--ok:hover:not(:disabled) {
   background: rgba(22, 163, 74, 0.08);
+}
+
+/* ── Toggle Agrupada / Tabela ─────────────────────────────────────────── */
+.audit-view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.12));
+  border-radius: 8px;
+  overflow: hidden;
+}
+.audit-view-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: background 120ms ease, color 120ms ease;
+}
+.audit-view-toggle button:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+.audit-view-toggle button.is-active {
+  background: var(--accent-teal, #0d9488);
+  color: #fff;
+}
+
+/* ── Tabela de auditoria ──────────────────────────────────────────────── */
+.audit-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
+  border-radius: 12px;
+  background: var(--surface, #fff);
+}
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.audit-table thead th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
+  background: var(--surface-subtle, #fafafa);
+  position: sticky;
+  top: 0;
+}
+.audit-table th.num, .audit-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.audit-table tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
+  color: var(--text-primary);
+}
+.audit-table tbody tr:hover {
+  background: rgba(13, 148, 136, 0.04);
+}
+.audit-table__camp {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  white-space: normal;
+  min-width: 160px;
+}
+.audit-table__camp-name {
+  font-weight: 600;
+}
+.audit-table__token {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono, monospace);
+}
+.audit-table__cs {
+  color: var(--text-secondary);
+}
+.audit-table__comp {
+  font-weight: 700;
+  color: var(--accent-teal, #0d9488);
+}
+.audit-table__open {
+  display: inline-flex;
+  padding: 5px;
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.12));
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 120ms ease;
+}
+.audit-table__open:hover {
+  border-color: var(--accent-teal, #0d9488);
+  color: var(--accent-teal, #0d9488);
+}
+
+/* ── Overrides admin no card expandido ────────────────────────────────── */
+.audit-card__overrides {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: rgba(202, 138, 4, 0.06);
+  border: 1px dashed rgba(202, 138, 4, 0.4);
+  border-radius: 8px;
+}
+.audit-card__overrides-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #a16207;
+  margin-bottom: 6px;
+}
+.audit-override {
+  padding: 4px 0;
+  font-size: 12px;
+}
+.audit-override + .audit-override {
+  border-top: 1px solid rgba(202, 138, 4, 0.15);
+}
+.audit-override__badge {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.audit-override__meta {
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.audit-override__reason {
+  margin-top: 2px;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+/* ── Badge de override na tabela ──────────────────────────────────────── */
+.audit-table__override-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-sans, sans-serif);
+  color: #a16207;
+  background: rgba(202, 138, 4, 0.1);
+  border-radius: 999px;
+  cursor: help;
 }

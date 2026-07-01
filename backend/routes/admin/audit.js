@@ -245,6 +245,7 @@ router.get('/:q', async (req, res) => {
         total: optTotal,
         ok: optTotal > 0 && optEarned === optTotal,
         details: optDetails,
+        over_pct: overPct,
         ecpm: metrics?.ecpm || 0,
         ctr: metrics?.ctr || 0,
         video_vtr_pct: metrics?.video_vtr_pct || 0,
@@ -313,6 +314,46 @@ router.get('/:q', async (req, res) => {
         };
       }
 
+      // ─── ADMIN OVERRIDES (forces feitos por admin, com nota) ───────────
+      // Coleta item-overrides + setup force do admin_overrides (ao).
+      const labelById = {};
+      for (const [, cat] of Object.entries(COMPPLAN_CATALOG)) {
+        for (const it of (cat.items || [])) labelById[it.id] = it.label;
+      }
+      const adminOverridesList = [];
+      for (const [key, val] of Object.entries(ao)) {
+        if (key === '__setup_force') {
+          const meta = ao.__setup_force_meta || {};
+          adminOverridesList.push({
+            kind: 'setup',
+            label: 'Setup',
+            forced: val, // 'valid' | 'invalid'
+            reason: meta.reason || null,
+            by: meta.by || null,
+            at: meta.at || null,
+          });
+        } else if (key === '__setup_force_meta') {
+          continue; // tratado junto de __setup_force
+        } else if (val && typeof val === 'object' && typeof val.earned === 'boolean') {
+          adminOverridesList.push({
+            kind: 'item',
+            item_id: key,
+            label: labelById[key] || key,
+            forced: val.earned ? 'earned' : 'not_earned',
+            reason: val.reason || null,
+            by: val.by || null,
+            at: val.at || null,
+          });
+        }
+      }
+
+      // ─── VALORES FINANCEIROS (pra visão em tabela) ───────────────────
+      const catOrder = ['setup', 'pre_campaign', 'optimization', 'account_management', 'extras', 'onboarding'];
+      const byCategoryBrl = {};
+      for (const catKey of catOrder) {
+        byCategoryBrl[catKey] = breakdown.by_category?.[catKey]?.subtotal_brl || 0;
+      }
+
       return {
         short_token: c.short_token,
         client_name: c.client_name,
@@ -328,7 +369,14 @@ router.get('/:q', async (req, res) => {
         optimization,
         evidences,
         audit_mark: auditMark,
+        admin_overrides: adminOverridesList,
         review_decision: mc.__review_decision || null,
+        // Financeiro (visão tabela)
+        total_value: Number(c.total_value) || 0,
+        liquido: breakdown.liquido || 0,
+        total_brl: breakdown.total_brl || 0,
+        total_pct: breakdown.total_pct || 0,
+        by_category_brl: byCategoryBrl,
       };
     });
 
