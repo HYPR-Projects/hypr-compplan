@@ -660,41 +660,4 @@
   letter-spacing: -0.01em;
 }
 
-/* Seletor de quarter inline no subtitle — sem cara de dropdown grosso.
-   Mantém o mesmo peso/cor do texto ao redor. */
-.quarter-inline-select {
-  appearance: none;
-  -webkit-appearance: none;
-  background: transparent;
-  border: 1px solid transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 600;
-  padding: 2px 20px 2px 6px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
-  /* seta customizada em CSS pra ficar clean */
-  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
-                    linear-gradient(135deg, currentColor 50%, transparent 50%);
-  background-position: calc(100% - 10px) 55%, calc(100% - 6px) 55%;
-  background-size: 4px 4px, 4px 4px;
-  background-repeat: no-repeat;
-}
-
-.quarter-inline-select:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-  border-color: var(--border-subtle, rgba(0, 0, 0, 0.1));
-}
-
-.quarter-inline-select:focus {
-  outline: none;
-  background-color: rgba(0, 0, 0, 0.06);
-  border-color: var(--accent-teal, #0d9488);
-}
-
-/* Dark mode: ajusta o hover */
-[data-theme="dark"] .quarter-inline-select:hover,
-.dark .quarter-inline-select:hover {
-  background-color: rgba(255, 255, 255, 0.06);
-}
+/* Seletor de quarter agora vem do componente compartilhado QuarterSelect. */

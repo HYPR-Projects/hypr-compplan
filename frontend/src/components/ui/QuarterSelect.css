@@ -1,0 +1,60 @@
+/* Seletor de quarter reutilizável. Dois variants: inline (discreto) e pill. */
+
+.quarter-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 120ms ease, border-color 120ms ease;
+  /* seta customizada em CSS */
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 10px) 55%, calc(100% - 6px) 55%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+}
+
+/* ── variant inline: integrado ao texto ao redor (subtitles) ── */
+.quarter-select--inline {
+  border: 1px solid transparent;
+  padding: 2px 20px 2px 6px;
+}
+.quarter-select--inline:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+  border-color: var(--border-subtle, rgba(0, 0, 0, 0.1));
+}
+.quarter-select--inline:focus {
+  outline: none;
+  background-color: rgba(0, 0, 0, 0.06);
+  border-color: var(--accent-teal, #0d9488);
+}
+
+/* ── variant pill: com borda, pra toolbars ── */
+.quarter-select--pill {
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.12));
+  padding: 6px 26px 6px 12px;
+  background-color: var(--surface, #fff);
+  font-size: var(--text-sm, 0.875rem);
+}
+.quarter-select--pill:hover {
+  border-color: var(--accent-teal, #0d9488);
+}
+.quarter-select--pill:focus {
+  outline: none;
+  border-color: var(--accent-teal, #0d9488);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12);
+}
+
+/* Dark mode */
+[data-theme="dark"] .quarter-select--inline:hover,
+.dark .quarter-select--inline:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+[data-theme="dark"] .quarter-select--pill,
+.dark .quarter-select--pill {
+  background-color: var(--surface-dark, #1a1a1a);
+}

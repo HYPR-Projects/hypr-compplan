@@ -10,57 +10,21 @@ import { Badge } from '../../components/ui/Badge.jsx';
 import { Input } from '../../components/ui/Input.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
-import { fmt, currentQuarter } from '../../lib/format.js';
+import QuarterSelect from '../../components/ui/QuarterSelect.jsx';
+import { fmt } from '../../lib/format.js';
+import { useQuarter } from '../../lib/useQuarter.js';
 import { auth, endpoints } from '../../lib/api.js';
 import './CSDashboard.css';
 
 const MONTHS_PT = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 const MONTHS_FULL = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
 
-// Chave localStorage pra persistir o quarter selecionado (só admin — CS sempre no atual)
-const QUARTER_STORAGE_KEY = 'compplan.selectedQuarter';
-
-/**
- * Últimos N quarters disponíveis (do mais recente pro mais antigo),
- * limitando ao piso Q1-2026 (início da plataforma).
- */
-function buildQuarterOptions() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const q = Math.floor(now.getMonth() / 3) + 1;
-  const opts = [];
-  for (let i = 0; i < 6; i++) {
-    let qi = q - i;
-    let yi = y;
-    while (qi <= 0) { qi += 4; yi -= 1; }
-    // Piso: não mostra quarter anterior a Q1-2026
-    if (yi < 2026) break;
-    opts.push(`Q${qi}-${yi}`);
-  }
-  return opts;
-}
-
-/**
- * Quarter inicial:
- * - Admin: recupera do localStorage se existir e estiver dentro das opções válidas
- * - CS (ou quarter salvo inválido): quarter atual
- */
-function getInitialQuarter(isAdmin) {
-  const current = currentQuarter();
-  if (!isAdmin) return current;
-  try {
-    const saved = localStorage.getItem(QUARTER_STORAGE_KEY);
-    if (saved && buildQuarterOptions().includes(saved)) return saved;
-  } catch (_) {}
-  return current;
-}
-
 export default function CsDashboard() {
   const navigate = useNavigate();
   const params = useParams();
   const user = auth.getUser();
   const isAdmin = user?.role === 'admin';
-  const [quarter, setQuarterState] = useState(() => getInitialQuarter(isAdmin));
+  const { quarter, setQuarter, quarterOptions } = useQuarter();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
@@ -68,16 +32,6 @@ export default function CsDashboard() {
   const [statusFilter, setStatusFilter] = useState('todas'); // todas | revisadas | pendentes
   const [monthFilter, setMonthFilter] = useState('todos'); // todos | "2026-05" | ...
   const [showAssignPreModal, setShowAssignPreModal] = useState(false);
-
-  const quarterOptions = useMemo(() => buildQuarterOptions(), []);
-
-  // Wrapper que salva no localStorage quando admin muda o quarter
-  function setQuarter(q) {
-    setQuarterState(q);
-    if (isAdmin) {
-      try { localStorage.setItem(QUARTER_STORAGE_KEY, q); } catch (_) {}
-    }
-  }
 
   const impersonateEmail = params.csEmail || null;
 
@@ -205,16 +159,7 @@ export default function CsDashboard() {
               </>
             )}
             <span className="page-subtitle__sep">·</span>
-            <select
-              className="quarter-inline-select"
-              value={quarter}
-              onChange={(e) => setQuarter(e.target.value)}
-              aria-label="Escolha o quarter"
-            >
-              {quarterOptions.map(q => (
-                <option key={q} value={q}>{q}</option>
-              ))}
-            </select>
+            <QuarterSelect value={quarter} options={quarterOptions} onChange={setQuarter} />
             {kpis.score_pct != null && (
               <span
                 className="cs-score-badge"

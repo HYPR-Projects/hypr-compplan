@@ -6,34 +6,19 @@ import { Card } from '../../components/ui/Card.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
 import { Input } from '../../components/ui/Input.jsx';
 import Avatar from '../../components/ui/Avatar.jsx';
-import { fmt, currentQuarter } from '../../lib/format.js';
+import QuarterSelect from '../../components/ui/QuarterSelect.jsx';
+import { fmt } from '../../lib/format.js';
+import { useQuarter } from '../../lib/useQuarter.js';
 import { endpoints, auth } from '../../lib/api.js';
 import './Overview.css';
 
-// Quarter selector — atual + 3 anteriores
-function buildQuarterOptions() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const q = Math.floor(now.getMonth() / 3) + 1;
-  const opts = [];
-  for (let i = 0; i < 4; i++) {
-    let qi = q - i;
-    let yi = y;
-    while (qi <= 0) { qi += 4; yi -= 1; }
-    opts.push(`Q${qi}-${yi}`);
-  }
-  return opts;
-}
-
 export default function AdminOverview() {
   const navigate = useNavigate();
-  const [quarter, setQuarter] = useState(currentQuarter());
+  const { quarter, setQuarter, quarterOptions } = useQuarter();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [pendingEvidences, setPendingEvidences] = useState(0);
-
-  const quarterOptions = useMemo(() => buildQuarterOptions(), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,15 +86,12 @@ export default function AdminOverview() {
         </div>
 
         <div className="admin-page-header__filters">
-          <select
-            className="cs-select"
+          <QuarterSelect
             value={quarter}
-            onChange={(e) => setQuarter(e.target.value)}
-          >
-            {quarterOptions.map(q => (
-              <option key={q} value={q}>{q}</option>
-            ))}
-          </select>
+            options={quarterOptions}
+            onChange={setQuarter}
+            variant="pill"
+          />
         </div>
       </header>
 

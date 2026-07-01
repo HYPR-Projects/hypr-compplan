@@ -4,12 +4,14 @@ import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
 import { Input } from '../../components/ui/Input.jsx';
-import { fmt, currentQuarter } from '../../lib/format.js';
+import QuarterSelect from '../../components/ui/QuarterSelect.jsx';
+import { fmt } from '../../lib/format.js';
+import { useQuarter } from '../../lib/useQuarter.js';
 import { endpoints } from '../../lib/api.js';
 import './Pending.css';
 
 export default function AdminPending() {
-  const quarter = currentQuarter();
+  const { quarter, setQuarter, quarterOptions } = useQuarter();
   const [items, setItems] = useState([]);
   const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -90,7 +92,7 @@ export default function AdminPending() {
         <div>
           <h1 className="page-title">Campanhas pendentes</h1>
           <div className="page-subtitle">
-            <span className="page-subtitle__highlight">{quarter}</span>
+            <QuarterSelect value={quarter} options={quarterOptions} onChange={setQuarter} />
             <span className="page-subtitle__sep">·</span>
             <span>{filtered.length} de {items.length} pendentes</span>
             <span className="page-subtitle__sep">·</span>

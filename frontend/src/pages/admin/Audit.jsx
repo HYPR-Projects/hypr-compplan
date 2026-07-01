@@ -10,23 +10,11 @@ import { Badge } from '../../components/ui/Badge.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Input, Textarea } from '../../components/ui/Input.jsx';
-import { fmt, currentQuarter } from '../../lib/format.js';
+import QuarterSelect from '../../components/ui/QuarterSelect.jsx';
+import { fmt } from '../../lib/format.js';
+import { useQuarter } from '../../lib/useQuarter.js';
 import { endpoints } from '../../lib/api.js';
 import './Audit.css';
-
-function buildQuarterOptions() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const q = Math.floor(now.getMonth() / 3) + 1;
-  const opts = [];
-  for (let i = 0; i < 4; i++) {
-    let qi = q - i;
-    let yi = y;
-    while (qi <= 0) { qi += 4; yi -= 1; }
-    opts.push(`Q${qi}-${yi}`);
-  }
-  return opts;
-}
 
 const GROUPS_META = [
   { key: 'setup_anulado',         label: 'Setup anulado por over > 50%', color: 'red'   },
@@ -38,7 +26,7 @@ const GROUPS_META = [
 
 export default function AuditPage() {
   const navigate = useNavigate();
-  const [quarter, setQuarter] = useState(currentQuarter());
+  const { quarter, setQuarter, quarterOptions } = useQuarter();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
@@ -46,8 +34,6 @@ export default function AuditPage() {
   const [collapsedGroups, setCollapsedGroups] = useState(new Set(['all_ok'])); // OK colapsado por padrão
   const [issueModalToken, setIssueModalToken] = useState(null);
   const [busyToken, setBusyToken] = useState(null);
-
-  const quarterOptions = useMemo(() => buildQuarterOptions(), []);
 
   useEffect(() => {
     setError(null);
@@ -184,13 +170,12 @@ export default function AuditPage() {
           </div>
         </div>
         <div className="audit-toolbar">
-          <select
-            className="audit-quarter-select"
+          <QuarterSelect
             value={quarter}
-            onChange={(e) => setQuarter(e.target.value)}
-          >
-            {quarterOptions.map(q => <option key={q} value={q}>{q}</option>)}
-          </select>
+            options={quarterOptions}
+            onChange={setQuarter}
+            variant="pill"
+          />
           <Input
             icon={Search}
             placeholder="Buscar CS, cliente..."
