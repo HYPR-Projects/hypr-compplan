@@ -361,21 +361,9 @@ function AuditTable({ groups, onOpenDetail }) {
             const cat = c.by_category_brl || {};
             const isOpen = expanded.has(c.short_token);
 
-            // Agrupa evidências (com link) por categoria
-            const linksByCat = {};
-            for (const it of (c.evidences?.items || [])) {
-              const k = it.cat || 'outros';
-              (linksByCat[k] = linksByCat[k] || []).push(it);
-            }
-            const missingByCat = {};
-            for (const m of (c.evidences?.missing || [])) {
-              const k = m.cat || 'outros';
-              (missingByCat[k] = missingByCat[k] || []).push(m);
-            }
-            const catKeysWithContent = [...new Set([
-              ...Object.keys(linksByCat),
-              ...Object.keys(missingByCat),
-            ])];
+            // Itens earned por categoria (com valor + link). Vem do backend.
+            const earnedByCat = c.earned_items_by_cat || {};
+            const catKeysWithContent = Object.keys(earnedByCat);
 
             return (
               <Fragment key={c.short_token}>
@@ -434,7 +422,7 @@ function AuditTable({ groups, onOpenDetail }) {
                       <div className="audit-table__detail">
                         {catKeysWithContent.length === 0 && (
                           <div className="audit-table__detail-empty">
-                            Nenhuma evidência anexada nesta campanha.
+                            Nenhum item conquistado nesta campanha.
                           </div>
                         )}
                         {catKeysWithContent.map(catKey => (
@@ -443,26 +431,25 @@ function AuditTable({ groups, onOpenDetail }) {
                               {CAT_LABELS[catKey] || catKey}
                               {cat[catKey] ? <span className="audit-table__detail-cat-brl"> · {fmt.brl(cat[catKey])}</span> : null}
                             </div>
-                            <div className="audit-table__detail-links">
-                              {(linksByCat[catKey] || []).map(it => (
-                                <a
-                                  key={it.id}
-                                  href={normalizeUrl(it.url)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="audit-link"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <ExternalLink size={12} />
-                                  <span className="audit-link__label">{it.label}</span>
-                                  <span className="audit-link__url">{shortUrl(it.url)}</span>
-                                </a>
-                              ))}
-                              {(missingByCat[catKey] || []).map(m => (
-                                <div key={m.id} className="audit-link audit-link--missing">
-                                  <CircleX size={12} />
-                                  <span className="audit-link__label">{m.label}</span>
-                                  <span className="audit-link__url">sem link</span>
+                            <div className="audit-table__detail-items">
+                              {earnedByCat[catKey].map(it => (
+                                <div key={it.id} className="audit-detail-item">
+                                  <span className="audit-detail-item__label">{it.label}</span>
+                                  <span className="audit-detail-item__brl">{fmt.brl(it.value_brl)}</span>
+                                  {it.url ? (
+                                    <a
+                                      href={normalizeUrl(it.url)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="audit-detail-item__link"
+                                      onClick={(e) => e.stopPropagation()}
+                                      title={it.url}
+                                    >
+                                      <ExternalLink size={12} /> {shortUrl(it.url)}
+                                    </a>
+                                  ) : (
+                                    <span className="audit-detail-item__nolink">sem link</span>
+                                  )}
                                 </div>
                               ))}
                             </div>

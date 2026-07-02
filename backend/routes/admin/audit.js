@@ -354,6 +354,30 @@ router.get('/:q', async (req, res) => {
         byCategoryBrl[catKey] = breakdown.by_category?.[catKey]?.subtotal_brl || 0;
       }
 
+      // Itens EARNED por categoria, com valor individual e link (se houver).
+      // Usado no detalhe expandido da tabela pra mostrar quanto cada item ganhou.
+      const earnedItemsByCat = {};
+      for (const catKey of catOrder) {
+        const cat = COMPPLAN_CATALOG[catKey];
+        const catBreakdown = breakdown.by_category?.[catKey];
+        if (!cat || !catBreakdown?.items) continue;
+        const sharedKey = cat.shared_evidence?.key || null;
+        const sharedLink = sharedKey ? (evidenceMap[sharedKey] || '') : '';
+        const list = [];
+        for (const it of catBreakdown.items) {
+          if (!it.earned) continue;
+          // Link individual do item, ou o shared da categoria como fallback
+          const link = evidenceMap[it.id] || sharedLink || '';
+          list.push({
+            id: it.id,
+            label: it.label,
+            value_brl: it.value_brl || 0,
+            url: link || null,
+          });
+        }
+        if (list.length > 0) earnedItemsByCat[catKey] = list;
+      }
+
       return {
         short_token: c.short_token,
         client_name: c.client_name,
@@ -377,6 +401,7 @@ router.get('/:q', async (req, res) => {
         total_brl: breakdown.total_brl || 0,
         total_pct: breakdown.total_pct || 0,
         by_category_brl: byCategoryBrl,
+        earned_items_by_cat: earnedItemsByCat,
       };
     });
 
