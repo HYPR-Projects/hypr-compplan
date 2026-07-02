@@ -397,19 +397,33 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
     const items = filteredItems.map(item => {
       const wasEarned = earned.has(item.id);
 
+      const blocked = isSetupInvalidated || isPreCampaignBlocked;
+      const adminOv = adminOverrides[item.id];
+
+      // Prioridade do admin override do item: se o admin forçou explicitamente
+      // OK/Não naquele item, isso vence QUALQUER bloqueio (setup anulado,
+      // pre-campanha de outro CS, etc). O force individual é a palavra final.
+      let effectivelyEarned;
+      if (adminOv && typeof adminOv.earned === 'boolean') {
+        effectivelyEarned = adminOv.earned;
+      } else {
+        effectivelyEarned = wasEarned && !blocked;
+      }
+
       // ex_estudos: bônus vai pro AUTOR. Se o csOwner observador NÃO é o autor de algum
       // estudo da campanha, value_brl pro dono = 0.
       const isStudyItem = item.id === 'ex_estudos';
-      let isStudyBlocked = false;
+      let isStudyBlocked2 = false;
       if (isStudyItem && studiesInfo.length > 0) {
         const authors = studiesInfo.map(s => (s.author_email || '').toLowerCase()).filter(Boolean);
-        // Se nenhum dos autores é o csOwner → bloqueia
-        isStudyBlocked = !authors.includes(csOwnerLower);
+        isStudyBlocked2 = !authors.includes(csOwnerLower);
+      }
+      // Estudo que vai pro autor: mesmo com admin force OK no dono, o bônus é do autor.
+      // Só bloqueia o valor se NÃO houver override explícito incluindo pro dono.
+      if (isStudyBlocked2 && !(adminOv && adminOv.earned === true)) {
+        effectivelyEarned = effectivelyEarned && !isStudyBlocked2;
       }
 
-      const blocked = isSetupInvalidated || isPreCampaignBlocked || isStudyBlocked;
-      const effectivelyEarned = wasEarned && !blocked;
-      const adminOv = adminOverrides[item.id];
       // Anexa info de estudos no item ex_estudos pra UI mostrar nome + autor
       const studiesAttachment = (isStudyItem && studiesInfo.length > 0)
         ? studiesInfo
@@ -449,9 +463,9 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
         evidence_type: item.evidence_type || null,
         earned: effectivelyEarned,
         was_earned: wasEarned,
-        invalidated: isSetupInvalidated && wasEarned,
-        pre_assigned_to_other: isPreCampaignBlocked && wasEarned,
-        study_goes_to_other: isStudyBlocked && wasEarned,
+        invalidated: isSetupInvalidated && wasEarned && !(adminOv && adminOv.earned === true),
+        pre_assigned_to_other: isPreCampaignBlocked && wasEarned && !(adminOv && adminOv.earned === true),
+        study_goes_to_other: isStudyBlocked2 && wasEarned,
         value_brl: effectivelyEarned ? liquido * item.pct : 0,
         admin_overridden: !!adminOv,
         admin_override: adminOv || null,

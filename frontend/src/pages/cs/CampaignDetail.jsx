@@ -1125,12 +1125,18 @@ function recomputeLocally(serverBreakdown, manualChecks, metrics, effectiveIsAbs
         wouldEarn = isEffectivelyEarned(item, manualChecks);
       }
 
-      const effectivelyEarned = wouldEarn && !invalidated;
+      // Admin override do item tem prioridade sobre a anulação do setup.
+      // Se o admin forçou explicitamente OK/Não naquele item, vale isso —
+      // mesmo com o setup anulado por over > 50%.
+      const hasItemOverride = item.admin_override && typeof item.admin_override.earned === 'boolean';
+      const effectivelyEarned = hasItemOverride
+        ? item.admin_override.earned
+        : (wouldEarn && !invalidated);
       return {
         ...item,
         earned: effectivelyEarned,
         was_earned: wouldEarn,
-        invalidated: invalidated && wouldEarn,
+        invalidated: invalidated && wouldEarn && !hasItemOverride,
         value_brl: effectivelyEarned ? liquido * item.pct : 0,
       };
     });
