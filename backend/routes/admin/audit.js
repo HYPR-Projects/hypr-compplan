@@ -363,6 +363,8 @@ router.get('/:q', async (req, res) => {
       // Itens EARNED por categoria, com valor individual e link (se houver).
       // Usado no detalhe expandido da tabela pra mostrar quanto cada item ganhou.
       const earnedItemsByCat = {};
+      // Mapa plano id → {value_brl, url} de TODOS os earned. Pra visão matriz.
+      const itemsMap = {};
       for (const catKey of catOrder) {
         const cat = COMPPLAN_CATALOG[catKey];
         const catBreakdown = breakdown.by_category?.[catKey];
@@ -380,6 +382,7 @@ router.get('/:q', async (req, res) => {
             value_brl: it.value_brl || 0,
             url: link || null,
           });
+          itemsMap[it.id] = { value_brl: it.value_brl || 0, url: link || null };
         }
         if (list.length > 0) earnedItemsByCat[catKey] = list;
       }
@@ -408,6 +411,7 @@ router.get('/:q', async (req, res) => {
         total_pct: breakdown.total_pct || 0,
         by_category_brl: byCategoryBrl,
         earned_items_by_cat: earnedItemsByCat,
+        items_map: itemsMap,
       };
     });
 

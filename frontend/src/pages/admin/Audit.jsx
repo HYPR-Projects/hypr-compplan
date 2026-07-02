@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, Fragment } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Shield, ChevronRight, ChevronDown, ExternalLink, AlertTriangle,
@@ -12,6 +12,7 @@ import Button from '../../components/ui/Button.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Input, Textarea } from '../../components/ui/Input.jsx';
 import QuarterSelect from '../../components/ui/QuarterSelect.jsx';
+import { AUDIT_MATRIX_CATEGORIES, AUDIT_MATRIX_ITEMS } from '../../lib/auditMatrix.js';
 import { fmt } from '../../lib/format.js';
 import { useQuarter } from '../../lib/useQuarter.js';
 import { endpoints } from '../../lib/api.js';
@@ -296,28 +297,13 @@ export default function AuditPage() {
 // Sub-componentes
 // ─────────────────────────────────────────────────────────────────────
 
-/**
- * Visão em tabela: uma linha por campanha, com colunas financeiras e
- * valor por categoria (Setup | Pré | Otim | AM | Extras).
- * Junta todas as campanhas de todos os grupos numa lista só.
- */
-// Rótulos amigáveis das categorias (pra agrupar links na expansão)
-const CAT_LABELS = {
-  setup: 'Setup',
-  pre_campaign: 'Pré-Campanha',
-  optimization: 'Otimização',
-  account_mgmt: 'Account Management',
-  extras: 'Extras',
-  onboarding: 'Onboarding',
-};
-
 function AuditTable({ groups, onOpenDetail }) {
   // Sort: coluna + direção. Default: bônus (comp) desc.
   const [sortKey, setSortKey] = useState('comp');
   const [sortDir, setSortDir] = useState('desc');
 
-  // Definição das colunas: key, label, tipo (num|text), e accessor pro valor
-  const COLUMNS = [
+  // Colunas fixas (resumo). As colunas de item vêm de AUDIT_MATRIX_ITEMS.
+  const BASE_COLUMNS = [
     { key: 'campaign', label: 'Campanha', type: 'text', get: c => c.campaign_name || '' },
     { key: 'client', label: 'Anunciante', type: 'text', get: c => c.client_name || '' },
     { key: 'cs', label: 'CS', type: 'text', get: c => c.cs_name || c.cs_email || '' },
@@ -325,12 +311,10 @@ function AuditTable({ groups, onOpenDetail }) {
     { key: 'liquido', label: 'Líquido', type: 'num', get: c => c.liquido || 0 },
     { key: 'score', label: 'Score', type: 'num', get: c => c.total_pct || 0 },
     { key: 'comp', label: 'Comp', type: 'num', get: c => c.total_brl || 0 },
-    { key: 'setup', label: 'Setup', type: 'num', get: c => c.by_category_brl?.setup || 0 },
-    { key: 'pre', label: 'Pré', type: 'num', get: c => c.by_category_brl?.pre_campaign || 0 },
-    { key: 'otim', label: 'Otim', type: 'num', get: c => c.by_category_brl?.optimization || 0 },
-    { key: 'am', label: 'AM', type: 'num', get: c => c.by_category_brl?.account_mgmt || 0 },
-    { key: 'extras', label: 'Extras', type: 'num', get: c => c.by_category_brl?.extras || 0 },
   ];
+
+  // Accessor pra valor de um item (matriz)
+  const itemValue = (c, itemId) => (c.items_map?.[itemId]?.value_brl || 0);
 
   // Achata todos os grupos numa lista única
   const allCampaigns = [];
@@ -338,17 +322,22 @@ function AuditTable({ groups, onOpenDetail }) {
     for (const c of groups[key] || []) allCampaigns.push(c);
   }
 
-  // Ordena conforme sortKey/sortDir
-  const activeCol = COLUMNS.find(col => col.key === sortKey) || COLUMNS[6];
+  // Ordena conforme sortKey/sortDir. sortKey pode ser base col ou 'item:<id>'.
+  let getVal, sortType;
+  if (sortKey.startsWith('item:')) {
+    const itemId = sortKey.slice(5);
+    getVal = c => itemValue(c, itemId);
+    sortType = 'num';
+  } else {
+    const col = BASE_COLUMNS.find(x => x.key === sortKey) || BASE_COLUMNS[6];
+    getVal = col.get;
+    sortType = col.type;
+  }
   allCampaigns.sort((a, b) => {
-    const va = activeCol.get(a);
-    const vb = activeCol.get(b);
+    const va = getVal(a), vb = getVal(b);
     let cmp;
-    if (activeCol.type === 'text') {
-      cmp = String(va).localeCompare(String(vb), 'pt-BR', { sensitivity: 'base' });
-    } else {
-      cmp = (Number(va) || 0) - (Number(vb) || 0);
-    }
+    if (sortType === 'text') cmp = String(va).localeCompare(String(vb), 'pt-BR', { sensitivity: 'base' });
+    else cmp = (Number(va) || 0) - (Number(vb) || 0);
     return sortDir === 'asc' ? cmp : -cmp;
   });
 
@@ -356,188 +345,125 @@ function AuditTable({ groups, onOpenDetail }) {
     return <Card><p className="card__subtitle">Nenhuma campanha pra exibir.</p></Card>;
   }
 
-  // Clique no header: se é a coluna ativa, inverte; senão, começa desc (maior→menor / Z-A)
   const onSort = (key) => {
-    if (key === sortKey) {
-      setSortDir(prev => (prev === 'desc' ? 'asc' : 'desc'));
-    } else {
-      setSortKey(key);
-      setSortDir('desc');
-    }
+    if (key === sortKey) setSortDir(prev => (prev === 'desc' ? 'asc' : 'desc'));
+    else { setSortKey(key); setSortDir('desc'); }
   };
 
   const SortIcon = ({ colKey }) => {
-    if (colKey !== sortKey) return <ArrowUpDown size={12} className="audit-th__sort-icon" />;
+    if (colKey !== sortKey) return <ArrowUpDown size={11} className="audit-th__sort-icon" />;
     return sortDir === 'desc'
-      ? <ArrowDown size={12} className="audit-th__sort-icon is-active" />
-      : <ArrowUp size={12} className="audit-th__sort-icon is-active" />;
+      ? <ArrowDown size={11} className="audit-th__sort-icon is-active" />
+      : <ArrowUp size={11} className="audit-th__sort-icon is-active" />;
   };
 
-  const COL_COUNT = 13;
-
   return (
-    <div className="audit-table-wrap fade-up">
-      <table className="audit-table">
+    <div className="audit-matrix-wrap fade-up">
+      <table className="audit-matrix">
         <thead>
-          <tr>
-            {COLUMNS.map(col => (
+          {/* Linha 1: grupos de categoria */}
+          <tr className="audit-matrix__group-row">
+            <th className="audit-matrix__sticky-head" colSpan={7}></th>
+            {AUDIT_MATRIX_CATEGORIES.map(cat => (
               <th
-                key={col.key}
-                className={`audit-th ${col.type === 'num' ? 'num' : ''} ${col.key === sortKey ? 'is-sorted' : ''}`}
-                onClick={() => onSort(col.key)}
+                key={cat.key}
+                className={`audit-matrix__group audit-matrix__group--${cat.key}`}
+                colSpan={cat.items.length}
               >
-                <span className="audit-th__inner">
-                  {col.label}
-                  <SortIcon colKey={col.key} />
-                </span>
+                {cat.label}
               </th>
             ))}
             <th></th>
           </tr>
+          {/* Linha 2: colunas base + itens */}
+          <tr>
+            {BASE_COLUMNS.map((col, i) => (
+              <th
+                key={col.key}
+                className={`audit-th ${col.type === 'num' ? 'num' : ''} ${col.key === sortKey ? 'is-sorted' : ''} ${i < 3 ? 'audit-matrix__sticky-col-head' : ''}`}
+                style={i < 3 ? { left: `${[0, 170, 320][i]}px` } : undefined}
+                onClick={() => onSort(col.key)}
+              >
+                <span className="audit-th__inner">{col.label}<SortIcon colKey={col.key} /></span>
+              </th>
+            ))}
+            {AUDIT_MATRIX_ITEMS.map(it => (
+              <th
+                key={it.id}
+                className={`audit-th num audit-matrix__item-head audit-matrix__item-head--${it.catKey} ${sortKey === `item:${it.id}` ? 'is-sorted' : ''}`}
+                onClick={() => onSort(`item:${it.id}`)}
+                title={it.label}
+              >
+                <span className="audit-th__inner">{it.label}<SortIcon colKey={`item:${it.id}`} /></span>
+              </th>
+            ))}
+            <th className="audit-matrix__open-head"></th>
+          </tr>
         </thead>
         <tbody>
-          {allCampaigns.map(c => {
-            const cat = c.by_category_brl || {};
-
-            // Itens earned por categoria (com valor + link). Vem do backend.
-            const earnedByCat = c.earned_items_by_cat || {};
-            const catKeysWithContent = Object.keys(earnedByCat);
-
-            // Overrides agrupados por categoria (pra badge no topo do card da etapa)
-            const overridesByCat = {};
-            for (const ov of (c.admin_overrides || [])) {
-              const k = ov.cat || 'outros';
-              (overridesByCat[k] = overridesByCat[k] || []).push(ov);
-            }
-
-            return (
-              <Fragment key={c.short_token}>
-                <tr className="audit-table__row">
-                  <td className="audit-table__camp">
-                    <span className="audit-table__camp-name">
-                      {c.campaign_name}
-                    </span>
-                    <span className="audit-table__token">
-                      {c.short_token}
-                      {c.admin_overrides && c.admin_overrides.length > 0 && (
-                        <span
-                          className="audit-table__override-badge"
-                          title={c.admin_overrides.map(o =>
-                            `${o.label}: ${o.forced}${o.reason ? ` — ${o.reason}` : ''} (${o.by || '?'})`
-                          ).join('\n')}
-                        >
-                          ⚡ {c.admin_overrides.length} override{c.admin_overrides.length > 1 ? 's' : ''}
-                        </span>
-                      )}
-                    </span>
+          {allCampaigns.map(c => (
+            <tr key={c.short_token} className="audit-matrix__row">
+              <td className="audit-matrix__camp audit-matrix__sticky-col" style={{ left: 0 }}>
+                <span className="audit-matrix__camp-name">{c.campaign_name}</span>
+                <span className="audit-matrix__token">
+                  {c.short_token}
+                  {c.admin_overrides && c.admin_overrides.length > 0 && (
+                    <span
+                      className="audit-table__override-badge"
+                      title={c.admin_overrides.map(o => `${o.label}: ${o.forced}${o.reason ? ` — ${o.reason}` : ''} (${o.by || '?'})`).join('\n')}
+                    >⚡ {c.admin_overrides.length}</span>
+                  )}
+                </span>
+              </td>
+              <td className="audit-matrix__sticky-col" style={{ left: '170px' }}>{c.client_name}</td>
+              <td className="audit-matrix__sticky-col audit-matrix__cs" style={{ left: '320px' }}>{c.cs_name || c.cs_email}</td>
+              <td className="num">{fmt.brlCompact(c.total_value)}</td>
+              <td className="num">{fmt.brlCompact(c.liquido)}</td>
+              <td className="num">{((c.total_pct || 0) * 100).toFixed(2)}%</td>
+              <td className="num audit-matrix__comp">{fmt.brl(c.total_brl)}</td>
+              {AUDIT_MATRIX_ITEMS.map(it => {
+                const cell = c.items_map?.[it.id];
+                const val = cell?.value_brl || 0;
+                const url = cell?.url || null;
+                if (!val) {
+                  return <td key={it.id} className="num audit-matrix__cell audit-matrix__cell--empty">—</td>;
+                }
+                return (
+                  <td key={it.id} className="num audit-matrix__cell">
+                    {url ? (
+                      <a
+                        href={normalizeUrl(url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="audit-matrix__cell-link"
+                        title="Abrir evidência"
+                      >
+                        {fmt.brlCompact(val)} <ExternalLink size={10} />
+                      </a>
+                    ) : (
+                      <span>{fmt.brlCompact(val)}</span>
+                    )}
                   </td>
-                  <td>{c.client_name}</td>
-                  <td className="audit-table__cs">{c.cs_name || c.cs_email}</td>
-                  <td className="num">{fmt.brlCompact(c.total_value)}</td>
-                  <td className="num">{fmt.brlCompact(c.liquido)}</td>
-                  <td className="num">{((c.total_pct || 0) * 100).toFixed(2)}%</td>
-                  <td className="num audit-table__comp">{fmt.brl(c.total_brl)}</td>
-                  <td className="num">{cat.setup ? fmt.brlCompact(cat.setup) : '—'}</td>
-                  <td className="num">{cat.pre_campaign ? fmt.brlCompact(cat.pre_campaign) : '—'}</td>
-                  <td className="num">{cat.optimization ? fmt.brlCompact(cat.optimization) : '—'}</td>
-                  <td className="num">{cat.account_mgmt ? fmt.brlCompact(cat.account_mgmt) : '—'}</td>
-                  <td className="num">{cat.extras ? fmt.brlCompact(cat.extras) : '—'}</td>
-                  <td className="num">
-                    <button
-                      type="button"
-                      className="audit-table__open"
-                      onClick={(e) => { e.stopPropagation(); onOpenDetail(c); }}
-                      title="Abrir campanha"
-                    >
-                      <ExternalLink size={14} />
-                    </button>
-                  </td>
-                </tr>
-
-                {catKeysWithContent.length > 0 && (
-                  <tr className="audit-table__detail-row">
-                    <td colSpan={COL_COUNT}>
-                      <div className="audit-table__detail">
-                        {catKeysWithContent.map(catKey => (
-                          <div key={catKey} className="audit-detail-card">
-                            <div className="audit-detail-card__head">
-                              <span className="audit-detail-card__title">{CAT_LABELS[catKey] || catKey}</span>
-                              {cat[catKey] ? (
-                                <span className="audit-detail-card__total">{fmt.brl(cat[catKey])}</span>
-                              ) : null}
-                            </div>
-                            {(overridesByCat[catKey] || []).map((ov, i) => (
-                              <div key={i} className="audit-detail-card__override">
-                                <span className="audit-detail-card__override-tag">⚡ Override</span>
-                                <span className="audit-detail-card__override-txt">
-                                  {ov.kind === 'setup'
-                                    ? (ov.forced === 'valid' ? 'setup forçado válido' : 'setup forçado anulado')
-                                    : `${ov.label} forçado ${ov.forced === 'earned' ? 'OK' : 'não'}`}
-                                  {ov.by && <> · {ov.by.split('@')[0]}</>}
-                                  {ov.reason && <> — "{ov.reason}"</>}
-                                </span>
-                              </div>
-                            ))}
-                            <table className="audit-detail-card__table">
-                              <thead>
-                                <tr>
-                                  <th>Detalhe</th>
-                                  <th className="audit-detail-card__brl">Valor</th>
-                                  <th className="audit-detail-card__link-cell">Link</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {earnedByCat[catKey].map(it => (
-                                  <tr key={it.id}>
-                                    <td className="audit-detail-card__item">
-                                      {it.label}
-                                      {catKey === 'optimization' && c.optimization && (
-                                        <div className="audit-detail-card__kpis">
-                                          <span>Over: <b>{c.optimization.over_pct != null ? `${c.optimization.over_pct.toFixed(1)}%` : '—'}</b></span>
-                                          <span>eCPM: <b>{c.optimization.ecpm ? fmt.brl(c.optimization.ecpm) : '—'}</b></span>
-                                          <span>CTR: <b>{c.optimization.ctr ? `${(c.optimization.ctr * 100).toFixed(2)}%` : '—'}</b></span>
-                                          {c.optimization.video_vtr_pct > 0 && (
-                                            <span>VTR: <b>{c.optimization.video_vtr_pct.toFixed(1)}%</b></span>
-                                          )}
-                                        </div>
-                                      )}
-                                    </td>
-                                    <td className="audit-detail-card__brl">{fmt.brl(it.value_brl)}</td>
-                                    <td className="audit-detail-card__link-cell">
-                                      {it.url ? (
-                                        <a
-                                          href={normalizeUrl(it.url)}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="audit-detail-card__link"
-                                          onClick={(e) => e.stopPropagation()}
-                                          title="Abrir evidência"
-                                          aria-label="Abrir evidência"
-                                        >
-                                          <ExternalLink size={13} />
-                                        </a>
-                                      ) : (
-                                        <span className="audit-detail-card__nolink" title="Sem evidência">—</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            );
-          })}
+                );
+              })}
+              <td className="num audit-matrix__open-cell">
+                <button
+                  type="button"
+                  className="audit-table__open"
+                  onClick={() => onOpenDetail(c)}
+                  title="Abrir campanha"
+                >
+                  <ExternalLink size={14} />
+                </button>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
   );
 }
+
 
 function AuditCampaignRow({ campaign: c, expanded, onToggle, onOpenDetail, onMarkOk, onMarkIssue, onClearMark, busy }) {
   const setupBad = c.setup.status === 'invalid';

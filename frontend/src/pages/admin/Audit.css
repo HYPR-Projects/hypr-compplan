@@ -798,3 +798,131 @@
 }
 
 
+
+/* ══════════════════════════════════════════════════════════════════════ */
+/* Visão MATRIZ — cada item de detalhe é uma coluna                        */
+/* ══════════════════════════════════════════════════════════════════════ */
+.audit-matrix-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  max-width: 100%;
+}
+.audit-matrix {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.audit-matrix th, .audit-matrix td {
+  border-bottom: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
+}
+.audit-matrix th.num, .audit-matrix td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Cabeçalho de grupo (linha 1) */
+.audit-matrix__group-row th {
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: center;
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--border-subtle, rgba(0, 0, 0, 0.12));
+  background: var(--surface-subtle, #f4f4f5);
+}
+.audit-matrix__group--setup { background: rgba(13, 148, 136, 0.08); }
+.audit-matrix__group--pre_campaign { background: rgba(37, 99, 235, 0.08); }
+.audit-matrix__group--optimization { background: rgba(202, 138, 4, 0.10); }
+.audit-matrix__group--account_mgmt { background: rgba(147, 51, 234, 0.08); }
+.audit-matrix__group--extras { background: rgba(219, 39, 119, 0.08); }
+.audit-matrix__group--onboarding { background: rgba(100, 116, 139, 0.10); }
+
+/* Cabeçalho de coluna (linha 2) */
+.audit-matrix thead th.audit-th {
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-tertiary);
+  background: var(--surface-subtle, #fafafa);
+  cursor: pointer;
+  user-select: none;
+  vertical-align: bottom;
+}
+.audit-matrix thead th.audit-th:hover { background: rgba(0, 0, 0, 0.03); }
+.audit-matrix thead th.audit-th.is-sorted { color: var(--accent-teal, #0d9488); }
+
+/* Colunas de item: largura fixa e enxuta */
+.audit-matrix__item-head {
+  min-width: 78px;
+  max-width: 78px;
+  white-space: normal;
+  line-height: 1.2;
+}
+.audit-matrix__item-head--setup { border-top: 2px solid rgba(13, 148, 136, 0.3); }
+.audit-matrix__item-head--pre_campaign { border-top: 2px solid rgba(37, 99, 235, 0.3); }
+.audit-matrix__item-head--optimization { border-top: 2px solid rgba(202, 138, 4, 0.3); }
+.audit-matrix__item-head--account_mgmt { border-top: 2px solid rgba(147, 51, 234, 0.3); }
+.audit-matrix__item-head--extras { border-top: 2px solid rgba(219, 39, 119, 0.3); }
+.audit-matrix__item-head--onboarding { border-top: 2px solid rgba(100, 116, 139, 0.3); }
+
+/* Corpo */
+.audit-matrix tbody td {
+  padding: 9px 10px;
+  color: var(--text-primary);
+  background: var(--surface, #fff);
+}
+.audit-matrix__row:hover td { background: rgba(13, 148, 136, 0.03); }
+
+.audit-matrix__camp-name { font-weight: 600; display: block; }
+.audit-matrix__token {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono, monospace);
+  display: block;
+  margin-top: 1px;
+}
+.audit-matrix__cs { color: var(--text-secondary); }
+.audit-matrix__comp { font-weight: 700; color: var(--accent-teal, #0d9488); }
+
+/* Célula de item */
+.audit-matrix__cell { font-variant-numeric: tabular-nums; }
+.audit-matrix__cell--empty { color: var(--border-strong, #d4d4d8); }
+.audit-matrix__cell-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--accent-blue, #2563eb);
+  text-decoration: none;
+}
+.audit-matrix__cell-link:hover { text-decoration: underline; }
+
+/* Colunas fixas (sticky) — Campanha, Anunciante, CS */
+.audit-matrix__sticky-col, .audit-matrix__sticky-col-head {
+  position: sticky;
+  z-index: 2;
+  background: var(--surface, #fff);
+}
+.audit-matrix__sticky-col-head { z-index: 4 !important; }
+.audit-matrix__row:hover .audit-matrix__sticky-col { background: #f6fefd; }
+.audit-matrix__camp { min-width: 170px; max-width: 170px; white-space: normal; }
+.audit-matrix__sticky-head { position: sticky; left: 0; z-index: 4; background: var(--surface-subtle, #f4f4f5); }
+
+/* Header sort icon (reaproveita) */
+.audit-matrix .audit-th__inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  justify-content: flex-end;
+}
+.audit-matrix .audit-th__sort-icon { opacity: 0.3; flex-shrink: 0; }
+.audit-matrix .audit-th__sort-icon.is-active { opacity: 1; color: var(--accent-teal, #0d9488); }
+
+.audit-matrix__open-cell { position: sticky; right: 0; background: var(--surface, #fff); z-index: 2; }
+.audit-matrix__open-head { position: sticky; right: 0; background: var(--surface-subtle, #fafafa); z-index: 3; }
