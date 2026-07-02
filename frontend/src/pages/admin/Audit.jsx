@@ -426,33 +426,39 @@ function AuditTable({ groups, onOpenDetail }) {
                           </div>
                         )}
                         {catKeysWithContent.map(catKey => (
-                          <div key={catKey} className="audit-table__detail-cat">
-                            <div className="audit-table__detail-cat-label">
-                              {CAT_LABELS[catKey] || catKey}
-                              {cat[catKey] ? <span className="audit-table__detail-cat-brl"> · {fmt.brl(cat[catKey])}</span> : null}
+                          <div key={catKey} className="audit-detail-card">
+                            <div className="audit-detail-card__head">
+                              <span className="audit-detail-card__title">{CAT_LABELS[catKey] || catKey}</span>
+                              {cat[catKey] ? (
+                                <span className="audit-detail-card__total">{fmt.brl(cat[catKey])}</span>
+                              ) : null}
                             </div>
-                            <div className="audit-table__detail-items">
-                              {earnedByCat[catKey].map(it => (
-                                <div key={it.id} className="audit-detail-item">
-                                  <span className="audit-detail-item__label">{it.label}</span>
-                                  <span className="audit-detail-item__brl">{fmt.brl(it.value_brl)}</span>
-                                  {it.url ? (
-                                    <a
-                                      href={normalizeUrl(it.url)}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="audit-detail-item__link"
-                                      onClick={(e) => e.stopPropagation()}
-                                      title={it.url}
-                                    >
-                                      <ExternalLink size={12} /> {shortUrl(it.url)}
-                                    </a>
-                                  ) : (
-                                    <span className="audit-detail-item__nolink">sem link</span>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
+                            <table className="audit-detail-card__table">
+                              <tbody>
+                                {earnedByCat[catKey].map(it => (
+                                  <tr key={it.id}>
+                                    <td className="audit-detail-card__item">{it.label}</td>
+                                    <td className="audit-detail-card__brl">{fmt.brl(it.value_brl)}</td>
+                                    <td className="audit-detail-card__link-cell">
+                                      {it.url ? (
+                                        <a
+                                          href={normalizeUrl(it.url)}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="audit-detail-card__link"
+                                          onClick={(e) => e.stopPropagation()}
+                                          title={it.url}
+                                        >
+                                          <ExternalLink size={11} /> {shortUrl(it.url)}
+                                        </a>
+                                      ) : (
+                                        <span className="audit-detail-card__nolink">—</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
                         ))}
                       </div>
