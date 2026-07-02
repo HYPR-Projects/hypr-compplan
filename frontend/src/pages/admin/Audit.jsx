@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Shield, ChevronRight, ChevronDown, ExternalLink, AlertTriangle,
   Check, X, RotateCcw, Search, Clock, CircleX, Download, FileSpreadsheet,
-  LayoutList, Table2, ArrowUp, ArrowDown, ArrowUpDown, MoreVertical,
+  LayoutList, Table2, ArrowUp, ArrowDown, ArrowUpDown, MoreVertical, Plus,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
@@ -305,50 +305,67 @@ function AuditTable({ groups, onReload, onOpenDetail }) {
   // Sort: coluna + direção. Default: bônus (comp) desc.
   const [sortKey, setSortKey] = useState('comp');
   const [sortDir, setSortDir] = useState('desc');
-  // Modal de exclusão: { token, campaignName, scope: 'item'|'cat', itemIds: [], label }
-  const [excludeModal, setExcludeModal] = useState(null);
-  const [excludeReason, setExcludeReason] = useState('');
-  const [excludeBusy, setExcludeBusy] = useState(false);
+  // Modal: { token, campaignName, action: 'exclude'|'include', scope: 'item'|'cat', itemIds: [], label }
+  const [actionModal, setActionModal] = useState(null);
+  const [actionReason, setActionReason] = useState('');
+  const [actionBusy, setActionBusy] = useState(false);
 
-  // Abre modal pra excluir 1 item
+  // ── EXCLUIR (força earned=false) ──
   const askExcludeItem = (c, itemId, label) => {
-    setExcludeReason('');
-    setExcludeModal({ token: c.short_token, campaignName: c.campaign_name, scope: 'item', itemIds: [itemId], label });
+    setActionReason('');
+    setActionModal({ token: c.short_token, campaignName: c.campaign_name, action: 'exclude', scope: 'item', itemIds: [itemId], label });
   };
-  // Abre modal pra excluir etapa inteira (todos os itens earned da categoria daquela campanha)
   const askExcludeCat = (c, catKey, catLabel) => {
     const ids = (AUDIT_MATRIX_CATEGORIES.find(x => x.key === catKey)?.items || [])
       .map(it => it.id)
       .filter(id => (c.items_map?.[id]?.value_brl || 0) > 0);
     if (ids.length === 0) return;
-    setExcludeReason('');
-    setExcludeModal({ token: c.short_token, campaignName: c.campaign_name, scope: 'cat', itemIds: ids, label: catLabel });
+    setActionReason('');
+    setActionModal({ token: c.short_token, campaignName: c.campaign_name, action: 'exclude', scope: 'cat', itemIds: ids, label: catLabel });
   };
-  // Reverte 1 item (remove override → volta a contar)
+
+  // ── INCLUIR (força earned=true) ──
+  const askIncludeItem = (c, itemId, label) => {
+    setActionReason('');
+    setActionModal({ token: c.short_token, campaignName: c.campaign_name, action: 'include', scope: 'item', itemIds: [itemId], label });
+  };
+  const askIncludeCat = (c, catKey, catLabel) => {
+    // Inclui os itens da etapa que hoje NÃO têm valor (— vazios)
+    const ids = (AUDIT_MATRIX_CATEGORIES.find(x => x.key === catKey)?.items || [])
+      .map(it => it.id)
+      .filter(id => (c.items_map?.[id]?.value_brl || 0) === 0);
+    if (ids.length === 0) return;
+    setActionReason('');
+    setActionModal({ token: c.short_token, campaignName: c.campaign_name, action: 'include', scope: 'cat', itemIds: ids, label: catLabel });
+  };
+
+  // Reverte 1 item (remove override → volta ao estado natural)
   const revertItem = async (c, itemId) => {
     try {
       await endpoints.adminOverrideItem(c.short_token, { item_id: itemId, earned: null });
       onReload?.();
     } catch (e) { alert(`Falha ao reverter: ${e.message}`); }
   };
-  // Confirma exclusão (força earned=false nos itemIds com motivo)
-  const confirmExclude = async () => {
-    if (!excludeModal) return;
-    if (!excludeReason.trim()) { alert('Informe o motivo da exclusão.'); return; }
-    setExcludeBusy(true);
+
+  // Confirma ação (exclude → earned=false / include → earned=true), com motivo
+  const confirmAction = async () => {
+    if (!actionModal) return;
+    if (!actionReason.trim()) { alert('Informe o motivo.'); return; }
+    setActionBusy(true);
+    const earnedVal = actionModal.action === 'include';
     try {
-      for (const id of excludeModal.itemIds) {
-        await endpoints.adminOverrideItem(excludeModal.token, {
-          item_id: id, earned: false, reason: excludeReason.trim(),
+      for (const id of actionModal.itemIds) {
+        await endpoints.adminOverrideItem(actionModal.token, {
+          item_id: id, earned: earnedVal, reason: actionReason.trim(),
         });
       }
-      setExcludeModal(null);
-      setExcludeReason('');
+      setActionModal(null);
+      setActionReason('');
       onReload?.();
     } catch (e) {
-      alert(`Falha ao excluir: ${e.message}`);
+      alert(`Falha: ${e.message}`);
     } finally {
-      setExcludeBusy(false);
+      setActionBusy(false);
     }
   };
 
@@ -461,10 +478,15 @@ function AuditTable({ groups, onReload, onOpenDetail }) {
         </thead>
         <tbody>
           {allCampaigns.map(c => {
-            // Itens forçados a não-earned (excluídos) por admin
+            // Itens forçados por admin
             const excludedIds = new Set(
               (c.admin_overrides || [])
                 .filter(o => o.kind === 'item' && o.forced === 'not_earned')
+                .map(o => o.item_id)
+            );
+            const forcedInIds = new Set(
+              (c.admin_overrides || [])
+                .filter(o => o.kind === 'item' && o.forced === 'earned')
                 .map(o => o.item_id)
             );
             return (
@@ -511,11 +533,29 @@ function AuditTable({ groups, onReload, onOpenDetail }) {
                 }
 
                 if (!val) {
-                  return <td key={it.id} className="num audit-matrix__cell audit-matrix__cell--empty">—</td>;
+                  // Célula vazia: botão + pra INCLUIR (forçar earned)
+                  return (
+                    <td key={it.id} className="num audit-matrix__cell audit-matrix__cell--empty">
+                      <span className="audit-matrix__cell-inner">
+                        <span className="audit-matrix__dash">—</span>
+                        <button
+                          type="button"
+                          className="audit-matrix__include-btn"
+                          onClick={() => askIncludeItem(c, it.id, it.label)}
+                          title={`Incluir "${it.label}" no compp deste CS`}
+                        >
+                          <Plus size={11} />
+                        </button>
+                      </span>
+                    </td>
+                  );
                 }
+
+                const isForcedIn = forcedInIds.has(it.id);
                 return (
-                  <td key={it.id} className="num audit-matrix__cell">
+                  <td key={it.id} className={`num audit-matrix__cell ${isForcedIn ? 'audit-matrix__cell--forced-in' : ''}`}>
                     <span className="audit-matrix__cell-inner">
+                      {isForcedIn && <span className="audit-matrix__forced-mark" title="Incluído manualmente pelo admin">＋</span>}
                       {url ? (
                         <a
                           href={normalizeUrl(url)}
@@ -529,23 +569,35 @@ function AuditTable({ groups, onReload, onOpenDetail }) {
                       ) : (
                         <span>{fmt.brlCompact(val)}</span>
                       )}
-                      <button
-                        type="button"
-                        className="audit-matrix__exclude-btn"
-                        onClick={() => askExcludeItem(c, it.id, it.label)}
-                        title={`Excluir "${it.label}" do compp deste CS`}
-                      >
-                        <X size={11} />
-                      </button>
+                      {isForcedIn ? (
+                        <button
+                          type="button"
+                          className="audit-matrix__revert-btn"
+                          onClick={() => revertItem(c, it.id)}
+                          title="Reverter inclusão (voltar ao natural)"
+                        >
+                          <RotateCcw size={11} />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="audit-matrix__exclude-btn"
+                          onClick={() => askExcludeItem(c, it.id, it.label)}
+                          title={`Excluir "${it.label}" do compp deste CS`}
+                        >
+                          <X size={11} />
+                        </button>
+                      )}
                     </span>
                   </td>
                 );
               })}
               <td className="num audit-matrix__open-cell">
                 <div className="audit-matrix__actions">
-                  <ExcludeCatMenu
+                  <CatActionMenu
                     campaign={c}
                     onExcludeCat={(catKey, catLabel) => askExcludeCat(c, catKey, catLabel)}
+                    onIncludeCat={(catKey, catLabel) => askIncludeCat(c, catKey, catLabel)}
                   />
                   <button
                     type="button"
@@ -563,56 +615,66 @@ function AuditTable({ groups, onReload, onOpenDetail }) {
         </tbody>
       </table>
 
-      {excludeModal && (
-        <Modal open onClose={() => !excludeBusy && setExcludeModal(null)} title={`Excluir ${excludeModal.scope === 'cat' ? 'etapa' : 'item'} do compp`}>
+      {actionModal && (() => {
+        const isInclude = actionModal.action === 'include';
+        return (
+        <Modal open onClose={() => !actionBusy && setActionModal(null)} title={`${isInclude ? 'Incluir' : 'Excluir'} ${actionModal.scope === 'cat' ? 'etapa' : 'item'} ${isInclude ? 'no' : 'do'} compp`}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
-              Campanha <strong>{excludeModal.campaignName}</strong> —{' '}
-              {excludeModal.scope === 'cat'
-                ? <>vai excluir <strong>{excludeModal.itemIds.length} {excludeModal.itemIds.length === 1 ? 'item' : 'itens'}</strong> da etapa <strong>{excludeModal.label}</strong>.</>
-                : <>vai excluir <strong>{excludeModal.label}</strong>.</>}
-              {' '}O valor é descontado do total do CS e reflete em todos os menus. Dá pra reverter depois.
+              Campanha <strong>{actionModal.campaignName}</strong> —{' '}
+              {actionModal.scope === 'cat'
+                ? <>vai {isInclude ? 'incluir' : 'excluir'} <strong>{actionModal.itemIds.length} {actionModal.itemIds.length === 1 ? 'item' : 'itens'}</strong> da etapa <strong>{actionModal.label}</strong>.</>
+                : <>vai {isInclude ? 'incluir' : 'excluir'} <strong>{actionModal.label}</strong>.</>}
+              {' '}O valor {isInclude ? 'é somado ao' : 'é descontado do'} total do CS e reflete em todos os menus. Dá pra reverter depois.
             </p>
             <div>
               <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                Motivo da exclusão <span style={{ color: 'var(--accent-red)' }}>*</span>
+                Motivo <span style={{ color: 'var(--accent-red)' }}>*</span>
               </label>
               <Textarea
-                value={excludeReason}
-                onChange={(e) => setExcludeReason(e.target.value)}
+                value={actionReason}
+                onChange={(e) => setActionReason(e.target.value)}
                 rows={3}
-                placeholder="Ex: entrega não comprovada, item não aplicável a esta campanha."
+                placeholder={isInclude
+                  ? 'Ex: entrega comprovada fora do checklist, ajuste acordado com o CS.'
+                  : 'Ex: entrega não comprovada, item não aplicável a esta campanha.'}
                 autoFocus
               />
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-              <Button variant="ghost" onClick={() => setExcludeModal(null)} disabled={excludeBusy}>Cancelar</Button>
+              <Button variant="ghost" onClick={() => setActionModal(null)} disabled={actionBusy}>Cancelar</Button>
               <Button
-                onClick={confirmExclude}
-                disabled={excludeBusy || !excludeReason.trim()}
-                style={{ background: 'var(--accent-red, #f43f5e)', borderColor: 'var(--accent-red, #f43f5e)', color: 'white' }}
+                onClick={confirmAction}
+                disabled={actionBusy || !actionReason.trim()}
+                style={isInclude
+                  ? { background: 'var(--accent-teal, #0d9488)', borderColor: 'var(--accent-teal, #0d9488)', color: 'white' }
+                  : { background: 'var(--accent-red, #f43f5e)', borderColor: 'var(--accent-red, #f43f5e)', color: 'white' }}
               >
-                {excludeBusy ? 'Excluindo…' : 'Excluir do compp'}
+                {actionBusy ? (isInclude ? 'Incluindo…' : 'Excluindo…') : (isInclude ? 'Incluir no compp' : 'Excluir do compp')}
               </Button>
             </div>
           </div>
         </Modal>
-      )}
+        );
+      })()}
     </div>
   );
 }
 
 /**
- * Menu de 3 pontinhos pra excluir etapa inteira de uma campanha.
- * Lista só as etapas que têm valor earned.
+ * Menu de 3 pontinhos pra excluir/incluir etapa inteira de uma campanha.
  */
-function ExcludeCatMenu({ campaign: c, onExcludeCat }) {
+function CatActionMenu({ campaign: c, onExcludeCat, onIncludeCat }) {
   const [open, setOpen] = useState(false);
-  // Etapas com pelo menos 1 item earned
-  const catsWithValue = AUDIT_MATRIX_CATEGORIES.filter(cat =>
+  // Etapas com pelo menos 1 item earned (podem ser excluídas)
+  const catsExcludable = AUDIT_MATRIX_CATEGORIES.filter(cat =>
     cat.items.some(it => (c.items_map?.[it.id]?.value_brl || 0) > 0)
   );
-  if (catsWithValue.length === 0) return null;
+  // Etapas com pelo menos 1 item vazio (podem ter itens incluídos)
+  const catsIncludable = AUDIT_MATRIX_CATEGORIES.filter(cat =>
+    cat.items.some(it => (c.items_map?.[it.id]?.value_brl || 0) === 0)
+  );
+  if (catsExcludable.length === 0 && catsIncludable.length === 0) return null;
 
   return (
     <div className="audit-matrix__menu-wrap">
@@ -620,7 +682,7 @@ function ExcludeCatMenu({ campaign: c, onExcludeCat }) {
         type="button"
         className="audit-matrix__menu-btn"
         onClick={() => setOpen(o => !o)}
-        title="Excluir etapa inteira"
+        title="Incluir / excluir etapa inteira"
       >
         <MoreVertical size={14} />
       </button>
@@ -628,17 +690,36 @@ function ExcludeCatMenu({ campaign: c, onExcludeCat }) {
         <>
           <div className="audit-matrix__menu-backdrop" onClick={() => setOpen(false)} />
           <div className="audit-matrix__menu">
-            <div className="audit-matrix__menu-head">Excluir etapa do compp</div>
-            {catsWithValue.map(cat => (
-              <button
-                key={cat.key}
-                type="button"
-                className="audit-matrix__menu-item"
-                onClick={() => { setOpen(false); onExcludeCat(cat.key, cat.label); }}
-              >
-                {cat.label}
-              </button>
-            ))}
+            {catsExcludable.length > 0 && (
+              <>
+                <div className="audit-matrix__menu-head">Excluir etapa</div>
+                {catsExcludable.map(cat => (
+                  <button
+                    key={`ex-${cat.key}`}
+                    type="button"
+                    className="audit-matrix__menu-item audit-matrix__menu-item--exclude"
+                    onClick={() => { setOpen(false); onExcludeCat(cat.key, cat.label); }}
+                  >
+                    <X size={12} /> {cat.label}
+                  </button>
+                ))}
+              </>
+            )}
+            {catsIncludable.length > 0 && (
+              <>
+                <div className="audit-matrix__menu-head">Incluir etapa</div>
+                {catsIncludable.map(cat => (
+                  <button
+                    key={`in-${cat.key}`}
+                    type="button"
+                    className="audit-matrix__menu-item audit-matrix__menu-item--include"
+                    onClick={() => { setOpen(false); onIncludeCat(cat.key, cat.label); }}
+                  >
+                    <Plus size={12} /> {cat.label}
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         </>
       )}

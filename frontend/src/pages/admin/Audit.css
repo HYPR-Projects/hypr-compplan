@@ -1078,7 +1078,51 @@
   color: var(--text-primary);
   cursor: pointer;
 }
-.audit-matrix__menu-item:hover {
+.audit-matrix__menu-item {
+  transition: background 100ms ease, color 100ms ease;
+}
+
+/* ── Incluir item (célula vazia) ──────────────────────────────────────── */
+.audit-matrix__dash { color: var(--border-strong, #d4d4d8); }
+.audit-matrix__include-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px; height: 18px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 100ms ease, background 100ms ease, color 100ms ease;
+  flex-shrink: 0;
+}
+.audit-matrix__cell--empty:hover .audit-matrix__include-btn { opacity: 1; }
+.audit-matrix__include-btn:hover {
+  background: rgba(13, 148, 136, 0.12);
+  color: var(--accent-teal, #0d9488);
+}
+
+/* Item incluído manualmente (forced-in) */
+.audit-matrix__cell--forced-in { background: rgba(13, 148, 136, 0.05) !important; }
+.audit-matrix__forced-mark {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-teal, #0d9488);
+}
+
+/* Menu items coloridos por ação */
+.audit-matrix__menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.audit-matrix__menu-item--exclude:hover {
   background: rgba(244, 63, 94, 0.08);
   color: var(--accent-red, #f43f5e);
+}
+.audit-matrix__menu-item--include:hover {
+  background: rgba(13, 148, 136, 0.08);
+  color: var(--accent-teal, #0d9488);
 }
