@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Shield, ChevronRight, ChevronDown, ExternalLink, AlertTriangle,
   Check, X, RotateCcw, Search, Clock, CircleX, Download, FileSpreadsheet,
-  LayoutList, Table2,
+  LayoutList, Table2, ArrowUp, ArrowDown, ArrowUpDown,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
@@ -313,18 +313,66 @@ const CAT_LABELS = {
 
 function AuditTable({ groups, onOpenDetail }) {
   const [expanded, setExpanded] = useState(new Set());
+  // Sort: coluna + direção. Default: bônus (comp) desc.
+  const [sortKey, setSortKey] = useState('comp');
+  const [sortDir, setSortDir] = useState('desc');
+
+  // Definição das colunas: key, label, tipo (num|text), e accessor pro valor
+  const COLUMNS = [
+    { key: 'campaign', label: 'Campanha', type: 'text', get: c => c.campaign_name || '' },
+    { key: 'client', label: 'Anunciante', type: 'text', get: c => c.client_name || '' },
+    { key: 'cs', label: 'CS', type: 'text', get: c => c.cs_name || c.cs_email || '' },
+    { key: 'valor', label: 'Valor', type: 'num', get: c => c.total_value || 0 },
+    { key: 'liquido', label: 'Líquido', type: 'num', get: c => c.liquido || 0 },
+    { key: 'score', label: 'Score', type: 'num', get: c => c.total_pct || 0 },
+    { key: 'comp', label: 'Comp', type: 'num', get: c => c.total_brl || 0 },
+    { key: 'setup', label: 'Setup', type: 'num', get: c => c.by_category_brl?.setup || 0 },
+    { key: 'pre', label: 'Pré', type: 'num', get: c => c.by_category_brl?.pre_campaign || 0 },
+    { key: 'otim', label: 'Otim', type: 'num', get: c => c.by_category_brl?.optimization || 0 },
+    { key: 'am', label: 'AM', type: 'num', get: c => c.by_category_brl?.account_mgmt || 0 },
+    { key: 'extras', label: 'Extras', type: 'num', get: c => c.by_category_brl?.extras || 0 },
+  ];
 
   // Achata todos os grupos numa lista única
   const allCampaigns = [];
   for (const key of Object.keys(groups)) {
     for (const c of groups[key] || []) allCampaigns.push(c);
   }
-  // Ordena por bônus (R$) desc
-  allCampaigns.sort((a, b) => (b.total_brl || 0) - (a.total_brl || 0));
+
+  // Ordena conforme sortKey/sortDir
+  const activeCol = COLUMNS.find(col => col.key === sortKey) || COLUMNS[6];
+  allCampaigns.sort((a, b) => {
+    const va = activeCol.get(a);
+    const vb = activeCol.get(b);
+    let cmp;
+    if (activeCol.type === 'text') {
+      cmp = String(va).localeCompare(String(vb), 'pt-BR', { sensitivity: 'base' });
+    } else {
+      cmp = (Number(va) || 0) - (Number(vb) || 0);
+    }
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
 
   if (allCampaigns.length === 0) {
     return <Card><p className="card__subtitle">Nenhuma campanha pra exibir.</p></Card>;
   }
+
+  // Clique no header: se é a coluna ativa, inverte; senão, começa desc (maior→menor / Z-A)
+  const onSort = (key) => {
+    if (key === sortKey) {
+      setSortDir(prev => (prev === 'desc' ? 'asc' : 'desc'));
+    } else {
+      setSortKey(key);
+      setSortDir('desc');
+    }
+  };
+
+  const SortIcon = ({ colKey }) => {
+    if (colKey !== sortKey) return <ArrowUpDown size={12} className="audit-th__sort-icon" />;
+    return sortDir === 'desc'
+      ? <ArrowDown size={12} className="audit-th__sort-icon is-active" />
+      : <ArrowUp size={12} className="audit-th__sort-icon is-active" />;
+  };
 
   const toggle = (token) => {
     setExpanded(prev => {
@@ -341,18 +389,18 @@ function AuditTable({ groups, onOpenDetail }) {
       <table className="audit-table">
         <thead>
           <tr>
-            <th>Campanha</th>
-            <th>Anunciante</th>
-            <th>CS</th>
-            <th className="num">Valor</th>
-            <th className="num">Líquido</th>
-            <th className="num">Score</th>
-            <th className="num">Comp</th>
-            <th className="num">Setup</th>
-            <th className="num">Pré</th>
-            <th className="num">Otim</th>
-            <th className="num">AM</th>
-            <th className="num">Extras</th>
+            {COLUMNS.map(col => (
+              <th
+                key={col.key}
+                className={`audit-th ${col.type === 'num' ? 'num' : ''} ${col.key === sortKey ? 'is-sorted' : ''}`}
+                onClick={() => onSort(col.key)}
+              >
+                <span className="audit-th__inner">
+                  {col.label}
+                  <SortIcon colKey={col.key} />
+                </span>
+              </th>
+            ))}
             <th></th>
           </tr>
         </thead>
