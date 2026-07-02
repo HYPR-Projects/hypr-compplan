@@ -918,27 +918,36 @@
 .audit-matrix__sticky-col-head { z-index: 4 !important; }
 .audit-matrix__row:hover .audit-matrix__sticky-col { background: #f6fefd; }
 
-/* Larguras fixas pra os offsets left baterem exatamente */
+/* Larguras fixas pra os offsets left baterem exatamente
+   Campanha 180 · Anunciante 140 · CS 150 · Início 90 · Fim 90 (total 650) */
 .audit-matrix__camp {
   min-width: 180px; max-width: 180px; width: 180px;
   white-space: normal;
 }
 .audit-matrix__client {
-  min-width: 150px; max-width: 150px; width: 150px;
+  min-width: 140px; max-width: 140px; width: 140px;
   white-space: normal;
 }
 .audit-matrix__cs {
-  min-width: 160px; max-width: 160px; width: 160px;
+  min-width: 150px; max-width: 150px; width: 150px;
   white-space: normal;
   color: var(--text-secondary);
 }
-/* Headers correspondentes (Campanha/Anunciante/CS) — mesma largura */
+.audit-matrix__date {
+  min-width: 90px; max-width: 90px; width: 90px;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+/* Headers correspondentes — mesma largura das colunas */
 .audit-matrix thead th.audit-matrix__sticky-col-head:nth-child(1) { min-width: 180px; max-width: 180px; width: 180px; }
-.audit-matrix thead th.audit-matrix__sticky-col-head:nth-child(2) { min-width: 150px; max-width: 150px; width: 150px; }
-.audit-matrix thead th.audit-matrix__sticky-col-head:nth-child(3) { min-width: 160px; max-width: 160px; width: 160px; }
+.audit-matrix thead th.audit-matrix__sticky-col-head:nth-child(2) { min-width: 140px; max-width: 140px; width: 140px; }
+.audit-matrix thead th.audit-matrix__sticky-col-head:nth-child(3) { min-width: 150px; max-width: 150px; width: 150px; }
+.audit-matrix thead th.audit-matrix__sticky-col-head:nth-child(4) { min-width: 90px; max-width: 90px; width: 90px; }
+.audit-matrix thead th.audit-matrix__sticky-col-head:nth-child(5) { min-width: 90px; max-width: 90px; width: 90px; }
 
-/* borda direita na última coluna congelada pra separar visualmente do scroll */
-.audit-matrix__cs, .audit-matrix thead th.audit-matrix__sticky-col-head:nth-child(3) {
+/* borda direita na última coluna congelada (Fim) pra separar do scroll */
+.audit-matrix__date--last, .audit-matrix thead th.audit-matrix__sticky-col-head:nth-child(5) {
   border-right: 2px solid var(--border-subtle, rgba(0, 0, 0, 0.12));
 }
 
@@ -947,7 +956,7 @@
   left: 0;
   z-index: 4;
   background: var(--surface-subtle, #f4f4f5);
-  min-width: 490px; max-width: 490px; width: 490px;
+  min-width: 650px; max-width: 650px; width: 650px;
   border-right: 2px solid var(--border-subtle, rgba(0, 0, 0, 0.12));
 }
 

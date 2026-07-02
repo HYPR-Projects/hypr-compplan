@@ -374,11 +374,17 @@ function AuditTable({ groups, onReload, onOpenDetail }) {
     { key: 'campaign', label: 'Campanha', type: 'text', get: c => c.campaign_name || '' },
     { key: 'client', label: 'Anunciante', type: 'text', get: c => c.client_name || '' },
     { key: 'cs', label: 'CS', type: 'text', get: c => c.cs_name || c.cs_email || '' },
+    { key: 'start', label: 'Início', type: 'text', get: c => c.start_date || '' },
+    { key: 'end', label: 'Fim', type: 'text', get: c => c.end_date || '' },
     { key: 'valor', label: 'Valor', type: 'num', get: c => c.total_value || 0 },
     { key: 'liquido', label: 'Líquido', type: 'num', get: c => c.liquido || 0 },
     { key: 'score', label: 'Score', type: 'num', get: c => c.total_pct || 0 },
     { key: 'comp', label: 'Comp', type: 'num', get: c => c.total_brl || 0 },
   ];
+
+  // Offsets left das 5 colunas congeladas (px acumulado): campanha, anunciante, cs, início, fim
+  const STICKY_LEFT = [0, 180, 320, 470, 560];
+  const STICKY_COUNT = 5;
 
   // Accessor pra valor de um item (matriz)
   const itemValue = (c, itemId) => (c.items_map?.[itemId]?.value_brl || 0);
@@ -438,7 +444,7 @@ function AuditTable({ groups, onReload, onOpenDetail }) {
         <thead>
           {/* Linha 1: grupos de categoria */}
           <tr className="audit-matrix__group-row">
-            <th className="audit-matrix__sticky-head" colSpan={3} style={{ left: 0 }}></th>
+            <th className="audit-matrix__sticky-head" colSpan={5} style={{ left: 0 }}></th>
             <th colSpan={4}></th>
             {AUDIT_MATRIX_CATEGORIES.map(cat => (
               <th
@@ -456,8 +462,8 @@ function AuditTable({ groups, onReload, onOpenDetail }) {
             {BASE_COLUMNS.map((col, i) => (
               <th
                 key={col.key}
-                className={`audit-th ${col.type === 'num' ? 'num' : ''} ${col.key === sortKey ? 'is-sorted' : ''} ${i < 3 ? 'audit-matrix__sticky-col-head' : ''}`}
-                style={i < 3 ? { left: `${[0, 180, 330][i]}px` } : undefined}
+                className={`audit-th ${col.type === 'num' ? 'num' : ''} ${col.key === sortKey ? 'is-sorted' : ''} ${i < STICKY_COUNT ? 'audit-matrix__sticky-col-head' : ''}`}
+                style={i < STICKY_COUNT ? { left: `${STICKY_LEFT[i]}px` } : undefined}
                 onClick={() => onSort(col.key)}
               >
                 <span className="audit-th__inner">{col.label}<SortIcon colKey={col.key} /></span>
@@ -504,7 +510,9 @@ function AuditTable({ groups, onReload, onOpenDetail }) {
                 </span>
               </td>
               <td className="audit-matrix__sticky-col audit-matrix__client" style={{ left: '180px' }}>{c.client_name}</td>
-              <td className="audit-matrix__sticky-col audit-matrix__cs" style={{ left: '330px' }}>{c.cs_name || c.cs_email}</td>
+              <td className="audit-matrix__sticky-col audit-matrix__cs" style={{ left: '320px' }}>{c.cs_name || c.cs_email}</td>
+              <td className="audit-matrix__sticky-col audit-matrix__date" style={{ left: '470px' }}>{fmt.dateShort(c.start_date)}</td>
+              <td className="audit-matrix__sticky-col audit-matrix__date audit-matrix__date--last" style={{ left: '560px' }}>{fmt.dateShort(c.end_date)}</td>
               <td className="num">{fmt.brlCompact(c.total_value)}</td>
               <td className="num">{fmt.brlCompact(c.liquido)}</td>
               <td className="num">{((c.total_pct || 0) * 100).toFixed(2)}%</td>
