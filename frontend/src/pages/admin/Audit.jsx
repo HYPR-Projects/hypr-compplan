@@ -365,6 +365,13 @@ function AuditTable({ groups, onOpenDetail }) {
             const earnedByCat = c.earned_items_by_cat || {};
             const catKeysWithContent = Object.keys(earnedByCat);
 
+            // Overrides agrupados por categoria (pra badge no topo do card da etapa)
+            const overridesByCat = {};
+            for (const ov of (c.admin_overrides || [])) {
+              const k = ov.cat || 'outros';
+              (overridesByCat[k] = overridesByCat[k] || []).push(ov);
+            }
+
             return (
               <Fragment key={c.short_token}>
                 <tr
@@ -433,6 +440,18 @@ function AuditTable({ groups, onOpenDetail }) {
                                 <span className="audit-detail-card__total">{fmt.brl(cat[catKey])}</span>
                               ) : null}
                             </div>
+                            {(overridesByCat[catKey] || []).map((ov, i) => (
+                              <div key={i} className="audit-detail-card__override">
+                                <span className="audit-detail-card__override-tag">⚡ Override</span>
+                                <span className="audit-detail-card__override-txt">
+                                  {ov.kind === 'setup'
+                                    ? (ov.forced === 'valid' ? 'setup forçado válido' : 'setup forçado anulado')
+                                    : `${ov.label} forçado ${ov.forced === 'earned' ? 'OK' : 'não'}`}
+                                  {ov.by && <> · {ov.by.split('@')[0]}</>}
+                                  {ov.reason && <> — "{ov.reason}"</>}
+                                </span>
+                              </div>
+                            ))}
                             <table className="audit-detail-card__table">
                               <tbody>
                                 {earnedByCat[catKey].map(it => (
@@ -447,12 +466,13 @@ function AuditTable({ groups, onOpenDetail }) {
                                           rel="noopener noreferrer"
                                           className="audit-detail-card__link"
                                           onClick={(e) => e.stopPropagation()}
-                                          title={it.url}
+                                          title="Abrir evidência"
+                                          aria-label="Abrir evidência"
                                         >
-                                          <ExternalLink size={11} /> {shortUrl(it.url)}
+                                          <ExternalLink size={13} />
                                         </a>
                                       ) : (
-                                        <span className="audit-detail-card__nolink">—</span>
+                                        <span className="audit-detail-card__nolink" title="Sem evidência">—</span>
                                       )}
                                     </td>
                                   </tr>

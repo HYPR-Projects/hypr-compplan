@@ -317,8 +317,12 @@ router.get('/:q', async (req, res) => {
       // ─── ADMIN OVERRIDES (forces feitos por admin, com nota) ───────────
       // Coleta item-overrides + setup force do admin_overrides (ao).
       const labelById = {};
-      for (const [, cat] of Object.entries(COMPPLAN_CATALOG)) {
-        for (const it of (cat.items || [])) labelById[it.id] = it.label;
+      const catById = {};
+      for (const [catKey, cat] of Object.entries(COMPPLAN_CATALOG)) {
+        for (const it of (cat.items || [])) {
+          labelById[it.id] = it.label;
+          catById[it.id] = catKey;
+        }
       }
       const adminOverridesList = [];
       for (const [key, val] of Object.entries(ao)) {
@@ -326,6 +330,7 @@ router.get('/:q', async (req, res) => {
           const meta = ao.__setup_force_meta || {};
           adminOverridesList.push({
             kind: 'setup',
+            cat: 'setup',
             label: 'Setup',
             forced: val, // 'valid' | 'invalid'
             reason: meta.reason || null,
@@ -338,6 +343,7 @@ router.get('/:q', async (req, res) => {
           adminOverridesList.push({
             kind: 'item',
             item_id: key,
+            cat: catById[key] || null,
             label: labelById[key] || key,
             forced: val.earned ? 'earned' : 'not_earned',
             reason: val.reason || null,
