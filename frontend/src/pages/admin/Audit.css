@@ -639,25 +639,13 @@
 
 /* ── Linha expansível na tabela ───────────────────────────────────────── */
 .audit-table__row {
-  cursor: pointer;
-}
-.audit-table__chevron {
-  display: inline-block;
-  margin-right: 4px;
-  vertical-align: -1px;
-  transition: transform 120ms ease;
-  color: var(--text-tertiary);
-}
-.audit-table__chevron.is-open {
-  transform: rotate(90deg);
-}
-.audit-table__row.is-open {
-  background: rgba(13, 148, 136, 0.04);
+  background: var(--surface, #fff);
 }
 
 .audit-table__detail-row > td {
   padding: 0 !important;
   background: var(--surface-subtle, #fafafa);
+  border-bottom: 3px solid var(--border-subtle, rgba(0, 0, 0, 0.08));
 }
 .audit-table__detail {
   display: grid;
@@ -732,6 +720,24 @@
   border-collapse: collapse;
   font-size: 12px;
   table-layout: fixed;
+}
+.audit-detail-card__table thead th {
+  padding: 5px 14px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-tertiary);
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
+  background: transparent;
+}
+.audit-detail-card__table thead th.audit-detail-card__brl,
+.audit-detail-card__table thead th.audit-detail-card__link-cell {
+  text-align: right;
+}
+.audit-detail-card__table thead th.audit-detail-card__link-cell {
+  text-align: center;
 }
 .audit-detail-card__table td {
   padding: 7px 14px;

@@ -312,7 +312,6 @@ const CAT_LABELS = {
 };
 
 function AuditTable({ groups, onOpenDetail }) {
-  const [expanded, setExpanded] = useState(new Set());
   // Sort: coluna + direção. Default: bônus (comp) desc.
   const [sortKey, setSortKey] = useState('comp');
   const [sortDir, setSortDir] = useState('desc');
@@ -374,14 +373,6 @@ function AuditTable({ groups, onOpenDetail }) {
       : <ArrowUp size={12} className="audit-th__sort-icon is-active" />;
   };
 
-  const toggle = (token) => {
-    setExpanded(prev => {
-      const next = new Set(prev);
-      next.has(token) ? next.delete(token) : next.add(token);
-      return next;
-    });
-  };
-
   const COL_COUNT = 13;
 
   return (
@@ -407,7 +398,6 @@ function AuditTable({ groups, onOpenDetail }) {
         <tbody>
           {allCampaigns.map(c => {
             const cat = c.by_category_brl || {};
-            const isOpen = expanded.has(c.short_token);
 
             // Itens earned por categoria (com valor + link). Vem do backend.
             const earnedByCat = c.earned_items_by_cat || {};
@@ -422,16 +412,9 @@ function AuditTable({ groups, onOpenDetail }) {
 
             return (
               <Fragment key={c.short_token}>
-                <tr
-                  className={`audit-table__row ${isOpen ? 'is-open' : ''}`}
-                  onClick={() => toggle(c.short_token)}
-                >
+                <tr className="audit-table__row">
                   <td className="audit-table__camp">
                     <span className="audit-table__camp-name">
-                      <ChevronRight
-                        size={13}
-                        className={`audit-table__chevron ${isOpen ? 'is-open' : ''}`}
-                      />
                       {c.campaign_name}
                     </span>
                     <span className="audit-table__token">
@@ -471,15 +454,10 @@ function AuditTable({ groups, onOpenDetail }) {
                   </td>
                 </tr>
 
-                {isOpen && (
+                {catKeysWithContent.length > 0 && (
                   <tr className="audit-table__detail-row">
                     <td colSpan={COL_COUNT}>
                       <div className="audit-table__detail">
-                        {catKeysWithContent.length === 0 && (
-                          <div className="audit-table__detail-empty">
-                            Nenhum item conquistado nesta campanha.
-                          </div>
-                        )}
                         {catKeysWithContent.map(catKey => (
                           <div key={catKey} className="audit-detail-card">
                             <div className="audit-detail-card__head">
@@ -501,6 +479,13 @@ function AuditTable({ groups, onOpenDetail }) {
                               </div>
                             ))}
                             <table className="audit-detail-card__table">
+                              <thead>
+                                <tr>
+                                  <th>Detalhe</th>
+                                  <th className="audit-detail-card__brl">Valor</th>
+                                  <th className="audit-detail-card__link-cell">Link</th>
+                                </tr>
+                              </thead>
                               <tbody>
                                 {earnedByCat[catKey].map(it => (
                                   <tr key={it.id}>
