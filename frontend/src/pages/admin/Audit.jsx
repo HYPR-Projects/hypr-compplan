@@ -316,10 +316,15 @@ function AuditTable({ groups, onOpenDetail }) {
   // Accessor pra valor de um item (matriz)
   const itemValue = (c, itemId) => (c.items_map?.[itemId]?.value_brl || 0);
 
-  // Achata todos os grupos numa lista única
+  // Achata TODOS os grupos numa lista única (inclusive all_ok).
   const allCampaigns = [];
+  const seen = new Set();
   for (const key of Object.keys(groups)) {
-    for (const c of groups[key] || []) allCampaigns.push(c);
+    for (const c of groups[key] || []) {
+      if (seen.has(c.short_token)) continue;
+      seen.add(c.short_token);
+      allCampaigns.push(c);
+    }
   }
 
   // Ordena conforme sortKey/sortDir. sortKey pode ser base col ou 'item:<id>'.
@@ -359,6 +364,9 @@ function AuditTable({ groups, onOpenDetail }) {
 
   return (
     <div className="audit-matrix-wrap fade-up">
+      <div className="audit-matrix__count">
+        {allCampaigns.length} {allCampaigns.length === 1 ? 'campanha' : 'campanhas'} · role para o lado para ver todas as etapas →
+      </div>
       <table className="audit-matrix">
         <thead>
           {/* Linha 1: grupos de categoria */}
