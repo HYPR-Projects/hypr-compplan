@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Shield, ChevronRight, ChevronDown, ExternalLink, AlertTriangle,
@@ -301,7 +301,19 @@ export default function AuditPage() {
  * valor por categoria (Setup | Pré | Otim | AM | Extras).
  * Junta todas as campanhas de todos os grupos numa lista só.
  */
+// Rótulos amigáveis das categorias (pra agrupar links na expansão)
+const CAT_LABELS = {
+  setup: 'Setup',
+  pre_campaign: 'Pré-Campanha',
+  optimization: 'Otimização',
+  account_management: 'Account Management',
+  extras: 'Extras',
+  onboarding: 'Onboarding',
+};
+
 function AuditTable({ groups, onOpenDetail }) {
+  const [expanded, setExpanded] = useState(new Set());
+
   // Achata todos os grupos numa lista única
   const allCampaigns = [];
   for (const key of Object.keys(groups)) {
@@ -313,6 +325,16 @@ function AuditTable({ groups, onOpenDetail }) {
   if (allCampaigns.length === 0) {
     return <Card><p className="card__subtitle">Nenhuma campanha pra exibir.</p></Card>;
   }
+
+  const toggle = (token) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(token) ? next.delete(token) : next.add(token);
+      return next;
+    });
+  };
+
+  const COL_COUNT = 13;
 
   return (
     <div className="audit-table-wrap fade-up">
@@ -337,46 +359,120 @@ function AuditTable({ groups, onOpenDetail }) {
         <tbody>
           {allCampaigns.map(c => {
             const cat = c.by_category_brl || {};
+            const isOpen = expanded.has(c.short_token);
+
+            // Agrupa evidências (com link) por categoria
+            const linksByCat = {};
+            for (const it of (c.evidences?.items || [])) {
+              const k = it.cat || 'outros';
+              (linksByCat[k] = linksByCat[k] || []).push(it);
+            }
+            const missingByCat = {};
+            for (const m of (c.evidences?.missing || [])) {
+              const k = m.cat || 'outros';
+              (missingByCat[k] = missingByCat[k] || []).push(m);
+            }
+            const catKeysWithContent = [...new Set([
+              ...Object.keys(linksByCat),
+              ...Object.keys(missingByCat),
+            ])];
+
             return (
-              <tr key={c.short_token}>
-                <td className="audit-table__camp">
-                  <span className="audit-table__camp-name">{c.campaign_name}</span>
-                  <span className="audit-table__token">
-                    {c.short_token}
-                    {c.admin_overrides && c.admin_overrides.length > 0 && (
-                      <span
-                        className="audit-table__override-badge"
-                        title={c.admin_overrides.map(o =>
-                          `${o.label}: ${o.forced}${o.reason ? ` — ${o.reason}` : ''} (${o.by || '?'})`
-                        ).join('\n')}
-                      >
-                        ⚡ {c.admin_overrides.length} override{c.admin_overrides.length > 1 ? 's' : ''}
-                      </span>
-                    )}
-                  </span>
-                </td>
-                <td>{c.client_name}</td>
-                <td className="audit-table__cs">{c.cs_name || c.cs_email}</td>
-                <td className="num">{fmt.brlCompact(c.total_value)}</td>
-                <td className="num">{fmt.brlCompact(c.liquido)}</td>
-                <td className="num">{((c.total_pct || 0) * 100).toFixed(2)}%</td>
-                <td className="num audit-table__comp">{fmt.brl(c.total_brl)}</td>
-                <td className="num">{cat.setup ? fmt.brlCompact(cat.setup) : '—'}</td>
-                <td className="num">{cat.pre_campaign ? fmt.brlCompact(cat.pre_campaign) : '—'}</td>
-                <td className="num">{cat.optimization ? fmt.brlCompact(cat.optimization) : '—'}</td>
-                <td className="num">{cat.account_management ? fmt.brlCompact(cat.account_management) : '—'}</td>
-                <td className="num">{cat.extras ? fmt.brlCompact(cat.extras) : '—'}</td>
-                <td className="num">
-                  <button
-                    type="button"
-                    className="audit-table__open"
-                    onClick={() => onOpenDetail(c)}
-                    title="Abrir campanha"
-                  >
-                    <ExternalLink size={14} />
-                  </button>
-                </td>
-              </tr>
+              <Fragment key={c.short_token}>
+                <tr
+                  className={`audit-table__row ${isOpen ? 'is-open' : ''}`}
+                  onClick={() => toggle(c.short_token)}
+                >
+                  <td className="audit-table__camp">
+                    <span className="audit-table__camp-name">
+                      <ChevronRight
+                        size={13}
+                        className={`audit-table__chevron ${isOpen ? 'is-open' : ''}`}
+                      />
+                      {c.campaign_name}
+                    </span>
+                    <span className="audit-table__token">
+                      {c.short_token}
+                      {c.admin_overrides && c.admin_overrides.length > 0 && (
+                        <span
+                          className="audit-table__override-badge"
+                          title={c.admin_overrides.map(o =>
+                            `${o.label}: ${o.forced}${o.reason ? ` — ${o.reason}` : ''} (${o.by || '?'})`
+                          ).join('\n')}
+                        >
+                          ⚡ {c.admin_overrides.length} override{c.admin_overrides.length > 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </span>
+                  </td>
+                  <td>{c.client_name}</td>
+                  <td className="audit-table__cs">{c.cs_name || c.cs_email}</td>
+                  <td className="num">{fmt.brlCompact(c.total_value)}</td>
+                  <td className="num">{fmt.brlCompact(c.liquido)}</td>
+                  <td className="num">{((c.total_pct || 0) * 100).toFixed(2)}%</td>
+                  <td className="num audit-table__comp">{fmt.brl(c.total_brl)}</td>
+                  <td className="num">{cat.setup ? fmt.brlCompact(cat.setup) : '—'}</td>
+                  <td className="num">{cat.pre_campaign ? fmt.brlCompact(cat.pre_campaign) : '—'}</td>
+                  <td className="num">{cat.optimization ? fmt.brlCompact(cat.optimization) : '—'}</td>
+                  <td className="num">{cat.account_management ? fmt.brlCompact(cat.account_management) : '—'}</td>
+                  <td className="num">{cat.extras ? fmt.brlCompact(cat.extras) : '—'}</td>
+                  <td className="num">
+                    <button
+                      type="button"
+                      className="audit-table__open"
+                      onClick={(e) => { e.stopPropagation(); onOpenDetail(c); }}
+                      title="Abrir campanha"
+                    >
+                      <ExternalLink size={14} />
+                    </button>
+                  </td>
+                </tr>
+
+                {isOpen && (
+                  <tr className="audit-table__detail-row">
+                    <td colSpan={COL_COUNT}>
+                      <div className="audit-table__detail">
+                        {catKeysWithContent.length === 0 && (
+                          <div className="audit-table__detail-empty">
+                            Nenhuma evidência anexada nesta campanha.
+                          </div>
+                        )}
+                        {catKeysWithContent.map(catKey => (
+                          <div key={catKey} className="audit-table__detail-cat">
+                            <div className="audit-table__detail-cat-label">
+                              {CAT_LABELS[catKey] || catKey}
+                              {cat[catKey] ? <span className="audit-table__detail-cat-brl"> · {fmt.brl(cat[catKey])}</span> : null}
+                            </div>
+                            <div className="audit-table__detail-links">
+                              {(linksByCat[catKey] || []).map(it => (
+                                <a
+                                  key={it.id}
+                                  href={normalizeUrl(it.url)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="audit-link"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <ExternalLink size={12} />
+                                  <span className="audit-link__label">{it.label}</span>
+                                  <span className="audit-link__url">{shortUrl(it.url)}</span>
+                                </a>
+                              ))}
+                              {(missingByCat[catKey] || []).map(m => (
+                                <div key={m.id} className="audit-link audit-link--missing">
+                                  <CircleX size={12} />
+                                  <span className="audit-link__label">{m.label}</span>
+                                  <span className="audit-link__url">sem link</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             );
           })}
         </tbody>

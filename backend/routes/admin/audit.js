@@ -274,9 +274,9 @@ router.get('/:q', async (req, res) => {
             const link = evidenceMap[cat.shared_evidence.key] || '';
             if (link) {
               evFilled += 1;
-              evItems.push({ id: cat.shared_evidence.key, label: cat.shared_evidence.label, url: link });
+              evItems.push({ id: cat.shared_evidence.key, label: cat.shared_evidence.label, url: link, cat: catKey });
             } else {
-              evMissing.push({ id: cat.shared_evidence.key, label: cat.shared_evidence.label });
+              evMissing.push({ id: cat.shared_evidence.key, label: cat.shared_evidence.label, cat: catKey });
             }
           }
         }
@@ -288,9 +288,9 @@ router.get('/:q', async (req, res) => {
           const link = evidenceMap[it.id] || '';
           if (link) {
             evFilled += 1;
-            evItems.push({ id: it.id, label: it.label, url: link });
+            evItems.push({ id: it.id, label: it.label, url: link, cat: catKey });
           } else {
-            evMissing.push({ id: it.id, label: it.label });
+            evMissing.push({ id: it.id, label: it.label, cat: catKey });
           }
         }
       }

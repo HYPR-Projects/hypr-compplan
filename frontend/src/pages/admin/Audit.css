@@ -602,3 +602,59 @@
   border-radius: 999px;
   cursor: help;
 }
+
+/* ── Linha expansível na tabela ───────────────────────────────────────── */
+.audit-table__row {
+  cursor: pointer;
+}
+.audit-table__chevron {
+  display: inline-block;
+  margin-right: 4px;
+  vertical-align: -1px;
+  transition: transform 120ms ease;
+  color: var(--text-tertiary);
+}
+.audit-table__chevron.is-open {
+  transform: rotate(90deg);
+}
+.audit-table__row.is-open {
+  background: rgba(13, 148, 136, 0.04);
+}
+
+.audit-table__detail-row > td {
+  padding: 0 !important;
+  background: var(--surface-subtle, #fafafa);
+}
+.audit-table__detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 14px 18px 16px 30px;
+  white-space: normal;
+}
+.audit-table__detail-empty {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+.audit-table__detail-cat {
+  min-width: 220px;
+  max-width: 340px;
+}
+.audit-table__detail-cat-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.audit-table__detail-cat-brl {
+  color: var(--accent-teal, #0d9488);
+  font-weight: 700;
+}
+.audit-table__detail-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
