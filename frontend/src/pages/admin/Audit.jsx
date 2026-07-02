@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Shield, ChevronRight, ChevronDown, ExternalLink, AlertTriangle,
   Check, X, RotateCcw, Search, Clock, CircleX, Download, FileSpreadsheet,
-  LayoutList, Table2, ArrowUp, ArrowDown, ArrowUpDown,
+  LayoutList, Table2, ArrowUp, ArrowDown, ArrowUpDown, MoreVertical,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
@@ -38,13 +38,11 @@ export default function AuditPage() {
   const [busyToken, setBusyToken] = useState(null);
   const [viewMode, setViewMode] = useState('grouped'); // grouped | table
 
-  useEffect(() => {
+  const reload = () => {
     setError(null);
-    setData(null);
     endpoints.adminAudit(quarter)
       .then(d => {
         setData(d);
-        // Expande automaticamente o primeiro item de cada grupo (exceto all_ok)
         const auto = new Set();
         for (const g of GROUPS_META) {
           if (g.key === 'all_ok') continue;
@@ -54,6 +52,11 @@ export default function AuditPage() {
         setExpandedTokens(auto);
       })
       .catch(e => setError(e.message));
+  };
+
+  useEffect(() => {
+    setData(null);
+    reload();
   }, [quarter]);
 
   function toggleExpand(token) {
@@ -234,6 +237,7 @@ export default function AuditPage() {
       {totals.total > 0 && viewMode === 'table' && (
         <AuditTable
           groups={filteredGroups}
+          onReload={reload}
           onOpenDetail={(c) => navigate(`/admin/cs/${encodeURIComponent(c.cs_email)}/campanha/${c.short_token}`)}
         />
       )}
@@ -297,10 +301,56 @@ export default function AuditPage() {
 // Sub-componentes
 // ─────────────────────────────────────────────────────────────────────
 
-function AuditTable({ groups, onOpenDetail }) {
+function AuditTable({ groups, onReload, onOpenDetail }) {
   // Sort: coluna + direção. Default: bônus (comp) desc.
   const [sortKey, setSortKey] = useState('comp');
   const [sortDir, setSortDir] = useState('desc');
+  // Modal de exclusão: { token, campaignName, scope: 'item'|'cat', itemIds: [], label }
+  const [excludeModal, setExcludeModal] = useState(null);
+  const [excludeReason, setExcludeReason] = useState('');
+  const [excludeBusy, setExcludeBusy] = useState(false);
+
+  // Abre modal pra excluir 1 item
+  const askExcludeItem = (c, itemId, label) => {
+    setExcludeReason('');
+    setExcludeModal({ token: c.short_token, campaignName: c.campaign_name, scope: 'item', itemIds: [itemId], label });
+  };
+  // Abre modal pra excluir etapa inteira (todos os itens earned da categoria daquela campanha)
+  const askExcludeCat = (c, catKey, catLabel) => {
+    const ids = (AUDIT_MATRIX_CATEGORIES.find(x => x.key === catKey)?.items || [])
+      .map(it => it.id)
+      .filter(id => (c.items_map?.[id]?.value_brl || 0) > 0);
+    if (ids.length === 0) return;
+    setExcludeReason('');
+    setExcludeModal({ token: c.short_token, campaignName: c.campaign_name, scope: 'cat', itemIds: ids, label: catLabel });
+  };
+  // Reverte 1 item (remove override → volta a contar)
+  const revertItem = async (c, itemId) => {
+    try {
+      await endpoints.adminOverrideItem(c.short_token, { item_id: itemId, earned: null });
+      onReload?.();
+    } catch (e) { alert(`Falha ao reverter: ${e.message}`); }
+  };
+  // Confirma exclusão (força earned=false nos itemIds com motivo)
+  const confirmExclude = async () => {
+    if (!excludeModal) return;
+    if (!excludeReason.trim()) { alert('Informe o motivo da exclusão.'); return; }
+    setExcludeBusy(true);
+    try {
+      for (const id of excludeModal.itemIds) {
+        await endpoints.adminOverrideItem(excludeModal.token, {
+          item_id: id, earned: false, reason: excludeReason.trim(),
+        });
+      }
+      setExcludeModal(null);
+      setExcludeReason('');
+      onReload?.();
+    } catch (e) {
+      alert(`Falha ao excluir: ${e.message}`);
+    } finally {
+      setExcludeBusy(false);
+    }
+  };
 
   // Colunas fixas (resumo). As colunas de item vêm de AUDIT_MATRIX_ITEMS.
   const BASE_COLUMNS = [
@@ -410,7 +460,14 @@ function AuditTable({ groups, onOpenDetail }) {
           </tr>
         </thead>
         <tbody>
-          {allCampaigns.map(c => (
+          {allCampaigns.map(c => {
+            // Itens forçados a não-earned (excluídos) por admin
+            const excludedIds = new Set(
+              (c.admin_overrides || [])
+                .filter(o => o.kind === 'item' && o.forced === 'not_earned')
+                .map(o => o.item_id)
+            );
+            return (
             <tr key={c.short_token} className="audit-matrix__row">
               <td className="audit-matrix__camp audit-matrix__sticky-col" style={{ left: 0 }}>
                 <span className="audit-matrix__camp-name">{c.campaign_name}</span>
@@ -434,41 +491,157 @@ function AuditTable({ groups, onOpenDetail }) {
                 const cell = c.items_map?.[it.id];
                 const val = cell?.value_brl || 0;
                 const url = cell?.url || null;
+                const isExcluded = excludedIds.has(it.id);
+
+                // Item excluído: mostra riscado + botão reverter
+                if (isExcluded) {
+                  return (
+                    <td key={it.id} className="num audit-matrix__cell audit-matrix__cell--excluded">
+                      <span className="audit-matrix__excluded-mark" title="Excluído do compp">excluído</span>
+                      <button
+                        type="button"
+                        className="audit-matrix__revert-btn"
+                        onClick={() => revertItem(c, it.id)}
+                        title="Reverter (voltar a contar)"
+                      >
+                        <RotateCcw size={11} />
+                      </button>
+                    </td>
+                  );
+                }
+
                 if (!val) {
                   return <td key={it.id} className="num audit-matrix__cell audit-matrix__cell--empty">—</td>;
                 }
                 return (
                   <td key={it.id} className="num audit-matrix__cell">
-                    {url ? (
-                      <a
-                        href={normalizeUrl(url)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="audit-matrix__cell-link"
-                        title="Abrir evidência"
+                    <span className="audit-matrix__cell-inner">
+                      {url ? (
+                        <a
+                          href={normalizeUrl(url)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="audit-matrix__cell-link"
+                          title="Abrir evidência"
+                        >
+                          {fmt.brlCompact(val)} <ExternalLink size={10} />
+                        </a>
+                      ) : (
+                        <span>{fmt.brlCompact(val)}</span>
+                      )}
+                      <button
+                        type="button"
+                        className="audit-matrix__exclude-btn"
+                        onClick={() => askExcludeItem(c, it.id, it.label)}
+                        title={`Excluir "${it.label}" do compp deste CS`}
                       >
-                        {fmt.brlCompact(val)} <ExternalLink size={10} />
-                      </a>
-                    ) : (
-                      <span>{fmt.brlCompact(val)}</span>
-                    )}
+                        <X size={11} />
+                      </button>
+                    </span>
                   </td>
                 );
               })}
               <td className="num audit-matrix__open-cell">
-                <button
-                  type="button"
-                  className="audit-table__open"
-                  onClick={() => onOpenDetail(c)}
-                  title="Abrir campanha"
-                >
-                  <ExternalLink size={14} />
-                </button>
+                <div className="audit-matrix__actions">
+                  <ExcludeCatMenu
+                    campaign={c}
+                    onExcludeCat={(catKey, catLabel) => askExcludeCat(c, catKey, catLabel)}
+                  />
+                  <button
+                    type="button"
+                    className="audit-table__open"
+                    onClick={() => onOpenDetail(c)}
+                    title="Abrir campanha"
+                  >
+                    <ExternalLink size={14} />
+                  </button>
+                </div>
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
+
+      {excludeModal && (
+        <Modal open onClose={() => !excludeBusy && setExcludeModal(null)} title={`Excluir ${excludeModal.scope === 'cat' ? 'etapa' : 'item'} do compp`}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
+              Campanha <strong>{excludeModal.campaignName}</strong> —{' '}
+              {excludeModal.scope === 'cat'
+                ? <>vai excluir <strong>{excludeModal.itemIds.length} {excludeModal.itemIds.length === 1 ? 'item' : 'itens'}</strong> da etapa <strong>{excludeModal.label}</strong>.</>
+                : <>vai excluir <strong>{excludeModal.label}</strong>.</>}
+              {' '}O valor é descontado do total do CS e reflete em todos os menus. Dá pra reverter depois.
+            </p>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                Motivo da exclusão <span style={{ color: 'var(--accent-red)' }}>*</span>
+              </label>
+              <Textarea
+                value={excludeReason}
+                onChange={(e) => setExcludeReason(e.target.value)}
+                rows={3}
+                placeholder="Ex: entrega não comprovada, item não aplicável a esta campanha."
+                autoFocus
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+              <Button variant="ghost" onClick={() => setExcludeModal(null)} disabled={excludeBusy}>Cancelar</Button>
+              <Button
+                onClick={confirmExclude}
+                disabled={excludeBusy || !excludeReason.trim()}
+                style={{ background: 'var(--accent-red, #f43f5e)', borderColor: 'var(--accent-red, #f43f5e)', color: 'white' }}
+              >
+                {excludeBusy ? 'Excluindo…' : 'Excluir do compp'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Menu de 3 pontinhos pra excluir etapa inteira de uma campanha.
+ * Lista só as etapas que têm valor earned.
+ */
+function ExcludeCatMenu({ campaign: c, onExcludeCat }) {
+  const [open, setOpen] = useState(false);
+  // Etapas com pelo menos 1 item earned
+  const catsWithValue = AUDIT_MATRIX_CATEGORIES.filter(cat =>
+    cat.items.some(it => (c.items_map?.[it.id]?.value_brl || 0) > 0)
+  );
+  if (catsWithValue.length === 0) return null;
+
+  return (
+    <div className="audit-matrix__menu-wrap">
+      <button
+        type="button"
+        className="audit-matrix__menu-btn"
+        onClick={() => setOpen(o => !o)}
+        title="Excluir etapa inteira"
+      >
+        <MoreVertical size={14} />
+      </button>
+      {open && (
+        <>
+          <div className="audit-matrix__menu-backdrop" onClick={() => setOpen(false)} />
+          <div className="audit-matrix__menu">
+            <div className="audit-matrix__menu-head">Excluir etapa do compp</div>
+            {catsWithValue.map(cat => (
+              <button
+                key={cat.key}
+                type="button"
+                className="audit-matrix__menu-item"
+                onClick={() => { setOpen(false); onExcludeCat(cat.key, cat.label); }}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
