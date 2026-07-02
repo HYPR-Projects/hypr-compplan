@@ -895,7 +895,6 @@
   display: block;
   margin-top: 1px;
 }
-.audit-matrix__cs { color: var(--text-secondary); }
 .audit-matrix__comp { font-weight: 700; color: var(--accent-teal, #0d9488); }
 
 /* Célula de item */
@@ -910,7 +909,7 @@
 }
 .audit-matrix__cell-link:hover { text-decoration: underline; }
 
-/* Colunas fixas (sticky) — Campanha, Anunciante, CS */
+/* Colunas fixas (sticky) — Campanha (180), Anunciante (150), CS (160) */
 .audit-matrix__sticky-col, .audit-matrix__sticky-col-head {
   position: sticky;
   z-index: 2;
@@ -918,8 +917,39 @@
 }
 .audit-matrix__sticky-col-head { z-index: 4 !important; }
 .audit-matrix__row:hover .audit-matrix__sticky-col { background: #f6fefd; }
-.audit-matrix__camp { min-width: 170px; max-width: 170px; white-space: normal; }
-.audit-matrix__sticky-head { position: sticky; left: 0; z-index: 4; background: var(--surface-subtle, #f4f4f5); }
+
+/* Larguras fixas pra os offsets left baterem exatamente */
+.audit-matrix__camp {
+  min-width: 180px; max-width: 180px; width: 180px;
+  white-space: normal;
+}
+.audit-matrix__client {
+  min-width: 150px; max-width: 150px; width: 150px;
+  white-space: normal;
+}
+.audit-matrix__cs {
+  min-width: 160px; max-width: 160px; width: 160px;
+  white-space: normal;
+  color: var(--text-secondary);
+}
+/* Headers correspondentes (Campanha/Anunciante/CS) — mesma largura */
+.audit-matrix thead th.audit-matrix__sticky-col-head:nth-child(1) { min-width: 180px; max-width: 180px; width: 180px; }
+.audit-matrix thead th.audit-matrix__sticky-col-head:nth-child(2) { min-width: 150px; max-width: 150px; width: 150px; }
+.audit-matrix thead th.audit-matrix__sticky-col-head:nth-child(3) { min-width: 160px; max-width: 160px; width: 160px; }
+
+/* borda direita na última coluna congelada pra separar visualmente do scroll */
+.audit-matrix__cs, .audit-matrix thead th.audit-matrix__sticky-col-head:nth-child(3) {
+  border-right: 2px solid var(--border-subtle, rgba(0, 0, 0, 0.12));
+}
+
+.audit-matrix__sticky-head {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  background: var(--surface-subtle, #f4f4f5);
+  min-width: 490px; max-width: 490px; width: 490px;
+  border-right: 2px solid var(--border-subtle, rgba(0, 0, 0, 0.12));
+}
 
 /* Header sort icon (reaproveita) */
 .audit-matrix .audit-th__inner {

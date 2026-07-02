@@ -371,7 +371,8 @@ function AuditTable({ groups, onOpenDetail }) {
         <thead>
           {/* Linha 1: grupos de categoria */}
           <tr className="audit-matrix__group-row">
-            <th className="audit-matrix__sticky-head" colSpan={7}></th>
+            <th className="audit-matrix__sticky-head" colSpan={3} style={{ left: 0 }}></th>
+            <th colSpan={4}></th>
             {AUDIT_MATRIX_CATEGORIES.map(cat => (
               <th
                 key={cat.key}
@@ -389,7 +390,7 @@ function AuditTable({ groups, onOpenDetail }) {
               <th
                 key={col.key}
                 className={`audit-th ${col.type === 'num' ? 'num' : ''} ${col.key === sortKey ? 'is-sorted' : ''} ${i < 3 ? 'audit-matrix__sticky-col-head' : ''}`}
-                style={i < 3 ? { left: `${[0, 170, 320][i]}px` } : undefined}
+                style={i < 3 ? { left: `${[0, 180, 330][i]}px` } : undefined}
                 onClick={() => onSort(col.key)}
               >
                 <span className="audit-th__inner">{col.label}<SortIcon colKey={col.key} /></span>
@@ -423,8 +424,8 @@ function AuditTable({ groups, onOpenDetail }) {
                   )}
                 </span>
               </td>
-              <td className="audit-matrix__sticky-col" style={{ left: '170px' }}>{c.client_name}</td>
-              <td className="audit-matrix__sticky-col audit-matrix__cs" style={{ left: '320px' }}>{c.cs_name || c.cs_email}</td>
+              <td className="audit-matrix__sticky-col audit-matrix__client" style={{ left: '180px' }}>{c.client_name}</td>
+              <td className="audit-matrix__sticky-col audit-matrix__cs" style={{ left: '330px' }}>{c.cs_name || c.cs_email}</td>
               <td className="num">{fmt.brlCompact(c.total_value)}</td>
               <td className="num">{fmt.brlCompact(c.liquido)}</td>
               <td className="num">{((c.total_pct || 0) * 100).toFixed(2)}%</td>
