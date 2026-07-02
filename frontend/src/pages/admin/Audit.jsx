@@ -305,6 +305,8 @@ function AuditTable({ groups, onReload, onOpenDetail }) {
   // Sort: coluna + direção. Default: bônus (comp) desc.
   const [sortKey, setSortKey] = useState('comp');
   const [sortDir, setSortDir] = useState('desc');
+  // Filtro de status: 'all' | 'attention' | 'ok'
+  const [statusFilter, setStatusFilter] = useState('all');
   // Modal: { token, campaignName, action: 'exclude'|'include', scope: 'item'|'cat', itemIds: [], label }
   const [actionModal, setActionModal] = useState(null);
   const [actionReason, setActionReason] = useState('');
@@ -389,16 +391,28 @@ function AuditTable({ groups, onReload, onOpenDetail }) {
   // Accessor pra valor de um item (matriz)
   const itemValue = (c, itemId) => (c.items_map?.[itemId]?.value_brl || 0);
 
-  // Achata TODOS os grupos numa lista única (inclusive all_ok).
+  // Achata TODOS os grupos numa lista única, marcando o status de cada uma.
+  // all_ok → 'ok'; qualquer outro grupo → 'attention'.
   const allCampaigns = [];
   const seen = new Set();
   for (const key of Object.keys(groups)) {
+    const status = key === 'all_ok' ? 'ok' : 'attention';
     for (const c of groups[key] || []) {
       if (seen.has(c.short_token)) continue;
       seen.add(c.short_token);
-      allCampaigns.push(c);
+      allCampaigns.push({ ...c, __status: status });
     }
   }
+
+  // Contadores por status (pra mostrar nos botões do filtro)
+  const countAll = allCampaigns.length;
+  const countOk = allCampaigns.filter(c => c.__status === 'ok').length;
+  const countAttention = countAll - countOk;
+
+  // Aplica o filtro de status
+  const visibleCampaigns = statusFilter === 'all'
+    ? allCampaigns
+    : allCampaigns.filter(c => c.__status === statusFilter);
 
   // Ordena conforme sortKey/sortDir. sortKey pode ser base col ou 'item:<id>'.
   let getVal, sortType;
@@ -411,17 +425,13 @@ function AuditTable({ groups, onReload, onOpenDetail }) {
     getVal = col.get;
     sortType = col.type;
   }
-  allCampaigns.sort((a, b) => {
+  visibleCampaigns.sort((a, b) => {
     const va = getVal(a), vb = getVal(b);
     let cmp;
     if (sortType === 'text') cmp = String(va).localeCompare(String(vb), 'pt-BR', { sensitivity: 'base' });
     else cmp = (Number(va) || 0) - (Number(vb) || 0);
     return sortDir === 'asc' ? cmp : -cmp;
   });
-
-  if (allCampaigns.length === 0) {
-    return <Card><p className="card__subtitle">Nenhuma campanha pra exibir.</p></Card>;
-  }
 
   const onSort = (key) => {
     if (key === sortKey) setSortDir(prev => (prev === 'desc' ? 'asc' : 'desc'));
@@ -437,9 +447,37 @@ function AuditTable({ groups, onReload, onOpenDetail }) {
 
   return (
     <div className="audit-matrix-wrap fade-up">
-      <div className="audit-matrix__count">
-        {allCampaigns.length} {allCampaigns.length === 1 ? 'campanha' : 'campanhas'} · role para o lado para ver todas as etapas →
+      <div className="audit-matrix__toolbar">
+        <div className="audit-matrix__status-filter">
+          <button
+            type="button"
+            className={statusFilter === 'all' ? 'is-active' : ''}
+            onClick={() => setStatusFilter('all')}
+          >
+            Todas <span className="audit-matrix__filter-count">{countAll}</span>
+          </button>
+          <button
+            type="button"
+            className={statusFilter === 'attention' ? 'is-active' : ''}
+            onClick={() => setStatusFilter('attention')}
+          >
+            Precisam atenção <span className="audit-matrix__filter-count">{countAttention}</span>
+          </button>
+          <button
+            type="button"
+            className={statusFilter === 'ok' ? 'is-active' : ''}
+            onClick={() => setStatusFilter('ok')}
+          >
+            OK <span className="audit-matrix__filter-count">{countOk}</span>
+          </button>
+        </div>
+        <div className="audit-matrix__count">
+          {visibleCampaigns.length} {visibleCampaigns.length === 1 ? 'campanha' : 'campanhas'} · role para o lado →
+        </div>
       </div>
+      {visibleCampaigns.length === 0 ? (
+        <div className="audit-matrix__empty">Nenhuma campanha neste filtro.</div>
+      ) : (
       <table className="audit-matrix">
         <thead>
           {/* Linha 1: grupos de categoria */}
@@ -483,7 +521,7 @@ function AuditTable({ groups, onReload, onOpenDetail }) {
           </tr>
         </thead>
         <tbody>
-          {allCampaigns.map(c => {
+          {visibleCampaigns.map(c => {
             // Itens forçados por admin
             const excludedIds = new Set(
               (c.admin_overrides || [])
@@ -622,6 +660,7 @@ function AuditTable({ groups, onReload, onOpenDetail }) {
           })}
         </tbody>
       </table>
+      )}
 
       {actionModal && (() => {
         const isInclude = actionModal.action === 'include';
