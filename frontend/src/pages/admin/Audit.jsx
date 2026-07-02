@@ -306,7 +306,7 @@ const CAT_LABELS = {
   setup: 'Setup',
   pre_campaign: 'Pré-Campanha',
   optimization: 'Otimização',
-  account_management: 'Account Management',
+  account_mgmt: 'Account Management',
   extras: 'Extras',
   onboarding: 'Onboarding',
 };
@@ -414,7 +414,7 @@ function AuditTable({ groups, onOpenDetail }) {
                   <td className="num">{cat.setup ? fmt.brlCompact(cat.setup) : '—'}</td>
                   <td className="num">{cat.pre_campaign ? fmt.brlCompact(cat.pre_campaign) : '—'}</td>
                   <td className="num">{cat.optimization ? fmt.brlCompact(cat.optimization) : '—'}</td>
-                  <td className="num">{cat.account_management ? fmt.brlCompact(cat.account_management) : '—'}</td>
+                  <td className="num">{cat.account_mgmt ? fmt.brlCompact(cat.account_mgmt) : '—'}</td>
                   <td className="num">{cat.extras ? fmt.brlCompact(cat.extras) : '—'}</td>
                   <td className="num">
                     <button

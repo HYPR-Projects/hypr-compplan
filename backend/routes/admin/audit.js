@@ -348,7 +348,7 @@ router.get('/:q', async (req, res) => {
       }
 
       // ─── VALORES FINANCEIROS (pra visão em tabela) ───────────────────
-      const catOrder = ['setup', 'pre_campaign', 'optimization', 'account_management', 'extras', 'onboarding'];
+      const catOrder = ['setup', 'pre_campaign', 'optimization', 'account_mgmt', 'extras', 'onboarding'];
       const byCategoryBrl = {};
       for (const catKey of catOrder) {
         byCategoryBrl[catKey] = breakdown.by_category?.[catKey]?.subtotal_brl || 0;
