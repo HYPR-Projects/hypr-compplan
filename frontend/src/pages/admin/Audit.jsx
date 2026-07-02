@@ -456,7 +456,19 @@ function AuditTable({ groups, onOpenDetail }) {
                               <tbody>
                                 {earnedByCat[catKey].map(it => (
                                   <tr key={it.id}>
-                                    <td className="audit-detail-card__item">{it.label}</td>
+                                    <td className="audit-detail-card__item">
+                                      {it.label}
+                                      {catKey === 'optimization' && c.optimization && (
+                                        <div className="audit-detail-card__kpis">
+                                          <span>Over: <b>{c.optimization.over_pct != null ? `${c.optimization.over_pct.toFixed(1)}%` : '—'}</b></span>
+                                          <span>eCPM: <b>{c.optimization.ecpm ? fmt.brl(c.optimization.ecpm) : '—'}</b></span>
+                                          <span>CTR: <b>{c.optimization.ctr ? `${(c.optimization.ctr * 100).toFixed(2)}%` : '—'}</b></span>
+                                          {c.optimization.video_vtr_pct > 0 && (
+                                            <span>VTR: <b>{c.optimization.video_vtr_pct.toFixed(1)}%</b></span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </td>
                                     <td className="audit-detail-card__brl">{fmt.brl(it.value_brl)}</td>
                                     <td className="audit-detail-card__link-cell">
                                       {it.url ? (

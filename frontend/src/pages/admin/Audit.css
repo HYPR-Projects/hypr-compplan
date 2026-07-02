@@ -714,6 +714,19 @@
   overflow-wrap: break-word;
   hyphens: auto;
 }
+.audit-detail-card__kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.audit-detail-card__kpis b {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
 .audit-detail-card__brl {
   text-align: right;
   font-weight: 700;
