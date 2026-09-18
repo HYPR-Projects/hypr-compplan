@@ -544,6 +544,13 @@ function CampaignRowNew({ campaign, onClick, i }) {
         </span>
       </div>
 
+      <div className="cs-campaign-card__metric">
+        <span className="label">Score</span>
+        <span className="mono">
+          {((campaign.bonus_pct || 0) * 100).toFixed(2)}%
+        </span>
+      </div>
+
       <div className="cs-campaign-card__cta">
         {reviewed ? (
           <Badge variant="green"><CheckCircle2 size={12} /> Revisada</Badge>

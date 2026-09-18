@@ -242,7 +242,7 @@
 
 .cs-campaign-card {
   display: grid;
-  grid-template-columns: 4px 1fr auto auto auto;
+  grid-template-columns: 4px 1fr auto auto auto auto;
   gap: var(--space-3);
   padding: 0;
   background: var(--surface-card);
