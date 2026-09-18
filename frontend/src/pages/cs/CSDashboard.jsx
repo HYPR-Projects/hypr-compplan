@@ -318,16 +318,37 @@ export default function CsDashboard() {
                   <span>{monthFull}</span>
                   <span className="cs-month-group__count">{monthItems.length} campanhas</span>
                 </div>
-                <div className="cs-campaign-list">
-                  {monthItems.map((c, i) => (
-                    <CampaignRowNew
-                      key={c.short_token}
-                      campaign={c}
-                      onClick={() => navigate(getCampaignUrl(c.short_token))}
-                      i={i}
-                    />
-                  ))}
-                </div>
+                {tab === 'lista' ? (
+                  <div className="cs-campaign-table">
+                    <div className="cs-campaign-table__head">
+                      <span>Cliente</span>
+                      <span>Campanha</span>
+                      <span>Prazo</span>
+                      <span>Bruto</span>
+                      <span>Bônus</span>
+                      <span>Score</span>
+                      <span>Status</span>
+                    </div>
+                    {monthItems.map((c) => (
+                      <CampaignRowList
+                        key={c.short_token}
+                        campaign={c}
+                        onClick={() => navigate(getCampaignUrl(c.short_token))}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="cs-campaign-list">
+                    {monthItems.map((c, i) => (
+                      <CampaignRowNew
+                        key={c.short_token}
+                        campaign={c}
+                        onClick={() => navigate(getCampaignUrl(c.short_token))}
+                        i={i}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -558,6 +579,40 @@ function CampaignRowNew({ campaign, onClick, i }) {
           <Badge variant="yellow"><Clock size={12} /> Revisar</Badge>
         )}
         <button className="cs-campaign-card__btn">Ver campanha <ArrowRight size={14} /></button>
+      </div>
+    </div>
+  );
+}
+
+function CampaignRowList({ campaign, onClick }) {
+  const reviewed = campaign.reviewed;
+  return (
+    <div className="cs-campaign-row" onClick={onClick}>
+      <div className="cs-campaign-row__client">
+        <span className="cs-campaign-row__client-name">{campaign.client_name}</span>
+        <Badge variant="neutral">{campaign.short_token}</Badge>
+        {campaign.is_legacy && <Badge variant="neutral">Legacy</Badge>}
+        {campaign.review_requested && <Badge variant="yellow">📋</Badge>}
+        {campaign.audit_flagged && <Badge variant="red">⚠</Badge>}
+      </div>
+      <div className="cs-campaign-row__campaign">{campaign.campaign_name}</div>
+      <div className="cs-campaign-row__prazo mono">
+        {fmt.dateRange(campaign.start_date, campaign.end_date)}
+      </div>
+      <div className="mono cs-campaign-row__num">{fmt.brl(campaign.bruto)}</div>
+      <div className="mono cs-campaign-row__num cs-campaign-row__num--cyan">
+        {fmt.brl(campaign.bonus_brl || 0)}
+      </div>
+      <div className="mono cs-campaign-row__num">
+        {((campaign.bonus_pct || 0) * 100).toFixed(2)}%
+      </div>
+      <div className="cs-campaign-row__status">
+        {reviewed ? (
+          <Badge variant="green"><CheckCircle2 size={12} /> Revisada</Badge>
+        ) : (
+          <Badge variant="yellow"><Clock size={12} /> Revisar</Badge>
+        )}
+        <ArrowRight size={14} className="cs-campaign-row__arrow" />
       </div>
     </div>
   );

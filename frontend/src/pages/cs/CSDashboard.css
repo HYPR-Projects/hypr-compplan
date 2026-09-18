@@ -339,6 +339,126 @@
   gap: var(--space-2);
 }
 
+/* ── Lista tab: table view, one row per campaign ─────────────────── */
+
+.cs-campaign-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.cs-campaign-table__head {
+  display: grid;
+  grid-template-columns: 1.4fr 1.6fr auto auto auto auto auto;
+  gap: var(--space-3);
+  padding: 8px var(--space-3);
+  background: var(--surface-muted, rgba(255, 255, 255, 0.03));
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.cs-campaign-table__head span:nth-child(n+3) {
+  text-align: right;
+}
+
+.cs-campaign-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1.6fr auto auto auto auto auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: 10px var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.cs-campaign-row:last-child {
+  border-bottom: none;
+}
+
+.cs-campaign-row:hover {
+  background: var(--surface-muted, rgba(255, 255, 255, 0.03));
+}
+
+.cs-campaign-row__client {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.cs-campaign-row__client-name {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cs-campaign-row__campaign {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cs-campaign-row__prazo {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.cs-campaign-row__num {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: right;
+  min-width: 90px;
+}
+
+.cs-campaign-row__num--cyan {
+  color: var(--accent-cyan);
+}
+
+.cs-campaign-row__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: end;
+}
+
+.cs-campaign-row__arrow {
+  color: var(--text-tertiary);
+}
+
+@media (max-width: 900px) {
+  .cs-campaign-table__head {
+    display: none;
+  }
+  .cs-campaign-row {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .cs-campaign-row__num {
+    text-align: left;
+    min-width: 0;
+  }
+  .cs-campaign-row__status {
+    justify-self: start;
+  }
+}
+
 .cs-campaign-card__btn {
   display: inline-flex;
   align-items: center;
