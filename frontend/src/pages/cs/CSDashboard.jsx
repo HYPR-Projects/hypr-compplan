@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Search, ArrowRight, ArrowLeft, Eye, Calendar, Users, List, Filter,
-  CheckCircle2, Clock, UserPlus, X, BookOpen, Shield,
+  CheckCircle2, Clock, UserPlus, X, BookOpen, Shield, ArrowUp, ArrowDown, ArrowUpDown,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
@@ -19,6 +19,44 @@ import './CSDashboard.css';
 const MONTHS_PT = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 const MONTHS_FULL = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
 
+// Colunas ordenáveis da view "Lista": key = campo do item, type define o comparador
+const LIST_COLUMNS = [
+  { key: 'client_name', label: 'Cliente', type: 'text' },
+  { key: 'campaign_name', label: 'Campanha', type: 'text' },
+  { key: 'start_date', label: 'Prazo', type: 'date' },
+  { key: 'bruto', label: 'Bruto', type: 'number' },
+  { key: 'bonus_brl', label: 'Bônus', type: 'number' },
+  { key: 'bonus_pct', label: 'Score', type: 'number' },
+  { key: 'reviewed', label: 'Status', type: 'bool' },
+];
+
+function sortCampaigns(items, sort) {
+  if (!sort || !sort.key) return items;
+  const col = LIST_COLUMNS.find(c => c.key === sort.key);
+  if (!col) return items;
+  const dir = sort.dir === 'desc' ? -1 : 1;
+  return [...items].sort((a, b) => {
+    let va = a[sort.key];
+    let vb = b[sort.key];
+    if (col.type === 'text') {
+      va = (va || '').toLowerCase();
+      vb = (vb || '').toLowerCase();
+      return va.localeCompare(vb) * dir;
+    }
+    if (col.type === 'bool') {
+      va = va ? 1 : 0;
+      vb = vb ? 1 : 0;
+      return (va - vb) * dir;
+    }
+    // date (string ISO "AAAA-MM-DD" ordena igual numérico) e number
+    va = va == null ? -Infinity : (col.type === 'date' ? String(va) : Number(va));
+    vb = vb == null ? -Infinity : (col.type === 'date' ? String(vb) : Number(vb));
+    if (va < vb) return -1 * dir;
+    if (va > vb) return 1 * dir;
+    return 0;
+  });
+}
+
 export default function CsDashboard() {
   const navigate = useNavigate();
   const params = useParams();
@@ -31,9 +69,17 @@ export default function CsDashboard() {
   const [tab, setTab] = useState('por_mes'); // por_mes | por_cliente | lista
   const [statusFilter, setStatusFilter] = useState('todas'); // todas | revisadas | pendentes
   const [monthFilter, setMonthFilter] = useState('todos'); // todos | "2026-05" | ...
+  const [listSort, setListSort] = useState({ key: null, dir: 'asc' }); // ordenação da view "Lista"
   const [showAssignPreModal, setShowAssignPreModal] = useState(false);
 
   const impersonateEmail = params.csEmail || null;
+
+  function toggleSort(key) {
+    setListSort(prev => {
+      if (prev.key !== key) return { key, dir: 'asc' };
+      return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' };
+    });
+  }
 
   async function load() {
     const opts = impersonateEmail ? { as: impersonateEmail } : {};
@@ -321,15 +367,28 @@ export default function CsDashboard() {
                 {tab === 'lista' ? (
                   <div className="cs-campaign-table">
                     <div className="cs-campaign-table__head">
-                      <span>Cliente</span>
-                      <span>Campanha</span>
-                      <span>Prazo</span>
-                      <span>Bruto</span>
-                      <span>Bônus</span>
-                      <span>Score</span>
-                      <span>Status</span>
+                      {LIST_COLUMNS.map(col => {
+                        const active = listSort.key === col.key;
+                        return (
+                          <button
+                            key={col.key}
+                            type="button"
+                            className={`cs-campaign-table__sort ${active ? 'is-active' : ''}`}
+                            onClick={() => toggleSort(col.key)}
+                          >
+                            {col.label}
+                            {active ? (
+                              listSort.dir === 'asc'
+                                ? <ArrowUp size={12} />
+                                : <ArrowDown size={12} />
+                            ) : (
+                              <ArrowUpDown size={12} className="cs-campaign-table__sort-icon--idle" />
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
-                    {monthItems.map((c) => (
+                    {sortCampaigns(monthItems, listSort).map((c) => (
                       <CampaignRowList
                         key={c.short_token}
                         campaign={c}

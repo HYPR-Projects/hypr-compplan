@@ -351,7 +351,7 @@
 
 .cs-campaign-table__head {
   display: grid;
-  grid-template-columns: 1.4fr 1.6fr auto auto auto auto auto;
+  grid-template-columns: 1.4fr 1.6fr 110px 110px 110px 70px 120px;
   gap: var(--space-3);
   padding: 8px var(--space-3);
   background: var(--surface-muted, rgba(255, 255, 255, 0.03));
@@ -363,13 +363,43 @@
   color: var(--text-tertiary);
 }
 
-.cs-campaign-table__head span:nth-child(n+3) {
+.cs-campaign-table__sort {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.cs-campaign-table__sort:hover {
+  color: var(--text-primary);
+}
+
+.cs-campaign-table__sort.is-active {
+  color: var(--accent-cyan);
+}
+
+.cs-campaign-table__sort-icon--idle {
+  opacity: 0.35;
+}
+
+.cs-campaign-table__head :nth-child(n+3) {
+  justify-content: flex-end;
   text-align: right;
 }
 
 .cs-campaign-row {
   display: grid;
-  grid-template-columns: 1.4fr 1.6fr auto auto auto auto auto;
+  grid-template-columns: 1.4fr 1.6fr 110px 110px 110px 70px 120px;
   gap: var(--space-3);
   align-items: center;
   padding: 10px var(--space-3);
