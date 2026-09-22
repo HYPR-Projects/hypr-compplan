@@ -237,11 +237,17 @@ async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
         'US'
       ),
       query(
+        // ⚡ FIX: over_percent (e portanto o gatilho de Setup anulado) só é
+        // válido pra O2O display. unified_daily_performance_metrics não
+        // reporta entrega de OOH sob media_type='display' (OOH é PDOOH,
+        // fonte separada) — somar ooh_display_impressions aqui infla o
+        // contratado sem que o entregue correspondente jamais apareça no
+        // numerador, empurrando campanhas com OOH pra "under" artificial.
+        // Casos confirmados: 0DM7HQ e M66HS0 (Audi), ambos com o mesmo
+        // pacote de OOH contratado somado ao denominador.
         `SELECT short_token,
            IFNULL(o2o_display_impressions, 0)
-         + IFNULL(bonus_o2o_display_impressions, 0)
-         + IFNULL(ooh_display_impressions, 0)
-         + IFNULL(bonus_ooh_display_impressions, 0) AS display_contracted
+         + IFNULL(bonus_o2o_display_impressions, 0) AS display_contracted
          FROM ${tableRef('commplan_checklists')}
          WHERE short_token IN UNNEST(@toks)`,
         { toks: tokens }

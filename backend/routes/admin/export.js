@@ -135,10 +135,10 @@ async function fetchAuditCampaigns({ quarter, tokenFilter, includeUnfinished = t
          GROUP BY short_token`,
         { toks: tokens }, 'US'
       ),
+      // ⚡ FIX: só O2O — ver nota em bonus-calc.js.
       query(
         `SELECT short_token,
            IFNULL(o2o_display_impressions, 0) + IFNULL(bonus_o2o_display_impressions, 0)
-           + IFNULL(ooh_display_impressions, 0) + IFNULL(bonus_ooh_display_impressions, 0)
            AS display_contracted
          FROM ${tableRef('commplan_checklists')}
          WHERE short_token IN UNNEST(@toks)`,

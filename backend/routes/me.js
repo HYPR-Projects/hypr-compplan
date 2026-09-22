@@ -256,12 +256,12 @@ async function fetchPerformanceMetrics(shortToken, clientName = null, totalValue
     // 2. Busca contratado de display da view commplan_checklists (us-central1).
     // A view já une Command (checklists) e Legacy (checklist_info_snapshot) e expõe
     // as 4 colunas separadas: contracted + bonus de O2O e OOH.
+    // ⚡ FIX: só O2O entra aqui — ver nota igual em bonus-calc.js sobre por
+    // que somar OOH infla o contratado sem o entregue correspondente.
     const [contractedRow] = await query(
       `SELECT
          IFNULL(o2o_display_impressions, 0)
-       + IFNULL(bonus_o2o_display_impressions, 0)
-       + IFNULL(ooh_display_impressions, 0)
-       + IFNULL(bonus_ooh_display_impressions, 0) AS display_contracted
+       + IFNULL(bonus_o2o_display_impressions, 0) AS display_contracted
        FROM ${tableRef('commplan_checklists')}
        WHERE short_token = @t
        LIMIT 1`,
@@ -481,12 +481,11 @@ router.get('/dashboard/:q', async (req, res) => {
           'US'
         );
 
+        // ⚡ FIX: só O2O — ver nota em bonus-calc.js.
         const contractedRows = await query(
           `SELECT short_token,
              IFNULL(o2o_display_impressions, 0)
-           + IFNULL(bonus_o2o_display_impressions, 0)
-           + IFNULL(ooh_display_impressions, 0)
-           + IFNULL(bonus_ooh_display_impressions, 0) AS display_contracted
+           + IFNULL(bonus_o2o_display_impressions, 0) AS display_contracted
            FROM ${tableRef('commplan_checklists')}
            WHERE short_token IN UNNEST(@toks)`,
           { toks: tokens }
