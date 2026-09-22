@@ -174,7 +174,7 @@ function inferMetricItems(campaign, metrics, manualChecks = {}) {
  * encerrou há menos de 1 dia). Usado pra tolerar falta de dados em
  * itens de métricas (mesma lógica do Setup pending).
  */
-function isCampaignStillInGracePeriod(campaign) {
+export function isCampaignStillInGracePeriod(campaign) {
   const endRaw = campaign?.end_date;
   const endStr = (endRaw && typeof endRaw === 'object' && 'value' in endRaw) ? endRaw.value : endRaw;
   if (!endStr) return false;

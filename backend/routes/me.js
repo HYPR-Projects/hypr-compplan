@@ -111,7 +111,7 @@ async function resolveStudiesInfo(campaign, studyAssigneeOverride = null, studyI
   return result;
 }
 import { parseQuarter } from '../engine/quarter-resolver.js';
-import { computeBonus } from '../engine/compplan-engine.js';
+import { computeBonus, isCampaignStillInGracePeriod } from '../engine/compplan-engine.js';
 import { FEATURE_TIERS, COMPPLAN_CATALOG } from '../engine/compplan-catalog.js';
 
 export const router = Router();
@@ -1031,7 +1031,7 @@ router.put('/campaign/:token', async (req, res) => {
     const body = req.body || {};
 
     const [campaign] = await query(
-      `SELECT short_token, cs_email, is_legacy
+      `SELECT short_token, cs_email, is_legacy, end_date
        FROM ${tableRef('commplan_checklists')}
        WHERE short_token = @t LIMIT 1`,
       { t: token }
@@ -1080,7 +1080,19 @@ router.put('/campaign/:token', async (req, res) => {
     }
     const manualChecksJson = JSON.stringify(manualChecks);
     const notes = body.notes || '';
-    const reviewed = body.reviewed !== false;
+
+    // ⚡ FIX: campanha ainda rodando (ou encerrada há <1 dia) não pode ser
+    // marcada como revisada/finalizada. A seção de Otimizações só calcula
+    // valor final "após a campanha fechar" (over_percent de mid-flight é
+    // enganoso — ver nota em compplan-engine.js) — então uma campanha em
+    // andamento, salva como "revisada" hoje, poderia mostrar Otimizações
+    // zeradas de forma definitiva quando na verdade ainda estão pendentes.
+    // Mesma regra de maturidade usada pra invalidar Setup (validateSetup).
+    const stillRunning = isCampaignStillInGracePeriod(campaign);
+    const reviewed = stillRunning ? false : (body.reviewed !== false);
+    const reviewBlockedReason = (stillRunning && body.reviewed !== false)
+      ? 'Campanha ainda em andamento (ou encerrada há menos de 1 dia) — não é possível marcar como revisada até que as Otimizações fechem com dado final.'
+      : null;
 
     // Antes de salvar, busca estado anterior pra detectar mudança no review_requested
     let wasReviewRequested = !!prev.manualChecks?.__review_requested;
@@ -1173,7 +1185,7 @@ router.put('/campaign/:token', async (req, res) => {
       studiesInfo: studiesInfoPost,
     });
 
-    res.json({ ok: true, reviewed, breakdown });
+    res.json({ ok: true, reviewed, review_blocked_reason: reviewBlockedReason, breakdown });
   } catch (err) {
     console.error('PUT /me/campaign error:', err);
     res.status(500).json({ error: err.message });
