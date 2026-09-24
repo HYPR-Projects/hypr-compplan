@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Home, Calendar, FileText, Users, BookOpen, Shield, ShieldAlert,
   Settings, LogOut, Sun, Moon, History, Sparkles, Archive, MessageSquare,
+  ClipboardList,
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.jsx';
 import { auth, endpoints } from '../../lib/api.js';
@@ -20,6 +21,7 @@ import './AppShell.css';
 const NAV_CS = [
   { to: '/cs',            label: 'Meu painel',  icon: Home, badge: 'review_decisions' },
   { to: '/cs/visao-geral', label: 'Visão geral do time', icon: Users },
+  { to: '/cs/checklists', label: 'Checklists',  icon: ClipboardList },
   { to: '/cs/estudos',    label: 'Estudos',     icon: BookOpen },
   { to: '/cs/historico',  label: 'Histórico',   icon: History },
 ];
@@ -30,6 +32,7 @@ const NAV_ADMIN = [
   { to: '/admin/pedidos-revisao',  label: 'Pedidos análise', icon: MessageSquare },
   { to: '/admin/auditoria',        label: 'Auditoria',       icon: Shield },
   { to: '/admin/campanhas',        label: 'Campanhas',       icon: FileText },
+  { to: '/admin/checklists',       label: 'Checklists',      icon: ClipboardList },
   { to: '/admin/time',             label: 'Time',            icon: Users },
   { to: '/admin/estudos',          label: 'Estudos',         icon: BookOpen },
   { to: '/admin/excecoes-over',    label: 'Exceções OVER',   icon: ShieldAlert },

@@ -18,6 +18,7 @@ import AdminAudit from './pages/admin/Audit.jsx';
 import CsDashboard from './pages/cs/CSDashboard.jsx';
 import CsCampaignDetail from './pages/cs/CampaignDetail.jsx';
 import CsHistory from './pages/cs/History.jsx';
+import CsChecklists from './pages/cs/Checklists.jsx';
 
 function ProtectedRoute({ children, adminOnly = false, csOnly = false }) {
   const location = useLocation();
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="/admin/auditoria" element={<ProtectedRoute adminOnly><AdminAudit /></ProtectedRoute>} />
         <Route path="/admin/excecoes-over" element={<ProtectedRoute adminOnly><AdminOverExceptions /></ProtectedRoute>} />
         <Route path="/admin/estudos"   element={<ProtectedRoute adminOnly><AdminStudies /></ProtectedRoute>} />
+        <Route path="/admin/checklists" element={<ProtectedRoute adminOnly><CsChecklists /></ProtectedRoute>} />
 
         {/* Admin impersonando CS */}
         <Route path="/admin/cs/:csEmail"                       element={<ProtectedRoute adminOnly><CsDashboard /></ProtectedRoute>} />
@@ -66,6 +68,7 @@ export default function App() {
         <Route path="/cs/historico"          element={<ProtectedRoute><CsHistory /></ProtectedRoute>} />
         {/* Estudos: leitura pra todos autenticados (componente esconde botões pra não-admins) */}
         <Route path="/cs/estudos"            element={<ProtectedRoute><AdminStudies /></ProtectedRoute>} />
+        <Route path="/cs/checklists"         element={<ProtectedRoute><CsChecklists /></ProtectedRoute>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

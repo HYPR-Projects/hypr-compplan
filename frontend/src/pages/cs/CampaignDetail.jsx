@@ -1087,7 +1087,16 @@ function formatMetricInfo(item, metrics, isABS) {
   const ecpmOK = ecpm > 0 && ecpm <= ecpmLimit ? '✓' : '✗';
   const ctrOK = Number(ctr) >= ctrLimit ? '✓' : '✗';
 
-  return `Over: ${over.toFixed(1)}% ${overOK} (limite 25%) · eCPM: R$ ${ecpm.toFixed(2)} ${ecpmOK} (limite R$ ${ecpmLimit.toFixed(2)}) · CTR: ${ctr}% ${ctrOK} (mín ${ctrLimit}%)`;
+  // ⚡ Contratado vs entregue de display, cru — ajuda o CS a enxergar a conta
+  // por trás do over% (ex.: checklist com bônus não lançado gera over% que
+  // parece estouro mas na real é dado incompleto — ver SAKL4M/22-09-2026).
+  const contratado = Number(metrics.display_contracted) || 0;
+  const entregue = Number(metrics.display_viewable) || 0;
+  const volInfo = contratado > 0
+    ? ` · Contratado: ${contratado.toLocaleString('pt-BR')} · Entregue: ${entregue.toLocaleString('pt-BR')}`
+    : '';
+
+  return `Over: ${over.toFixed(1)}% ${overOK} (limite 25%) · eCPM: R$ ${ecpm.toFixed(2)} ${ecpmOK} (limite R$ ${ecpmLimit.toFixed(2)}) · CTR: ${ctr}% ${ctrOK} (mín ${ctrLimit}%)${volInfo}`;
 }
 
 // Recalcula localmente o subtotal pra dar feedback imediato sem chamar backend.

@@ -192,6 +192,14 @@ export const endpoints = {
   meHistory(opts = {})         { return api.get(`/commplan/me/history${asQuery(opts)}`); },
   meFeaturesCatalog()          { return api.get(`/commplan/me/features-catalog`); },
   meStudiesCatalog()           { return api.get(`/commplan/me/studies-catalog`); },
+  meChecklists({ scope = 'mine', ano, as } = {}) {
+    const params = new URLSearchParams();
+    params.set('scope', scope);
+    if (ano) params.set('ano', ano);
+    if (as) params.set('as', as);
+    return api.get(`/commplan/me/checklists?${params.toString()}`);
+  },
+  meChecklistDetail(token, opts = {}) { return api.get(`/commplan/me/checklists/${token}${asQuery(opts)}`); },
 
   // Admin
   adminOverview(q)       { return api.get(`/commplan/admin/overview/${q}`); },
