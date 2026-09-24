@@ -374,6 +374,57 @@ async function fetchManualChecks(shortToken, isLegacy) {
 // Reusa o mesmo handler do /admin/overview/:q, sem requerer admin role.
 router.get('/team-overview/:q', overviewHandler);
 
+// ── GET /me/checklists ──────────────────────────────────────────────────
+// Lista de checklists no estilo "Meus checklists" do Force. Lê da mesma
+// commplan_checklists (já resolve cs_email via Command + legacy_assignments,
+// então funciona pra checklist novo e legado sem duplicar lógica).
+// scope=mine (default) filtra pelo CS logado (ou impersonado); scope=team
+// mostra todo mundo, igual à aba "Todos" do Force.
+router.get('/checklists', async (req, res) => {
+  try {
+    const { csEmail } = resolveTargetCs(req);
+    const scope = req.query.scope === 'team' ? 'team' : 'mine';
+    const ano = Number(req.query.ano) || new Date().getFullYear();
+
+    const rows = await query(
+      `SELECT
+         short_token, client_name, campaign_name, agency, industry,
+         campaign_type, start_date, end_date, total_value,
+         cs_email, cs_name, cp_name, reviewed, is_legacy
+       FROM ${tableRef('commplan_checklists')}
+       WHERE start_date <= DATE(@fim)
+         AND IFNULL(end_date, start_date) >= DATE(@ini)
+         ${scope === 'mine' ? 'AND LOWER(IFNULL(cs_email, \'\')) = @cs' : ''}
+       ORDER BY start_date DESC`,
+      { ini: `${ano}-01-01`, fim: `${ano}-12-31`, cs: csEmail }
+    );
+
+    res.json({ rows, scope, ano });
+  } catch (e) {
+    console.error('GET /me/checklists:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── GET /me/checklists/:token ───────────────────────────────────────────
+// Detalhe completo, somente leitura — "o que tem dentro daquele checklist
+// feito no Force", sem editar nada por aqui. Qualquer pessoa autenticada
+// pode ver (visão de time), igual à aba "Todos" do Force.
+router.get('/checklists/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const [row] = await query(
+      `SELECT * FROM ${tableRef('commplan_checklists')} WHERE short_token = @t LIMIT 1`,
+      { t: token }
+    );
+    if (!row) return res.status(404).json({ error: `Checklist ${token} não encontrado` });
+    res.json({ checklist: row });
+  } catch (e) {
+    console.error('GET /me/checklists/:token:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── GET /me/dashboard/:q ───────────────────────────────────────────────
 router.get('/dashboard/:q', async (req, res) => {
   try {
@@ -1004,6 +1055,12 @@ router.get('/campaign/:token', async (req, res) => {
         ecpm: Number(metrics.ecpm) || 0,
         ctr: Number(metrics.ctr) || 0,
         over_percent: Number(metrics.over_percent) || 0,
+        // ⚡ Contratado vs entregue de display, cru — pra CS enxergar a conta
+        // por trás do over% e pegar checklist incompleto (ex.: bônus não
+        // lançado) antes de virar "Setup anulado" errado.
+        display_contracted: Number(metrics.display_contracted) || 0,
+        display_viewable: Number(metrics.display_viewable) || 0,
+        display_impressions: Number(metrics.display_impressions) || 0,
         // Campos de vídeo (campanhas só de vídeo precisam pra UI calcular Tech Cost + VTR)
         video_starts: Number(metrics.video_starts) || 0,
         video_completions: Number(metrics.video_completions) || 0,
