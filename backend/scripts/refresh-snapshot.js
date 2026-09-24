@@ -87,7 +87,6 @@ async function main() {
   await bq.query({
     query: `TRUNCATE TABLE \`${PROJECT_ID}.${SNAPSHOT_DATASET}.${SNAPSHOT_TABLE_NAME}\``,
     useLegacySql: false,
-    location: 'us-central1',
   });
   console.log('  ✓ truncated');
 
@@ -130,7 +129,7 @@ async function main() {
     snapshot_taken_at:                    now,
   }));
 
-  const dataset = bq.dataset(SNAPSHOT_DATASET, { location: 'us-central1' });
+  const dataset = bq.dataset(SNAPSHOT_DATASET);
   const table = dataset.table(SNAPSHOT_TABLE_NAME);
 
   // Streaming insert em batches de 500 (limite recomendado)
