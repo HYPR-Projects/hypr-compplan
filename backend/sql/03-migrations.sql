@@ -25,5 +25,5 @@ ADD COLUMN IF NOT EXISTS studies_used ARRAY<STRING>;
 --   2. Permitir seleção de 1 estudo (UI: clique alterna; só 1 ativo por vez).
 --   3. Persistir o id selecionado em checklists.studies_used como array de 1
 --      elemento (ou array vazio se nenhum).
---   4. Mirror pro prod_assets.checklist_info NÃO precisa propagar este campo
+--   4. Mirror pro hyprops_mart.checklist_info NÃO precisa propagar este campo
 --      (Report Center não usa). Mas pode propagar sem prejuízo.

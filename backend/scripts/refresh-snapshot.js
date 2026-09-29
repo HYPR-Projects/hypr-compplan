@@ -17,7 +17,7 @@ import 'dotenv/config';
 import { BigQuery } from '@google-cloud/bigquery';
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID || 'site-hypr';
-const SOURCE_TABLE = `${PROJECT_ID}.prod_assets.checklist_info`;
+const SOURCE_TABLE = `${PROJECT_ID}.hyprops_mart.checklist_info`;
 const SNAPSHOT_DATASET = 'hypr_commplan';
 const SNAPSHOT_TABLE_NAME = 'checklist_info_snapshot';
 

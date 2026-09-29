@@ -3,7 +3,7 @@
 -- ║       (coluna Command → extras JSON → checklist_info_snapshot)            ║
 -- ║                                                                            ║
 -- ║  CONTEXTO:                                                                 ║
--- ║  A migration 11 tentou incluir prod_assets.checklist_info na cascata,     ║
+-- ║  A migration 11 tentou incluir hyprops_mart.checklist_info na cascata,     ║
 -- ║  mas esse dataset está na região US enquanto hypr_commplan está em        ║
 -- ║  us-central1. BigQuery NÃO permite JOIN entre datasets de regiões         ║
 -- ║  diferentes numa view → erro "Dataset prod_assets not found in            ║
