@@ -340,6 +340,23 @@ function resolveTargetCs(req) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Helper: chaves de manual_checks (e de __evidence) que pertencem às etapas
+// informadas — items + link compartilhado da etapa (+ toggle ABS na Otimização).
+// ─────────────────────────────────────────────────────────────────────
+function stageManualKeys(stages) {
+  const keys = new Set();
+  for (const st of stages) {
+    const cat = COMPPLAN_CATALOG[st];
+    if (!cat) continue;
+    for (const item of cat.items) keys.add(item.id);
+    if (cat.shared_evidence?.key) keys.add(cat.shared_evidence.key);
+  }
+  // Toggle Com/Sem ABS muda o resultado da Otimização
+  if (stages.includes('optimization')) keys.add('__is_abs');
+  return keys;
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Helper: pega manual_checks salvos (de overrides ou legacy_assignments)
 // ─────────────────────────────────────────────────────────────────────
 async function fetchManualChecks(shortToken, isLegacy) {
@@ -367,7 +384,9 @@ async function fetchManualChecks(shortToken, isLegacy) {
     };
   } catch (err) {
     console.warn(`fetchManualChecks(${shortToken}): ${err.message}`);
-    return { manualChecks: {}, adminOverrides: {}, adminOverridesBy: null, adminOverridesAt: null, preAssignee: null, preAssignedAt: null, studyAssignee: null, studyIdOverride: null };
+    // readError: quem vai GRAVAR a partir desse estado (merge) deve abortar,
+    // senão sobrescreve dados salvos com um objeto vazio.
+    return { manualChecks: {}, adminOverrides: {}, adminOverridesBy: null, adminOverridesAt: null, preAssignee: null, preAssignedAt: null, studyAssignee: null, studyIdOverride: null, readError: err.message };
   }
 }
 
@@ -1068,21 +1087,17 @@ router.put('/campaign/:token', async (req, res) => {
     // pode mexer nos items dessas etapas. Faz merge dos manual_checks dele
     // sobre os do dono — preservando todo o resto.
     const restrictToStages = !isAdmin && !isOwner;
+    if (restrictToStages && prev.readError) {
+      // Sem o estado atual não dá pra fazer o merge sem apagar o do dono
+      return res.status(503).json({ error: 'Não foi possível ler os dados atuais da campanha. Tente de novo.' });
+    }
 
     const manualChecksFromBody = body.manual_checks && typeof body.manual_checks === 'object'
       ? body.manual_checks
       : {};
     let manualChecks;
     if (restrictToStages) {
-      const allowedKeys = new Set();
-      for (const st of viewerStages) {
-        const cat = COMPPLAN_CATALOG[st];
-        if (!cat) continue;
-        for (const item of cat.items) allowedKeys.add(item.id);
-        if (cat.shared_evidence?.key) allowedKeys.add(cat.shared_evidence.key);
-      }
-      // Toggle Com/Sem ABS muda o resultado da Otimização
-      if (viewerStages.includes('optimization')) allowedKeys.add('__is_abs');
+      const allowedKeys = stageManualKeys(viewerStages);
 
       const prevChecks = prev.manualChecks || {};
       manualChecks = { ...prevChecks };
@@ -1103,6 +1118,29 @@ router.put('/campaign/:token', async (req, res) => {
       }
     } else {
       manualChecks = manualChecksFromBody;
+      // Dono (não admin) salvando: etapas atribuídas a OUTROS CSs ficam como
+      // estão no banco — a tela do dono pode estar com uma versão antiga e
+      // apagaria o que o responsável preencheu.
+      const othersStages = ASSIGNABLE_STAGES.filter(st => stageAssignees[st] && stageAssignees[st] !== csEmail);
+      if (!isAdmin && othersStages.length > 0) {
+        if (prev.readError) {
+          return res.status(503).json({ error: 'Não foi possível ler os dados atuais da campanha. Tente de novo.' });
+        }
+        const keepKeys = stageManualKeys(othersStages);
+        const prevChecks = prev.manualChecks || {};
+        manualChecks = { ...manualChecksFromBody };
+        for (const k of keepKeys) {
+          if (k in prevChecks) manualChecks[k] = prevChecks[k];
+          else delete manualChecks[k];
+        }
+        const prevEv = prevChecks.__evidence || {};
+        const ev = { ...(manualChecksFromBody.__evidence || {}) };
+        for (const k of keepKeys) {
+          if (k in prevEv) ev[k] = prevEv[k];
+          else delete ev[k];
+        }
+        if (Object.keys(ev).length > 0 || manualChecksFromBody.__evidence) manualChecks.__evidence = ev;
+      }
     }
     const manualChecksJson = JSON.stringify(manualChecks);
     const notes = body.notes || '';
@@ -1466,6 +1504,10 @@ router.post('/campaign/:token/assign-stage', async (req, res) => {
 
     const table = campaign.is_legacy ? 'commplan_legacy_assignments' : 'commplan_command_overrides';
     const prev = await fetchManualChecks(token, !!campaign.is_legacy);
+    if (prev.readError) {
+      // Sem o estado atual, gravar admin_overrides apagaria os overrides existentes
+      return res.status(503).json({ error: 'Não foi possível ler os dados atuais da campanha. Tente de novo.' });
+    }
     const before = resolveStageAssignees(prev.adminOverrides, prev.preAssignee);
 
     if (stage === 'pre_campaign') {
