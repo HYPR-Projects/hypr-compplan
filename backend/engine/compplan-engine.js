@@ -22,6 +22,50 @@ const TAX_RATE = 0.1653;
 const NET_FACTOR = 1 - TAX_RATE;
 
 /**
+ * Etapas que podem ser atribuídas a um CS diferente do dono da campanha
+ * (ex.: João é dono, mas quem fez o Setup foi a Mariana).
+ *
+ * Armazenamento:
+ *   - pre_campaign → coluna pre_campaign_assignee_email (fluxo antigo, mantido)
+ *   - demais       → admin_overrides.__stage_assignees[<etapa>] = { email, by, at }
+ */
+export const ASSIGNABLE_STAGES = ['pre_campaign', 'setup', 'optimization', 'account_mgmt', 'extras', 'onboarding'];
+
+// Items que NÃO seguem a atribuição da etapa (têm regra própria de destino).
+// ex_estudos vai sempre pro AUTOR do estudo.
+export const STAGE_EXEMPT_ITEMS = new Set(['ex_estudos']);
+
+/**
+ * Resolve o mapa { etapa → email } de responsáveis por etapa da campanha.
+ * Etapas sem responsável não aparecem no mapa (= contam pro dono).
+ */
+export function resolveStageAssignees(adminOverrides = {}, preAssignee = null) {
+  const map = {};
+  const raw = (adminOverrides && adminOverrides.__stage_assignees) || {};
+  for (const stage of ASSIGNABLE_STAGES) {
+    const entry = raw[stage];
+    const email = typeof entry === 'string' ? entry : entry?.email;
+    if (email) map[stage] = String(email).toLowerCase();
+  }
+  if (preAssignee) map.pre_campaign = String(preAssignee).toLowerCase();
+  return map;
+}
+
+/**
+ * Soma o que um CS ganha numa etapa atribuída a ele (breakdown calculado com
+ * csOwner = esse CS). Ignora items isentos (ex_estudos).
+ */
+export function stageSubtotal(breakdown, stage) {
+  const cat = breakdown?.by_category?.[stage];
+  if (!cat) return { pct: 0, brl: 0 };
+  const items = cat.items.filter(i => i.earned && !STAGE_EXEMPT_ITEMS.has(i.id));
+  return {
+    pct: items.reduce((s, i) => s + i.pct, 0),
+    brl: items.reduce((s, i) => s + i.value_brl, 0),
+  };
+}
+
+/**
  * Infere quais items AUTOMÁTICOS e SEMI_AUTO estão atingidos baseado no checklist.
  * Retorna Set de ids inferidos.
  */
@@ -287,23 +331,24 @@ function applyConstraints(earnedItems, allItems, adminOverriddenItems = new Set(
  * @param {object} manualChecks - JSON do que o CS marcou (item_id → bool)
  * @param {object} metrics - Métricas (eCPM, CTR, over)
  * @param {object} adminOverrides - JSON com overrides admin
- * @param {object} opts - { preAssignee: email|null, csOwner: email }
- *   Se preAssignee diferente de null, os itens de pre_campaign NÃO contam pro CS dono.
- *   Eles continuam aparecendo (e podem ser marcados) mas value_brl=0 no breakdown do dono.
- *   Quando engine roda PRO assignee (outra view), preAssignee === csOwner → conta normalmente.
+ * @param {object} opts - { preAssignee: email|null, csOwner: email, studiesInfo }
+ *   csOwner = CS do ponto de vista de quem o bônus é calculado.
+ *   Responsáveis por etapa vêm de preAssignee (Pré) + adminOverrides.__stage_assignees.
+ *   Se uma etapa tem responsável diferente de csOwner, os items dela aparecem
+ *   (e podem ser marcados) mas value_brl=0 — o valor vai pro responsável.
+ *   Quando o engine roda PRO responsável, responsável === csOwner → conta normalmente.
  */
 export function computeBonus(campaign, manualChecks = {}, metrics = null, adminOverrides = {}, opts = {}) {
   const bruto = Number(campaign.total_value) || 0;
   const liquido = bruto * NET_FACTOR;
 
   const { preAssignee = null, csOwner = null, studiesInfo = [] } = opts;
-  // Pré Campanha entra no breakdown do CS APENAS se:
-  //   - Não há assignee (sem atribuição → conta pro dono)
-  //   - OU o CS olhando É o assignee (mesma pessoa)
-  // Quando preAssignee existe E é diferente do csOwner observador, pre_campaign zera.
+  // Uma etapa entra no breakdown do CS APENAS se:
+  //   - Não há responsável (sem atribuição → conta pro dono)
+  //   - OU o CS olhando É o responsável (mesma pessoa)
   const csOwnerLower = (csOwner || '').toLowerCase();
-  const preAssigneeLower = (preAssignee || '').toLowerCase();
-  const preGoesToOwner = !preAssigneeLower || preAssigneeLower === csOwnerLower;
+  const stageAssignees = resolveStageAssignees(adminOverrides, preAssignee);
+  const stageGoesToViewer = (stage) => !stageAssignees[stage] || stageAssignees[stage] === csOwnerLower;
 
   // 1. Items inferidos do checklist (auto + semi_auto)
   const inferred = inferAutoItems(campaign, { studiesInfo });
@@ -380,8 +425,9 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
 
   for (const [catKey, cat] of Object.entries(COMPPLAN_CATALOG)) {
     const isSetupInvalidated = catKey === 'setup' && setupValidation.invalidated;
-    // Pré Campanha: se atribuída a outro CS, items aparecem mas value_brl=0 pro dono
-    const isPreCampaignBlocked = catKey === 'pre_campaign' && !preGoesToOwner;
+    // Etapa atribuída a outro CS: items aparecem mas value_brl=0 pra quem está olhando
+    const isStageBlocked = !stageGoesToViewer(catKey);
+    const isPreCampaignBlocked = catKey === 'pre_campaign' && isStageBlocked;
 
     // Filtra items relevantes pra esta campanha. Hoje só Otimizações tem
     // variação por tipo: campanhas só de vídeo veem apenas opt_video;
@@ -397,18 +443,23 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
     const items = filteredItems.map(item => {
       const wasEarned = earned.has(item.id);
 
-      const blocked = isSetupInvalidated || isPreCampaignBlocked;
       const adminOv = adminOverrides[item.id];
 
       // Prioridade do admin override do item: se o admin forçou explicitamente
-      // OK/Não naquele item, isso vence QUALQUER bloqueio (setup anulado,
-      // pre-campanha de outro CS, etc). O force individual é a palavra final.
+      // OK/Não naquele item, isso vence o setup anulado. O force individual é
+      // a palavra final sobre SE o item foi conquistado.
       let effectivelyEarned;
       if (adminOv && typeof adminOv.earned === 'boolean') {
         effectivelyEarned = adminOv.earned;
       } else {
-        effectivelyEarned = wasEarned && !blocked;
+        effectivelyEarned = wasEarned && !isSetupInvalidated;
       }
+
+      // Atribuição de etapa decide PRA QUEM vai o item (não se foi conquistado).
+      // Aplica mesmo com admin override — senão o item seria pago 2× (dono + responsável).
+      const itemStageBlocked = isStageBlocked && !STAGE_EXEMPT_ITEMS.has(item.id);
+      const assignedToOther = itemStageBlocked && effectivelyEarned;
+      if (itemStageBlocked) effectivelyEarned = false;
 
       // ex_estudos: bônus vai pro AUTOR. Se o csOwner observador NÃO é o autor de algum
       // estudo da campanha, value_brl pro dono = 0.
@@ -464,7 +515,8 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
         earned: effectivelyEarned,
         was_earned: wasEarned,
         invalidated: isSetupInvalidated && wasEarned && !(adminOv && adminOv.earned === true),
-        pre_assigned_to_other: isPreCampaignBlocked && wasEarned && !(adminOv && adminOv.earned === true),
+        pre_assigned_to_other: isPreCampaignBlocked && assignedToOther,
+        assigned_to_other: assignedToOther,
         study_goes_to_other: isStudyBlocked2 && wasEarned,
         value_brl: effectivelyEarned ? liquido * item.pct : 0,
         admin_overridden: !!adminOv,
@@ -494,6 +546,9 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
       setup_pending: catKey === 'setup' ? (setupValidation.pending || false) : false,
       pre_assigned_to: catKey === 'pre_campaign' ? (preAssignee || null) : null,
       pre_blocked_for_owner: isPreCampaignBlocked,
+      // Responsável pela etapa (null = dono) e se ela está bloqueada pra quem olha
+      assignee: stageAssignees[catKey] || null,
+      assigned_to_other: isStageBlocked,
     };
 
     totalPct += subtotalPct;
@@ -508,5 +563,6 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
     total_brl: liquido * totalPct,
     setup_validation: setupValidation,
     auto_setup_validation: autoSetupValidation,  // pra UI ver o que era automático
+    stage_assignees: stageAssignees,
   };
 }

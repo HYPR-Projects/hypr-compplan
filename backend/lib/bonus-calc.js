@@ -19,7 +19,8 @@
  */
 
 import { query, tableRef } from './bigquery.js';
-import { computeBonus } from '../engine/compplan-engine.js';
+import { computeBonus, ASSIGNABLE_STAGES, stageSubtotal } from '../engine/compplan-engine.js';
+import { COMPPLAN_CATALOG } from '../engine/compplan-catalog.js';
 import { isOverException } from '../data/over-exceptions.js';
 import { findStudyByName, getStudyById } from '../data/studies.js';
 
@@ -104,117 +105,17 @@ export async function resolveStudiesInfo(campaign, studyAssigneeOverride = null,
 }
 
 /**
- * Calcula o bônus total bruto de um CS num quarter, aplicando TODOS os
- * componentes:
- *   1. Bônus das próprias campanhas (com manual_checks, admin_overrides, etc)
- *   2. Bônus de Pré Campanha atribuída a este CS em campanhas de OUTROS CSs
- *   3. Bônus de Estudo autorado por este CS usado em campanhas de OUTROS CSs
+ * Batch de métricas (display + video) por short_token — eCPM, CTR, OVER (com
+ * exceções) e VTR/Tech Cost. Usado pelo cálculo das campanhas próprias e das
+ * etapas atribuídas (Setup e Otimização dependem de métricas).
  *
- * @param {object} args
- * @param {string} args.csEmail - email lowercase
- * @param {string} args.startDate - YYYY-MM-DD
- * @param {string} args.endDate - YYYY-MM-DD
- *
- * @returns {Promise<{
- *   total_brl: number,
- *   own_brl: number,
- *   pre_assigned_brl: number,
- *   study_authored_brl: number,
- *   by_campaign: Array<{short_token, bonus_brl}>
- * }>}
+ * @param {Array<{short_token, client_name, total_value}>} campaigns
+ * @returns {Promise<Object<string, object>>}
  */
-export async function computeCsBonus({ csEmail, startDate, endDate }) {
-  const csLower = csEmail.toLowerCase();
-
-  // Rodar as 3 partes em paralelo (são queries independentes ao BQ)
-  const [ownPart, preAssignedBrl, studyAuthoredBrl] = await Promise.all([
-    _computeOwnCampaignsBonus({ csEmail: csLower, startDate, endDate }),
-    _computePreAssignedBonus({ csEmail: csLower, startDate, endDate }),
-    _computeStudyAuthoredBonus({ csEmail: csLower, startDate, endDate }),
-  ]);
-
-  return {
-    total_brl: ownPart.total_brl + preAssignedBrl + studyAuthoredBrl,
-    own_brl: ownPart.total_brl,
-    pre_assigned_brl: preAssignedBrl,
-    study_authored_brl: studyAuthoredBrl,
-    by_campaign: ownPart.by_campaign,
-  };
-}
-
-/**
- * Parte 1: bônus das campanhas onde o CS é dono.
- * Idêntico ao que /me/dashboard faz no map(campaigns).
- */
-async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
-  // 1. Campanhas do CS
-  // Inclui is_reviewed (override.reviewed OU legacy.updated_at > attributed_at)
-  // pra que callers (ex.: cálculo de score) possam filtrar só as revisadas.
-  const campaigns = await query(
-    `SELECT
-       c.short_token, c.client_name, c.is_legacy,
-       c.total_value, c.features, c.products,
-       c.formats, c.audiences, c.studies_used, c.pracas_type,
-       c.o2o_display_impressions, c.bonus_o2o_display_impressions,
-       c.ooh_display_impressions, c.bonus_ooh_display_impressions,
-       c.end_date,
-       (IFNULL(o.reviewed, FALSE) = TRUE
-        OR (la.updated_at IS NOT NULL AND la.updated_at > la.attributed_at)) AS is_reviewed
-     FROM ${tableRef('commplan_checklists')} c
-     LEFT JOIN ${tableRef('commplan_command_overrides')}   o  ON c.short_token = o.short_token
-     LEFT JOIN ${tableRef('commplan_legacy_assignments')}  la ON c.short_token = la.short_token
-     WHERE LOWER(c.cs_email) = @cs
-       AND c.start_date >= @s AND c.start_date <= @e`,
-    { cs: csEmail, s: startDate, e: endDate }
-  );
-
-  if (campaigns.length === 0) {
-    return { total_brl: 0, by_campaign: [] };
-  }
-
+export async function fetchMetricsByToken(campaigns) {
+  const metricsByToken = {};
+  if (!campaigns || campaigns.length === 0) return metricsByToken;
   const tokens = campaigns.map(c => c.short_token);
-
-  // 2. Batch: overlays
-  let manualChecksByToken = {};
-  let adminOverridesByToken = {};
-  let preAssigneeByToken = {};
-  let studyAssigneeByToken = {};
-  let studyIdOverrideByToken = {};
-
-  try {
-    const [overrideRows, legacyRows] = await Promise.all([
-      query(
-        `SELECT short_token, manual_checks, admin_overrides,
-                pre_campaign_assignee_email, study_assignee_email, study_id_override
-         FROM ${tableRef('commplan_command_overrides')}
-         WHERE short_token IN UNNEST(@toks)`,
-        { toks: tokens }
-      ),
-      query(
-        `SELECT short_token, manual_checks, admin_overrides,
-                pre_campaign_assignee_email, study_assignee_email, study_id_override
-         FROM ${tableRef('commplan_legacy_assignments')}
-         WHERE short_token IN UNNEST(@toks)`,
-        { toks: tokens }
-      ),
-    ]);
-    for (const r of [...overrideRows, ...legacyRows]) {
-      if (r.manual_checks) {
-        try { manualChecksByToken[r.short_token] = JSON.parse(r.manual_checks); } catch (_) {}
-      }
-      if (r.admin_overrides) {
-        try { adminOverridesByToken[r.short_token] = JSON.parse(r.admin_overrides); } catch (_) {}
-      }
-      if (r.pre_campaign_assignee_email) preAssigneeByToken[r.short_token] = r.pre_campaign_assignee_email;
-      if (r.study_assignee_email)        studyAssigneeByToken[r.short_token] = r.study_assignee_email;
-      if (r.study_id_override)           studyIdOverrideByToken[r.short_token] = r.study_id_override;
-    }
-  } catch (e) {
-    console.warn('_computeOwnCampaignsBonus overlays:', e.message);
-  }
-
-  // 3. Batch: métricas (display + video)
-  let metricsByToken = {};
   try {
     const [perfRows, contractedRows] = await Promise.all([
       query(
@@ -298,8 +199,124 @@ async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
       };
     }
   } catch (e) {
-    console.warn('_computeOwnCampaignsBonus metrics:', e.message);
+    console.warn('fetchMetricsByToken:', e.message);
   }
+  return metricsByToken;
+}
+
+/**
+ * Calcula o bônus total bruto de um CS num quarter, aplicando TODOS os
+ * componentes:
+ *   1. Bônus das próprias campanhas (com manual_checks, admin_overrides, etc)
+ *   2. Bônus de etapas (Pré, Setup, Otimização, ...) atribuídas a este CS em
+ *      campanhas de OUTROS CSs
+ *   3. Bônus de Estudo autorado por este CS usado em campanhas de OUTROS CSs
+ *
+ * @param {object} args
+ * @param {string} args.csEmail - email lowercase
+ * @param {string} args.startDate - YYYY-MM-DD
+ * @param {string} args.endDate - YYYY-MM-DD
+ *
+ * @returns {Promise<{
+ *   total_brl: number,
+ *   own_brl: number,
+ *   stage_assigned_brl: number,
+ *   study_authored_brl: number,
+ *   by_campaign: Array<{short_token, bonus_brl}>
+ * }>}
+ */
+export async function computeCsBonus({ csEmail, startDate, endDate }) {
+  const csLower = csEmail.toLowerCase();
+
+  // Rodar as 3 partes em paralelo (são queries independentes ao BQ)
+  const [ownPart, stageAssigned, studyAuthoredBrl] = await Promise.all([
+    _computeOwnCampaignsBonus({ csEmail: csLower, startDate, endDate }),
+    computeStageAssignedBonus({ csEmail: csLower, startDate, endDate }),
+    _computeStudyAuthoredBonus({ csEmail: csLower, startDate, endDate }),
+  ]);
+
+  return {
+    total_brl: ownPart.total_brl + stageAssigned.total_brl + studyAuthoredBrl,
+    own_brl: ownPart.total_brl,
+    stage_assigned_brl: stageAssigned.total_brl,
+    study_authored_brl: studyAuthoredBrl,
+    by_campaign: ownPart.by_campaign,
+  };
+}
+
+/**
+ * Parte 1: bônus das campanhas onde o CS é dono.
+ * Idêntico ao que /me/dashboard faz no map(campaigns).
+ */
+async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
+  // 1. Campanhas do CS
+  // Inclui is_reviewed (override.reviewed OU legacy.updated_at > attributed_at)
+  // pra que callers (ex.: cálculo de score) possam filtrar só as revisadas.
+  const campaigns = await query(
+    `SELECT
+       c.short_token, c.client_name, c.is_legacy,
+       c.total_value, c.features, c.products,
+       c.formats, c.audiences, c.studies_used, c.pracas_type,
+       c.o2o_display_impressions, c.bonus_o2o_display_impressions,
+       c.ooh_display_impressions, c.bonus_ooh_display_impressions,
+       c.end_date,
+       (IFNULL(o.reviewed, FALSE) = TRUE
+        OR (la.updated_at IS NOT NULL AND la.updated_at > la.attributed_at)) AS is_reviewed
+     FROM ${tableRef('commplan_checklists')} c
+     LEFT JOIN ${tableRef('commplan_command_overrides')}   o  ON c.short_token = o.short_token
+     LEFT JOIN ${tableRef('commplan_legacy_assignments')}  la ON c.short_token = la.short_token
+     WHERE LOWER(c.cs_email) = @cs
+       AND c.start_date >= @s AND c.start_date <= @e`,
+    { cs: csEmail, s: startDate, e: endDate }
+  );
+
+  if (campaigns.length === 0) {
+    return { total_brl: 0, by_campaign: [] };
+  }
+
+  const tokens = campaigns.map(c => c.short_token);
+
+  // 2. Batch: overlays
+  let manualChecksByToken = {};
+  let adminOverridesByToken = {};
+  let preAssigneeByToken = {};
+  let studyAssigneeByToken = {};
+  let studyIdOverrideByToken = {};
+
+  try {
+    const [overrideRows, legacyRows] = await Promise.all([
+      query(
+        `SELECT short_token, manual_checks, admin_overrides,
+                pre_campaign_assignee_email, study_assignee_email, study_id_override
+         FROM ${tableRef('commplan_command_overrides')}
+         WHERE short_token IN UNNEST(@toks)`,
+        { toks: tokens }
+      ),
+      query(
+        `SELECT short_token, manual_checks, admin_overrides,
+                pre_campaign_assignee_email, study_assignee_email, study_id_override
+         FROM ${tableRef('commplan_legacy_assignments')}
+         WHERE short_token IN UNNEST(@toks)`,
+        { toks: tokens }
+      ),
+    ]);
+    for (const r of [...overrideRows, ...legacyRows]) {
+      if (r.manual_checks) {
+        try { manualChecksByToken[r.short_token] = JSON.parse(r.manual_checks); } catch (_) {}
+      }
+      if (r.admin_overrides) {
+        try { adminOverridesByToken[r.short_token] = JSON.parse(r.admin_overrides); } catch (_) {}
+      }
+      if (r.pre_campaign_assignee_email) preAssigneeByToken[r.short_token] = r.pre_campaign_assignee_email;
+      if (r.study_assignee_email)        studyAssigneeByToken[r.short_token] = r.study_assignee_email;
+      if (r.study_id_override)           studyIdOverrideByToken[r.short_token] = r.study_id_override;
+    }
+  } catch (e) {
+    console.warn('_computeOwnCampaignsBonus overlays:', e.message);
+  }
+
+  // 3. Batch: métricas (display + video)
+  const metricsByToken = await fetchMetricsByToken(campaigns);
 
   // 4. Resolve studiesInfo em paralelo
   const studiesInfoByToken = {};
@@ -343,40 +360,95 @@ async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
 }
 
 /**
- * Parte 2: bônus de Pré Campanha atribuído a este CS em campanhas de OUTROS CSs.
- * Espelha exatamente o que /me/dashboard faz (linha ~512 do me.js).
+ * Parte 2: bônus das etapas atribuídas a este CS em campanhas de OUTROS CSs
+ * (ex.: João é dono, Mariana fez o Setup → o Setup entra aqui pra Mariana).
+ *
+ * Responsáveis vêm de pre_campaign_assignee_email (Pré) e de
+ * admin_overrides.__stage_assignees (demais etapas).
+ *
+ * Usado também por /me/dashboard pra listar essas campanhas.
+ *
+ * @returns {Promise<{ total_brl: number, items: Array }>}
  */
-async function _computePreAssignedBonus({ csEmail, startDate, endDate }) {
+export async function computeStageAssignedBonus({ csEmail, startDate, endDate }) {
+  const csLower = (csEmail || '').toLowerCase();
   try {
-    const preCampaigns = await query(
+    const stageConds = ASSIGNABLE_STAGES
+      .filter(st => st !== 'pre_campaign')
+      .map(st => `LOWER(JSON_VALUE(IFNULL(o.admin_overrides, la.admin_overrides), '$.__stage_assignees.${st}.email')) = @cs`)
+      .join('\n           OR ');
+
+    const rows = await query(
       `SELECT
-         c.short_token, c.client_name, c.is_legacy, c.total_value,
-         c.features, c.products, c.formats, c.audiences,
-         c.studies_used, c.pracas_type,
-         IFNULL(o.manual_checks, la.manual_checks) AS manual_checks,
-         IFNULL(o.admin_overrides, la.admin_overrides) AS admin_overrides
+         c.*,
+         IFNULL(o.manual_checks, la.manual_checks) AS ov_manual_checks,
+         IFNULL(o.admin_overrides, la.admin_overrides) AS ov_admin_overrides,
+         IFNULL(o.pre_campaign_assignee_email, la.pre_campaign_assignee_email) AS ov_pre_assignee
        FROM ${tableRef('commplan_checklists')} c
        LEFT JOIN ${tableRef('commplan_command_overrides')} o ON c.short_token = o.short_token
        LEFT JOIN ${tableRef('commplan_legacy_assignments')} la ON c.short_token = la.short_token
-       WHERE LOWER(IFNULL(o.pre_campaign_assignee_email, la.pre_campaign_assignee_email)) = @cs
-         AND LOWER(IFNULL(c.cs_email, '')) != @cs
-         AND c.start_date >= @s AND c.start_date <= @e`,
-      { cs: csEmail, s: startDate, e: endDate }
+       WHERE LOWER(IFNULL(c.cs_email, '')) != @cs
+         AND c.start_date >= @s AND c.start_date <= @e
+         AND (
+           LOWER(IFNULL(o.pre_campaign_assignee_email, la.pre_campaign_assignee_email)) = @cs
+           OR ${stageConds}
+         )
+       ORDER BY c.start_date DESC`,
+      { cs: csLower, s: startDate, e: endDate }
     );
+    if (rows.length === 0) return { total_brl: 0, items: [] };
+
+    const metricsByToken = await fetchMetricsByToken(rows);
 
     let total = 0;
-    for (const pc of preCampaigns) {
-      const mc = pc.manual_checks ? JSON.parse(pc.manual_checks) : {};
-      const ao = pc.admin_overrides ? JSON.parse(pc.admin_overrides) : {};
-      // csOwner = csEmail faz o pre_campaign contar pra ele
-      const breakdown = computeBonus(pc, mc, null, ao, { preAssignee: csEmail, csOwner: csEmail });
-      const preSubtotal = breakdown.by_category?.pre_campaign?.subtotal_brl || 0;
-      total += preSubtotal;
+    const items = [];
+    for (const c of rows) {
+      let mc = {};
+      let ao = {};
+      try { mc = c.ov_manual_checks ? JSON.parse(c.ov_manual_checks) : {}; } catch (_) {}
+      try { ao = c.ov_admin_overrides ? JSON.parse(c.ov_admin_overrides) : {}; } catch (_) {}
+
+      // csOwner = este CS → as etapas atribuídas a ele contam no breakdown
+      const breakdown = computeBonus(c, mc, metricsByToken[c.short_token] || null, ao, {
+        preAssignee: c.ov_pre_assignee || null,
+        csOwner: csLower,
+      });
+
+      const stages = [];
+      for (const st of ASSIGNABLE_STAGES) {
+        if (breakdown.stage_assignees?.[st] !== csLower) continue;
+        const sub = stageSubtotal(breakdown, st);
+        stages.push({
+          stage: st,
+          label: COMPPLAN_CATALOG[st]?.label || st,
+          subtotal_pct: sub.pct,
+          subtotal_brl: sub.brl,
+        });
+      }
+      if (stages.length === 0) continue;
+
+      const subtotalBrl = stages.reduce((s, x) => s + x.subtotal_brl, 0);
+      const subtotalPct = stages.reduce((s, x) => s + x.subtotal_pct, 0);
+      total += subtotalBrl;
+      items.push({
+        short_token: c.short_token,
+        client_name: c.client_name,
+        campaign_name: c.campaign_name,
+        owner_cs_email: c.cs_email,
+        owner_cs_name: c.cs_name,
+        start_date: c.start_date?.value || c.start_date,
+        end_date: c.end_date?.value || c.end_date,
+        is_legacy: !!c.is_legacy,
+        total_value: Number(c.total_value) || 0,
+        stages,
+        subtotal_brl: subtotalBrl,
+        subtotal_pct: subtotalPct,
+      });
     }
-    return total;
+    return { total_brl: total, items };
   } catch (e) {
-    console.warn('_computePreAssignedBonus:', e.message);
-    return 0;
+    console.warn('computeStageAssignedBonus:', e.message);
+    return { total_brl: 0, items: [] };
   }
 }
 

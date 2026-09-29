@@ -355,7 +355,7 @@ function buildExportRows(campaigns) {
         let motivo = '';
         if (!item.earned) {
           if (item.invalidated) motivo = 'Setup anulado por OVER';
-          else if (item.pre_assigned_to_other) motivo = 'Pré-Campanha atribuída a outro CS';
+          else if (item.assigned_to_other) motivo = `Etapa atribuída a ${catBreakdown.assignee || 'outro CS'}`;
           else if (item.study_goes_to_other) motivo = 'Bônus de estudo vai pro autor';
           else if (item.admin_overridden) motivo = `Admin forçou: ${item.admin_override?.value === false ? 'Não' : 'Sim'}`;
           else motivo = 'Não marcado';

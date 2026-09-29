@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle2, AlertCircle, Save, Info,
   ChevronDown, ChevronRight, Sparkles, Zap, Eye, Link2, AlertTriangle,
-  MessageSquare, Shield, Copy, BookOpen, X, Download, FileSpreadsheet,
+  MessageSquare, Shield, Copy, BookOpen, X, Download, FileSpreadsheet, UserPlus,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
@@ -15,6 +15,8 @@ import { endpoints, auth } from '../../lib/api.js';
 import './CampaignDetail.css';
 
 const CATEGORY_ORDER = ['pre_campaign', 'setup', 'optimization', 'account_mgmt', 'extras', 'onboarding'];
+// Items que não seguem o responsável da etapa (ex_estudos vai pro autor do estudo)
+const STAGE_EXEMPT_ITEMS = new Set(['ex_estudos']);
 
 export default function CsCampaignDetail() {
   const { token, csEmail: impersonateEmail } = useParams();
@@ -67,6 +69,17 @@ export default function CsCampaignDetail() {
       await load();
     } catch (e) {
       alert(`Erro ao atribuir estudo: ${e.message}`);
+    }
+  }
+
+  /** Define o CS responsável por uma etapa (null = volta pro dono). */
+  async function handleAssignStage(stage, csEmail) {
+    try {
+      setError(null);
+      await endpoints.meAssignStage(token, stage, csEmail || null, opts);
+      await load();
+    } catch (e) {
+      setError(`Erro ao atribuir etapa: ${e.message}`);
     }
   }
 
@@ -129,7 +142,8 @@ export default function CsCampaignDetail() {
       }, opts);
       setSavedAt(new Date());
       setSavedAs(markReviewed ? 'reviewed' : 'draft');
-      setCampaign(prev => prev ? { ...prev, breakdown: result.breakdown, reviewed: result.reviewed } : prev);
+      // reviewed = null quando quem salvou é só responsável por etapa (não mexe na revisão)
+      setCampaign(prev => prev ? { ...prev, breakdown: result.breakdown, reviewed: result.reviewed ?? prev.reviewed } : prev);
     } catch (e) {
       setError(`Erro ao salvar: ${e.message}`);
     } finally {
@@ -171,6 +185,23 @@ export default function CsCampaignDetail() {
   // E também recalcula Otimização quando is_abs muda (Para feedback imediato sem esperar o backend)
   const breakdown = recomputeLocally(campaign.breakdown, manualChecks, campaign.metrics, effectiveIsAbs);
 
+  // Responsáveis por etapa (ausente = dono)
+  const viewerEmail = (user?.email || '').toLowerCase();
+  const ownerEmail = (campaign.cs_email || '').toLowerCase();
+  // Na impersonação o admin "é" o CS impersonado pro cálculo; na UI segue admin.
+  const isOwner = viewerEmail === ownerEmail;
+  const stageAssignees = campaign.stage_assignees || {};
+  const viewerAssignedStages = campaign.viewer_assigned_stages || [];
+  // Só responsável por etapa(s): vê e edita apenas essas etapas
+  const onlyAssignedStages = !isAdmin && !isOwner && viewerAssignedStages.length > 0;
+  const canAssignStages = isAdmin || isOwner;
+  const nameForEmail = (email) => {
+    const e = (email || '').toLowerCase();
+    if (!e) return null;
+    const member = (teamList || []).find(t => (t.email || '').toLowerCase() === e);
+    return member?.name || email;
+  };
+
   return (
     <AppShell>
       {impersonateEmail && (
@@ -197,11 +228,11 @@ export default function CsCampaignDetail() {
             <Badge variant="neutral">{campaign.short_token}</Badge>
             {campaign.is_legacy && <Badge variant="neutral">Legacy</Badge>}
             {campaign.reviewed && <Badge variant="green">Revisada</Badge>}
-            {campaign.pre_campaign_assignee_email && (
-              <Badge variant={campaign.viewer_is_pre_assignee ? 'cyan' : 'yellow'}>
-                Pré: {campaign.pre_campaign_assignee_email}
+            {CATEGORY_ORDER.filter(st => stageAssignees[st]).map(st => (
+              <Badge key={st} variant={viewerAssignedStages.includes(st) ? 'cyan' : 'yellow'}>
+                {breakdown.by_category[st]?.label || st}: {nameForEmail(stageAssignees[st])}
               </Badge>
-            )}
+            ))}
           </div>
           <h1 className="page-title">{campaign.campaign_name}</h1>
           <div className="page-subtitle">
@@ -309,85 +340,70 @@ export default function CsCampaignDetail() {
         Detalhamento do bônus
       </h2>
 
-      {/* Quando o viewer é APENAS pre_assignee (não é dono nem admin),
-          mostra só o bloco de Pré Campanha. */}
-      {(() => {
-        const viewerEmail = (user?.email || '').toLowerCase();
-        const ownerEmail = (campaign.cs_email || '').toLowerCase();
-        const isOwner = viewerEmail === ownerEmail;
-        const onlyPreCampaign = !isAdmin && !isOwner && campaign.viewer_is_pre_assignee;
-
-        const categoriesToShow = onlyPreCampaign
-          ? ['pre_campaign']
-          : CATEGORY_ORDER;
-
-        // Info pra bloquear o bloco Pré Campanha do DONO quando atribuída a outro CS.
-        const assigneeEmail = (campaign.pre_campaign_assignee_email || '').toLowerCase();
-        const assigneeIsOther = !!assigneeEmail && assigneeEmail !== viewerEmail;
-        let assigneeName = null;
-        if (assigneeIsOther) {
-          const member = (teamList || []).find(t => (t.email || '').toLowerCase() === assigneeEmail);
-          assigneeName = member?.name || null;
-        }
-        const preAssigneeInfo = {
-          assigneeIsOther,
-          assigneeName,
+      {/* Quando o viewer é APENAS responsável por etapa(s) (não é dono nem admin),
+          mostra só os blocos dessas etapas. */}
+      {onlyAssignedStages && (
+        <div className="cs-only-pre-banner">
+          <Info size={14} />
+          <span>
+            Você é responsável por{' '}
+            <strong>{viewerAssignedStages.map(st => breakdown.by_category[st]?.label || st).join(', ')}</strong>{' '}
+            nesta campanha (dono: <strong>{campaign.cs_name || campaign.cs_email}</strong>).
+            O bônus dessas etapas vai pra você — o resto da campanha não é editável por você.
+          </span>
+        </div>
+      )}
+      {(onlyAssignedStages ? CATEGORY_ORDER.filter(st => viewerAssignedStages.includes(st)) : CATEGORY_ORDER).map(catKey => {
+        const cat = breakdown.by_category[catKey];
+        if (!cat) return null;
+        const assigneeEmail = (stageAssignees[catKey] || '').toLowerCase();
+        const stageInfo = {
           assigneeEmail,
+          assigneeName: nameForEmail(assigneeEmail),
+          // Etapa com outro responsável (do ponto de vista do CS em foco)
+          assignedToOther: !!cat.assigned_to_other,
+          // Admin continua podendo editar tudo
+          locked: !!cat.assigned_to_other && !isAdmin,
+          canAssign: canAssignStages,
+          ownerEmail,
+          ownerName: campaign.cs_name || campaign.cs_email,
         };
-
         return (
-          <>
-            {onlyPreCampaign && (
-              <div className="cs-only-pre-banner">
-                <Info size={14} />
-                <span>
-                  Você foi atribuído à <strong>Pré Campanha</strong> desta campanha
-                  (dono: <strong>{campaign.cs_name || campaign.cs_email}</strong>).
-                  Só você pode preencher esta seção — o resto da campanha não é editável por você.
-                </span>
-              </div>
-            )}
-            {categoriesToShow.map(catKey => {
-              const cat = breakdown.by_category[catKey];
-              if (!cat) return null;
-              return (
-                <CategoryBlock
-                  key={catKey}
-                  catKey={catKey}
-                  cat={cat}
-                  expanded={expandedCategories.has(catKey)}
-                  onToggleExpand={() => toggleCategory(catKey)}
-                  manualChecks={manualChecks}
-                  onCheck={toggleCheck}
-                  onEvidenceChange={setEvidence}
-                  metrics={campaign.metrics}
-                  isABS={effectiveIsAbs}
-                  onAbsChange={(newAbs) => setManualChecks(prev => ({ ...prev, __is_abs: newAbs }))}
-                  isVideoOnly={(() => {
-                    // Detecta campanha exclusivamente de vídeo (sem display, sem OOH).
-                    // Em campanhas só de vídeo, o toggle Com ABS / Sem ABS NÃO aparece
-                    // — porque o item de otimização é opt_video (Tech Cost / VTR), não display.
-                    const fmts = Array.isArray(campaign.formats) ? campaign.formats : [];
-                    const hasVideo = fmts.some(f => /video/i.test(f));
-                    const hasDisplay = fmts.some(f => /display/i.test(f));
-                    const hasOoh = fmts.some(f => /ooh/i.test(f));
-                    return hasVideo && !hasDisplay && !hasOoh;
-                  })()}
-                  isAdmin={isAdmin}
-                  onAdminOverride={handleAdminOverride}
-                  onSetupForce={handleSetupForce}
-                  teamList={teamList}
-                  studiesCatalog={studiesCatalog}
-                  currentStudyAssignee={campaign.study_assignee_email || null}
-                  currentStudyId={campaign.study_id_override || null}
-                  onAssignStudy={handleAssignStudy}
-                  preAssigneeInfo={preAssigneeInfo}
-                />
-              );
-            })}
-          </>
+          <CategoryBlock
+            key={catKey}
+            catKey={catKey}
+            cat={cat}
+            expanded={expandedCategories.has(catKey)}
+            onToggleExpand={() => toggleCategory(catKey)}
+            manualChecks={manualChecks}
+            onCheck={toggleCheck}
+            onEvidenceChange={setEvidence}
+            metrics={campaign.metrics}
+            isABS={effectiveIsAbs}
+            onAbsChange={(newAbs) => setManualChecks(prev => ({ ...prev, __is_abs: newAbs }))}
+            isVideoOnly={(() => {
+              // Detecta campanha exclusivamente de vídeo (sem display, sem OOH).
+              // Em campanhas só de vídeo, o toggle Com ABS / Sem ABS NÃO aparece
+              // — porque o item de otimização é opt_video (Tech Cost / VTR), não display.
+              const fmts = Array.isArray(campaign.formats) ? campaign.formats : [];
+              const hasVideo = fmts.some(f => /video/i.test(f));
+              const hasDisplay = fmts.some(f => /display/i.test(f));
+              const hasOoh = fmts.some(f => /ooh/i.test(f));
+              return hasVideo && !hasDisplay && !hasOoh;
+            })()}
+            isAdmin={isAdmin}
+            onAdminOverride={handleAdminOverride}
+            onSetupForce={handleSetupForce}
+            teamList={teamList}
+            studiesCatalog={studiesCatalog}
+            currentStudyAssignee={campaign.study_assignee_email || null}
+            currentStudyId={campaign.study_id_override || null}
+            onAssignStudy={handleAssignStudy}
+            stageInfo={stageInfo}
+            onAssignStage={handleAssignStage}
+          />
         );
-      })()}
+      })}
 
       {error && (
         <div className="form-error">
@@ -447,7 +463,8 @@ export default function CsCampaignDetail() {
         </div>
       )}
 
-      {/* Bloco de observação CS - pedido de análise */}
+      {/* Bloco de observação CS - pedido de análise (só dono/admin) */}
+      {!onlyAssignedStages && (
       <Card className="cs-notes-block">
         <div className="cs-notes-block__header">
           <MessageSquare size={16} />
@@ -485,14 +502,23 @@ export default function CsCampaignDetail() {
           </div>
         )}
       </Card>
+      )}
 
       <div className="form-actions">
-        <Button variant="ghost" onClick={() => handleSave(false)} disabled={saving}>
-          Salvar rascunho
-        </Button>
-        <Button variant="primary" icon={Save} onClick={() => handleSave(true)} loading={saving}>
-          {campaign.reviewed ? 'Atualizar revisão' : 'Confirmar revisão'}
-        </Button>
+        {onlyAssignedStages ? (
+          <Button variant="primary" icon={Save} onClick={() => handleSave(false)} loading={saving}>
+            Salvar minhas etapas
+          </Button>
+        ) : (
+          <>
+            <Button variant="ghost" onClick={() => handleSave(false)} disabled={saving}>
+              Salvar rascunho
+            </Button>
+            <Button variant="primary" icon={Save} onClick={() => handleSave(true)} loading={saving}>
+              {campaign.reviewed ? 'Atualizar revisão' : 'Confirmar revisão'}
+            </Button>
+          </>
+        )}
       </div>
 
       {showReplicateModal && (
@@ -511,14 +537,14 @@ export default function CsCampaignDetail() {
   );
 }
 
-function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, onEvidenceChange, metrics, isABS, onAbsChange, isVideoOnly, isAdmin, onAdminOverride, onSetupForce, teamList, studiesCatalog, currentStudyAssignee, currentStudyId, onAssignStudy, preAssigneeInfo }) {
+function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, onCheck, onEvidenceChange, metrics, isABS, onAbsChange, isVideoOnly, isAdmin, onAdminOverride, onSetupForce, teamList, studiesCatalog, currentStudyAssignee, currentStudyId, onAssignStudy, stageInfo, onAssignStage }) {
   const earnedCount = cat.items.filter(i => isEffectivelyEarned(i, manualChecks)).length;
   const isOptimization = catKey === 'optimization';
 
-  // Bloqueio de Pré Campanha quando atribuída a outro CS (do ponto de vista do dono).
-  // Não bloqueia o admin (que pode ver/editar tudo).
-  const preAssignedElsewhere = catKey === 'pre_campaign'
-    && preAssigneeInfo?.assigneeIsOther === true;
+  // Etapa atribuída a outro CS (do ponto de vista de quem está olhando):
+  // o bônus vai pro responsável. Trava edição, exceto pro admin.
+  const assignedElsewhere = !!stageInfo?.assignedToOther;
+  const locked = !!stageInfo?.locked;
 
   // Shared evidence: link único da categoria. Aparece quando há item marcado.
   const evidenceMap = manualChecks.__evidence || {};
@@ -530,17 +556,17 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
   const sharedMissing = showSharedEvidence && !sharedLink.trim();
 
   return (
-    <Card className={`category-block fade-up ${preAssignedElsewhere ? 'category-block--locked' : ''}`} style={{ marginBottom: 'var(--space-3)' }}>
+    <Card className={`category-block fade-up ${assignedElsewhere ? 'category-block--locked' : ''}`} style={{ marginBottom: 'var(--space-3)' }}>
       <button className="category-block__header" onClick={onToggleExpand}>
         <div className="category-block__title">
           {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
           <span>{cat.label}</span>
-          <Badge variant={cat.invalidated ? 'red' : (preAssignedElsewhere ? 'neutral' : 'neutral')}>
+          <Badge variant={cat.invalidated ? 'red' : 'neutral'}>
             {cat.invalidated
               ? `0/${cat.items.length} (anulado)`
               : cat.setup_pending
                 ? `${earnedCount}/${cat.items.length} (em andamento)`
-                : preAssignedElsewhere
+                : assignedElsewhere
                   ? 'atribuído'
                   : `${earnedCount}/${cat.items.length}`}
           </Badge>
@@ -553,13 +579,40 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
 
       {expanded && (
         <div className="category-block__items">
-          {preAssignedElsewhere && (
+          {stageInfo?.canAssign && onAssignStage && (
+            <div className="category-block__stage-assign">
+              <UserPlus size={14} />
+              <label htmlFor={`stage-assign-${catKey}`}>Responsável por esta etapa:</label>
+              <select
+                id={`stage-assign-${catKey}`}
+                value={stageInfo.assigneeEmail || ''}
+                onChange={(e) => onAssignStage(catKey, e.target.value || null)}
+              >
+                <option value="">Dono da campanha ({stageInfo.ownerName})</option>
+                {(teamList || [])
+                  .filter(t => (t.email || '').toLowerCase() !== stageInfo.ownerEmail)
+                  .map(t => (
+                    <option key={t.email} value={(t.email || '').toLowerCase()}>
+                      {t.name} ({t.email})
+                    </option>
+                  ))}
+                {/* Responsável atual fora da lista do time (ex.: inativo) */}
+                {stageInfo.assigneeEmail
+                  && !(teamList || []).some(t => (t.email || '').toLowerCase() === stageInfo.assigneeEmail) && (
+                  <option value={stageInfo.assigneeEmail}>{stageInfo.assigneeEmail}</option>
+                )}
+              </select>
+            </div>
+          )}
+          {assignedElsewhere && (
             <div className="category-block__pre-assigned-banner">
               <Info size={14} />
               <span>
-                Pré Campanha atribuída a{' '}
-                <strong>{preAssigneeInfo.assigneeName || preAssigneeInfo.assigneeEmail}</strong>.
-                Apenas este CS pode preencher os items desta seção. O bônus de Pré não conta pra você nesta campanha.
+                {cat.label} atribuída a{' '}
+                <strong>{stageInfo.assigneeName || stageInfo.assigneeEmail}</strong>.
+                {locked ? ' Apenas este CS pode preencher os items desta seção.' : ''}
+                {' '}O bônus desta etapa vai pra ele(a), não pro dono da campanha
+                {catKey === 'extras' ? ' (Estudos continuam indo pro autor)' : ''}.
               </span>
             </div>
           )}
@@ -619,7 +672,7 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
               </div>
             </div>
           )}
-          {isOptimization && onAbsChange && !isVideoOnly && (
+          {isOptimization && onAbsChange && !isVideoOnly && !locked && (
             <div className="abs-toggle">
               <div className="abs-toggle__label">
                 <span>Esta campanha é</span>
@@ -680,6 +733,7 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
                   placeholder="Cole o link da evidência (Drive, Loom, doc)…"
                   value={sharedLink}
                   onChange={(e) => onEvidenceChange(sharedKey, e.target.value)}
+                  disabled={locked}
                 />
                 {sharedLink && (
                   <a
@@ -714,7 +768,8 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
               currentStudyAssignee={currentStudyAssignee}
               currentStudyId={currentStudyId}
               onAssignStudy={onAssignStudy}
-              locked={preAssignedElsewhere}
+              locked={locked && !STAGE_EXEMPT_ITEMS.has(item.id)}
+              assignedElsewhere={assignedElsewhere && !STAGE_EXEMPT_ITEMS.has(item.id)}
             />
           ))}
           {cat.notes && (
@@ -728,7 +783,7 @@ function CategoryBlock({ catKey, cat, expanded, onToggleExpand, manualChecks, on
   );
 }
 
-function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS, invalidated, isAdmin, onAdminOverride, teamList, studiesCatalog, currentStudyAssignee, currentStudyId, onAssignStudy, locked }) {
+function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS, invalidated, isAdmin, onAdminOverride, teamList, studiesCatalog, currentStudyAssignee, currentStudyId, onAssignStudy, locked, assignedElsewhere }) {
   const isManual = item.source === 'manual';
   const isSemiAuto = item.source === 'semi_auto';
   const isAuto = item.source === 'auto';
@@ -923,9 +978,9 @@ function ItemRow({ item, manualChecks, onCheck, onEvidenceChange, metrics, isABS
             <Info size={12} /> Bônus deste estudo vai pro autor, não pra você
           </div>
         )}
-        {item.pre_assigned_to_other && !locked && (
+        {assignedElsewhere && !locked && isEffectivelyEarned(item, manualChecks) && (
           <div className="item-row__pre-assigned-note">
-            <Info size={12} /> Pré Campanha atribuída a outro CS — bônus não vai pra você
+            <Info size={12} /> Etapa atribuída a outro CS — bônus não vai pro dono
           </div>
         )}
 
@@ -1118,6 +1173,8 @@ function recomputeLocally(serverBreakdown, manualChecks, metrics, effectiveIsAbs
   const newByCategory = {};
   for (const [catKey, cat] of Object.entries(serverBreakdown.by_category)) {
     const invalidated = !!cat.invalidated;
+    // Etapa atribuída a outro CS: item pode estar conquistado, mas não conta aqui
+    const stageBlocked = !!cat.assigned_to_other;
     const newItems = cat.items.map(item => {
       let wouldEarn;
 
@@ -1138,12 +1195,16 @@ function recomputeLocally(serverBreakdown, manualChecks, metrics, effectiveIsAbs
       // Se o admin forçou explicitamente OK/Não naquele item, vale isso —
       // mesmo com o setup anulado por over > 50%.
       const hasItemOverride = item.admin_override && typeof item.admin_override.earned === 'boolean';
-      const effectivelyEarned = hasItemOverride
+      let effectivelyEarned = hasItemOverride
         ? item.admin_override.earned
         : (wouldEarn && !invalidated);
+      const itemStageBlocked = stageBlocked && !STAGE_EXEMPT_ITEMS.has(item.id);
+      const assignedToOther = itemStageBlocked && effectivelyEarned;
+      if (itemStageBlocked) effectivelyEarned = false;
       return {
         ...item,
         earned: effectivelyEarned,
+        assigned_to_other: assignedToOther,
         was_earned: wouldEarn,
         invalidated: invalidated && wouldEarn && !hasItemOverride,
         value_brl: effectivelyEarned ? liquido * item.pct : 0,

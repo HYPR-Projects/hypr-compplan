@@ -19,6 +19,8 @@ import { findStudyByName } from '../data/studies.js';
 import { getFloorOverride } from '../data/floor-overrides.js';
 import { sendEmail } from '../lib/email.js';
 import { overviewHandler } from './admin/overview.js';
+import { computeStageAssignedBonus } from '../lib/bonus-calc.js';
+import { logAudit } from '../lib/audit.js';
 
 const VERSION_ID = '2026';
 
@@ -111,7 +113,7 @@ async function resolveStudiesInfo(campaign, studyAssigneeOverride = null, studyI
   return result;
 }
 import { parseQuarter } from '../engine/quarter-resolver.js';
-import { computeBonus, isCampaignStillInGracePeriod } from '../engine/compplan-engine.js';
+import { computeBonus, isCampaignStillInGracePeriod, ASSIGNABLE_STAGES, resolveStageAssignees } from '../engine/compplan-engine.js';
 import { FEATURE_TIERS, COMPPLAN_CATALOG } from '../engine/compplan-catalog.js';
 
 export const router = Router();
@@ -338,6 +340,23 @@ function resolveTargetCs(req) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Helper: chaves de manual_checks (e de __evidence) que pertencem às etapas
+// informadas — items + link compartilhado da etapa (+ toggle ABS na Otimização).
+// ─────────────────────────────────────────────────────────────────────
+function stageManualKeys(stages) {
+  const keys = new Set();
+  for (const st of stages) {
+    const cat = COMPPLAN_CATALOG[st];
+    if (!cat) continue;
+    for (const item of cat.items) keys.add(item.id);
+    if (cat.shared_evidence?.key) keys.add(cat.shared_evidence.key);
+  }
+  // Toggle Com/Sem ABS muda o resultado da Otimização
+  if (stages.includes('optimization')) keys.add('__is_abs');
+  return keys;
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Helper: pega manual_checks salvos (de overrides ou legacy_assignments)
 // ─────────────────────────────────────────────────────────────────────
 async function fetchManualChecks(shortToken, isLegacy) {
@@ -365,7 +384,9 @@ async function fetchManualChecks(shortToken, isLegacy) {
     };
   } catch (err) {
     console.warn(`fetchManualChecks(${shortToken}): ${err.message}`);
-    return { manualChecks: {}, adminOverrides: {}, adminOverridesBy: null, adminOverridesAt: null, preAssignee: null, preAssignedAt: null, studyAssignee: null, studyIdOverride: null };
+    // readError: quem vai GRAVAR a partir desse estado (merge) deve abortar,
+    // senão sobrescreve dados salvos com um objeto vazio.
+    return { manualChecks: {}, adminOverrides: {}, adminOverridesBy: null, adminOverridesAt: null, preAssignee: null, preAssignedAt: null, studyAssignee: null, studyIdOverride: null, readError: err.message };
   }
 }
 
@@ -594,7 +615,6 @@ router.get('/dashboard/:q', async (req, res) => {
 
     // Agora calcula bônus de cada campanha com TODOS os dados
     let totalBonusBrl = 0;
-    let totalBonusPreAssignedBrl = 0; // bônus de Pré atribuído pra este CS em campanhas de outros
 
     // Resolve studies pra todas as campanhas em paralelo (pra UI mostrar nome + autor)
     const studiesInfoByToken = {};
@@ -643,59 +663,11 @@ router.get('/dashboard/:q', async (req, res) => {
     const nReviewed = items.filter(i => i.reviewed).length;
     const bruto = items.reduce((s, i) => s + i.bruto, 0);
 
-    // Busca campanhas onde este CS é PRE_ASSIGNEE mas NÃO é o CS dono
-    // (Pré Campanha atribuída a este CS em campanhas de outros)
-    let preAssignedItems = [];
-    let preAssignedBonusBrl = 0;
-    try {
-      const qInfo = parseQuarter(quarter);
-      if (!qInfo) throw new Error(`Quarter inválido: ${quarter}`);
-      const { startDate: qStart, endDate: qEnd } = qInfo;
-
-      const preCampaigns = await query(
-        `SELECT
-           c.short_token, c.client_name, c.campaign_name, c.cp_name, c.agency,
-           c.start_date, c.end_date, c.is_legacy, c.cs_email, c.cs_name,
-           c.total_value,
-           IFNULL(o.manual_checks, la.manual_checks) AS manual_checks,
-           IFNULL(o.admin_overrides, la.admin_overrides) AS admin_overrides
-         FROM ${tableRef('commplan_checklists')} c
-         LEFT JOIN ${tableRef('commplan_command_overrides')} o ON c.short_token = o.short_token
-         LEFT JOIN ${tableRef('commplan_legacy_assignments')} la ON c.short_token = la.short_token
-         WHERE LOWER(IFNULL(o.pre_campaign_assignee_email, la.pre_campaign_assignee_email)) = @cs
-           AND LOWER(IFNULL(c.cs_email, '')) != @cs
-           AND c.start_date >= @qStart AND c.start_date <= @qEnd`,
-        { cs: csEmail, qStart, qEnd }
-      );
-
-      for (const pc of preCampaigns) {
-        const mc = pc.manual_checks ? JSON.parse(pc.manual_checks) : {};
-        const ao = pc.admin_overrides ? JSON.parse(pc.admin_overrides) : {};
-        // Calcula com csOwner = csEmail (faz pre_campaign contar pra ele)
-        const breakdown = computeBonus(pc, mc, null, ao, { preAssignee: csEmail, csOwner: csEmail });
-        // Mas só pega o subtotal de pre_campaign (não conta setup/etc das campanhas de outros)
-        const preSubtotal = breakdown.by_category?.pre_campaign?.subtotal_brl || 0;
-        // SEMPRE mostra a campanha atribuída (mesmo se subtotal=0, pra CS poder preencher).
-        // Só soma no bonus_pre_assigned se houver subtotal.
-        preAssignedBonusBrl += preSubtotal;
-        preAssignedItems.push({
-          short_token: pc.short_token,
-          client_name: pc.client_name,
-          campaign_name: pc.campaign_name,
-          owner_cs_email: pc.cs_email,
-          owner_cs_name: pc.cs_name,
-          start_date: pc.start_date?.value || pc.start_date,
-          end_date: pc.end_date?.value || pc.end_date,
-          is_legacy: !!pc.is_legacy,
-          pre_subtotal_brl: preSubtotal,
-          pre_subtotal_pct: breakdown.by_category?.pre_campaign?.subtotal_pct || 0,
-          // Bruto da campanha — útil pra UI mostrar o potencial
-          total_value: Number(pc.total_value) || 0,
-        });
-      }
-    } catch (e) {
-      console.warn(`Erro buscando pre-assigned: ${e.message}`);
-    }
+    // Campanhas de OUTROS CSs onde este CS é responsável por alguma etapa
+    // (Pré, Setup, Otimização, ...). Mesma função usada pela visão geral admin.
+    const stageAssigned = await computeStageAssignedBonus({ csEmail, startDate, endDate });
+    const stageAssignedItems = stageAssigned.items;
+    const stageAssignedBonusBrl = stageAssigned.total_brl;
 
     // Busca campanhas onde este CS é AUTOR DE ESTUDO usado (mas não é CS dono)
     let studyAuthoredItems = [];
@@ -799,8 +771,8 @@ router.get('/dashboard/:q', async (req, res) => {
       console.warn(`Erro buscando study-authored: ${e.message}`);
     }
 
-    // Total = bonus das próprias + pré atribuída + estudo autorado
-    totalBonusBrl += preAssignedBonusBrl + studyAuthoredBonusBrl;
+    // Total = bonus das próprias + etapas atribuídas + estudo autorado
+    totalBonusBrl += stageAssignedBonusBrl + studyAuthoredBonusBrl;
 
     // Busca salário vigente do CS
     let monthlySalary = 0;
@@ -868,7 +840,7 @@ router.get('/dashboard/:q', async (req, res) => {
         bruto_total: bruto,
         liquido_total: bruto * NET_FACTOR,
         bonus_total: totalBonusBrl,
-        bonus_pre_assigned: preAssignedBonusBrl,
+        bonus_stage_assigned: stageAssignedBonusBrl,
         bonus_study_authored: studyAuthoredBonusBrl,
         monthly_salary: monthlySalary,
         floor_quarter: floorQuarter,
@@ -883,7 +855,7 @@ router.get('/dashboard/:q', async (req, res) => {
         score_n_campaigns: scoreEligible.length,
       },
       items,
-      pre_assigned_items: preAssignedItems,
+      stage_assigned_items: stageAssignedItems,
       study_authored_items: studyAuthoredItems,
     });
   } catch (err) {
@@ -928,10 +900,12 @@ router.get('/campaign/:token', async (req, res) => {
     ]);
     const { manualChecks, adminOverrides, adminOverridesBy, adminOverridesAt, preAssignee, preAssignedAt, studyAssignee, studyIdOverride } = mcData;
 
-    // Permissão: CS dono OU admin OU assignee de pre_campaign
+    // Permissão: CS dono OU admin OU responsável por alguma etapa
+    const stageAssignees = resolveStageAssignees(adminOverrides, preAssignee);
+    const viewerAssignedStages = ASSIGNABLE_STAGES.filter(st => stageAssignees[st] === csEmail);
     if (!isAdmin
         && (campaign.cs_email || '').toLowerCase() !== csEmail
-        && (preAssignee || '').toLowerCase() !== csEmail) {
+        && viewerAssignedStages.length === 0) {
       return res.status(403).json({ error: 'Sem permissão pra ver essa campanha' });
     }
 
@@ -1045,6 +1019,11 @@ router.get('/campaign/:token', async (req, res) => {
       // Flag útil pra UI: o viewer atual é o assignee?
       viewer_is_pre_assignee: (preAssignee || '').toLowerCase() === csEmail,
 
+      // Responsáveis por etapa ({ etapa → email }; ausente = dono) e as etapas
+      // atribuídas ao viewer (quando ele não é o dono)
+      stage_assignees: stageAssignees,
+      viewer_assigned_stages: viewerAssignedStages,
+
       // Study assignee — admin pode atribuir bônus de estudo a outro CS
       study_assignee_email: studyAssignee,
       study_id_override: studyIdOverride,
@@ -1096,44 +1075,72 @@ router.put('/campaign/:token', async (req, res) => {
 
     if (!campaign) return res.status(404).json({ error: `Campanha ${token} não encontrada` });
 
-    // Permissão: CS dono OU admin OU assignee de pre_campaign
+    // Permissão: CS dono OU admin OU responsável por alguma etapa
     const prev = await fetchManualChecks(campaign.short_token, !!campaign.is_legacy);
-    const preAssignee = prev.preAssignee;
     const isOwner = (campaign.cs_email || '').toLowerCase() === csEmail;
-    const isPreAssignee = (preAssignee || '').toLowerCase() === csEmail;
-    if (!isAdmin && !isOwner && !isPreAssignee) {
+    const stageAssignees = resolveStageAssignees(prev.adminOverrides, prev.preAssignee);
+    const viewerStages = ASSIGNABLE_STAGES.filter(st => stageAssignees[st] === csEmail);
+    if (!isAdmin && !isOwner && viewerStages.length === 0) {
       return res.status(403).json({ error: 'Sem permissão pra editar' });
     }
-    // Se o viewer é APENAS preAssignee (não dono nem admin), ele só pode
-    // mexer nos items de Pré Campanha. Faz merge dos manual_checks dele
-    // sobre os do dono — preservando tudo que NÃO é pre_*.
-    const restrictToPre = !isAdmin && !isOwner && isPreAssignee;
+    // Se o viewer é APENAS responsável por etapas (não dono nem admin), ele só
+    // pode mexer nos items dessas etapas. Faz merge dos manual_checks dele
+    // sobre os do dono — preservando todo o resto.
+    const restrictToStages = !isAdmin && !isOwner;
+    if (restrictToStages && prev.readError) {
+      // Sem o estado atual não dá pra fazer o merge sem apagar o do dono
+      return res.status(503).json({ error: 'Não foi possível ler os dados atuais da campanha. Tente de novo.' });
+    }
 
     const manualChecksFromBody = body.manual_checks && typeof body.manual_checks === 'object'
       ? body.manual_checks
       : {};
     let manualChecks;
-    if (restrictToPre) {
-      // Pega manual_checks antigos do dono, sobrescreve só as keys pre_*
+    if (restrictToStages) {
+      const allowedKeys = stageManualKeys(viewerStages);
+
       const prevChecks = prev.manualChecks || {};
       manualChecks = { ...prevChecks };
-      // Aplica só keys pre_* (e __evidence.pre_*)
       for (const [key, val] of Object.entries(manualChecksFromBody)) {
-        if (key.startsWith('pre_')) {
-          manualChecks[key] = val;
-        }
+        if (allowedKeys.has(key)) manualChecks[key] = val;
       }
-      // Evidências: só pre_*
+      // Evidências: só das keys permitidas
       if (manualChecksFromBody.__evidence) {
         manualChecks.__evidence = { ...(prevChecks.__evidence || {}) };
         for (const [k, v] of Object.entries(manualChecksFromBody.__evidence)) {
-          if (k.startsWith('pre_')) {
-            manualChecks.__evidence[k] = v;
+          if (allowedKeys.has(k)) manualChecks.__evidence[k] = v;
+        }
+        for (const k of Object.keys(manualChecks.__evidence)) {
+          if (allowedKeys.has(k) && !(k in manualChecksFromBody.__evidence)) {
+            delete manualChecks.__evidence[k]; // link apagado pelo responsável
           }
         }
       }
     } else {
       manualChecks = manualChecksFromBody;
+      // Dono (não admin) salvando: etapas atribuídas a OUTROS CSs ficam como
+      // estão no banco — a tela do dono pode estar com uma versão antiga e
+      // apagaria o que o responsável preencheu.
+      const othersStages = ASSIGNABLE_STAGES.filter(st => stageAssignees[st] && stageAssignees[st] !== csEmail);
+      if (!isAdmin && othersStages.length > 0) {
+        if (prev.readError) {
+          return res.status(503).json({ error: 'Não foi possível ler os dados atuais da campanha. Tente de novo.' });
+        }
+        const keepKeys = stageManualKeys(othersStages);
+        const prevChecks = prev.manualChecks || {};
+        manualChecks = { ...manualChecksFromBody };
+        for (const k of keepKeys) {
+          if (k in prevChecks) manualChecks[k] = prevChecks[k];
+          else delete manualChecks[k];
+        }
+        const prevEv = prevChecks.__evidence || {};
+        const ev = { ...(manualChecksFromBody.__evidence || {}) };
+        for (const k of keepKeys) {
+          if (k in prevEv) ev[k] = prevEv[k];
+          else delete ev[k];
+        }
+        if (Object.keys(ev).length > 0 || manualChecksFromBody.__evidence) manualChecks.__evidence = ev;
+      }
     }
     const manualChecksJson = JSON.stringify(manualChecks);
     const notes = body.notes || '';
@@ -1160,13 +1167,15 @@ router.put('/campaign/:token', async (req, res) => {
     if (campaign.is_legacy) {
       // Legacy: salva em commplan_legacy_assignments (campo manual_checks JSON)
       await query(
+        // Responsável por etapa não marca a legacy como revisada
+        // (revisada = updated_at > attributed_at)
         `UPDATE ${tableRef('commplan_legacy_assignments')}
          SET manual_checks = @mc,
-             notes = @notes,
-             updated_by = @byEmail,
-             updated_at = CURRENT_TIMESTAMP()
+             notes = IF(@restricted, notes, @notes),
+             updated_by = IF(@restricted, updated_by, @byEmail),
+             updated_at = IF(@restricted, updated_at, CURRENT_TIMESTAMP())
          WHERE short_token = @token`,
-        { mc: manualChecksJson, notes, byEmail, token }
+        { mc: manualChecksJson, notes, byEmail, token, restricted: restrictToStages }
       );
     } else {
       // Command novo: MERGE em commplan_command_overrides
@@ -1176,18 +1185,20 @@ router.put('/campaign/:token', async (req, res) => {
          ON T.short_token = S.short_token
          WHEN MATCHED THEN UPDATE SET
            manual_checks = @mc,
-           notes = @notes,
-           reviewed = @reviewed,
-           reviewed_at = CURRENT_TIMESTAMP(),
+           notes = IF(@restricted, T.notes, @notes),
+           -- Responsável por etapa salvando NÃO mexe na revisão do dono
+           reviewed = IF(@restricted, T.reviewed, @reviewed),
+           reviewed_at = IF(@restricted, T.reviewed_at, CURRENT_TIMESTAMP()),
            updated_at = CURRENT_TIMESTAMP(),
            updated_by = @byEmail
          WHEN NOT MATCHED THEN INSERT
            (short_token, cs_email, manual_checks, notes, reviewed, reviewed_at,
             created_at, updated_at, updated_by)
          VALUES
-           (@token, @csEmail, @mc, @notes, @reviewed, CURRENT_TIMESTAMP(),
+           (@token, @ownerEmail, @mc, @notes, IF(@restricted, FALSE, @reviewed), CURRENT_TIMESTAMP(),
             CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), @byEmail)`,
-        { token, csEmail, byEmail, mc: manualChecksJson, notes, reviewed }
+        { token, ownerEmail: campaign.cs_email || csEmail, byEmail, mc: manualChecksJson, notes, reviewed,
+          restricted: restrictToStages }
       );
     }
 
@@ -1242,7 +1253,13 @@ router.put('/campaign/:token', async (req, res) => {
       studiesInfo: studiesInfoPost,
     });
 
-    res.json({ ok: true, reviewed, review_blocked_reason: reviewBlockedReason, breakdown });
+    res.json({
+      ok: true,
+      // Responsável por etapa não altera a revisão do dono → null = "não mudou"
+      reviewed: restrictToStages ? null : reviewed,
+      review_blocked_reason: restrictToStages ? null : reviewBlockedReason,
+      breakdown,
+    });
   } catch (err) {
     console.error('PUT /me/campaign error:', err);
     res.status(500).json({ error: err.message });
@@ -1437,6 +1454,148 @@ router.delete('/campaign/:token/assign-pre', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('DELETE assign-pre error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /commplan/me/campaign/:token/assign-stage
+ * Define quem é o responsável (e recebe o bônus) por uma etapa da campanha,
+ * quando não é o CS dono. Ex.: João é dono, mas quem fez o Setup foi a Mariana.
+ *
+ * Body: { stage: 'pre_campaign'|'setup'|'optimization'|'account_mgmt'|'extras'|'onboarding',
+ *         cs_email: string|null }   // null (ou o próprio dono) = volta pro dono
+ *
+ * Quem pode: admin ou o CS dono da campanha.
+ * Armazenamento: pre_campaign → pre_campaign_assignee_email (mesmo campo do
+ * fluxo "assumir Pré"); demais → admin_overrides.__stage_assignees.
+ */
+router.post('/campaign/:token/assign-stage', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { byEmail, isAdmin } = resolveTargetCs(req);
+    const stage = String(req.body?.stage || '');
+    if (!ASSIGNABLE_STAGES.includes(stage)) {
+      return res.status(400).json({ error: `etapa inválida: ${stage}` });
+    }
+
+    const [campaign] = await query(
+      `SELECT short_token, is_legacy, cs_email
+       FROM ${tableRef('commplan_checklists')}
+       WHERE short_token = @t LIMIT 1`,
+      { t: token }
+    );
+    if (!campaign) return res.status(404).json({ error: 'campanha não encontrada' });
+
+    const ownerEmail = (campaign.cs_email || '').toLowerCase();
+    if (!isAdmin && ownerEmail !== byEmail) {
+      return res.status(403).json({ error: 'Apenas admin ou o CS dono podem atribuir etapas' });
+    }
+
+    let assignee = req.body?.cs_email ? String(req.body.cs_email).trim().toLowerCase() : '';
+    if (assignee === ownerEmail) assignee = ''; // atribuir ao dono = sem atribuição
+    if (assignee) {
+      const [member] = await query(
+        `SELECT email FROM ${tableRef('compplan_team')} WHERE LOWER(email) = @e LIMIT 1`,
+        { e: assignee }
+      );
+      if (!member) return res.status(400).json({ error: `${assignee} não está no time` });
+    }
+
+    const table = campaign.is_legacy ? 'commplan_legacy_assignments' : 'commplan_command_overrides';
+    const prev = await fetchManualChecks(token, !!campaign.is_legacy);
+    if (prev.readError) {
+      // Sem o estado atual, gravar admin_overrides apagaria os overrides existentes
+      return res.status(503).json({ error: 'Não foi possível ler os dados atuais da campanha. Tente de novo.' });
+    }
+    const before = resolveStageAssignees(prev.adminOverrides, prev.preAssignee);
+
+    if (stage === 'pre_campaign') {
+      if (campaign.is_legacy) {
+        await query(
+          // Legacy: não mexe em updated_at (updated_at > attributed_at = "revisada")
+          `UPDATE ${tableRef(table)}
+           SET pre_campaign_assignee_email = NULLIF(@a, ''),
+               pre_campaign_assigned_at = IF(@a = '', NULL, CURRENT_TIMESTAMP())
+           WHERE short_token = @t`,
+          { t: token, a: assignee }
+        );
+      } else {
+        await query(
+          `MERGE ${tableRef(table)} T
+           USING (SELECT @t AS short_token) S
+           ON T.short_token = S.short_token
+           WHEN MATCHED THEN UPDATE SET
+             pre_campaign_assignee_email = NULLIF(@a, ''),
+             pre_campaign_assigned_at = IF(@a = '', NULL, CURRENT_TIMESTAMP()),
+             updated_at = CURRENT_TIMESTAMP(),
+             updated_by = @by
+           WHEN NOT MATCHED THEN INSERT
+             (short_token, cs_email, pre_campaign_assignee_email, pre_campaign_assigned_at,
+              reviewed, created_at, updated_at, updated_by)
+           VALUES (@t, @owner, NULLIF(@a, ''), IF(@a = '', NULL, CURRENT_TIMESTAMP()),
+                   FALSE, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), @by)`,
+          { t: token, a: assignee, by: byEmail, owner: ownerEmail || byEmail }
+        );
+      }
+    } else {
+      // Demais etapas: mapa dentro de admin_overrides. Não mexe em
+      // admin_overrides_by/at (esses indicam "revisado pelo admin" na UI).
+      const ao = { ...(prev.adminOverrides || {}) };
+      const map = { ...(ao.__stage_assignees || {}) };
+      if (assignee) {
+        map[stage] = { email: assignee, by: byEmail, at: new Date().toISOString() };
+      } else {
+        delete map[stage];
+      }
+      if (Object.keys(map).length > 0) ao.__stage_assignees = map;
+      else delete ao.__stage_assignees;
+      const aoJson = JSON.stringify(ao);
+
+      if (campaign.is_legacy) {
+        await query(
+          // Legacy: não mexe em updated_at (updated_at > attributed_at = "revisada")
+          `UPDATE ${tableRef(table)}
+           SET admin_overrides = @ov
+           WHERE short_token = @t`,
+          { t: token, ov: aoJson }
+        );
+      } else {
+        await query(
+          `MERGE ${tableRef(table)} T
+           USING (SELECT @t AS short_token) S
+           ON T.short_token = S.short_token
+           WHEN MATCHED THEN UPDATE SET
+             admin_overrides = @ov,
+             updated_at = CURRENT_TIMESTAMP(),
+             updated_by = @by
+           WHEN NOT MATCHED THEN INSERT
+             (short_token, cs_email, admin_overrides, reviewed, created_at, updated_at, updated_by)
+           VALUES (@t, @owner, @ov, FALSE, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), @by)`,
+          { t: token, ov: aoJson, by: byEmail, owner: ownerEmail || byEmail }
+        );
+      }
+    }
+
+    const after = { ...before };
+    if (assignee) after[stage] = assignee; else delete after[stage];
+    try {
+      await logAudit({
+        entityType: 'stage_assignee',
+        entityId: token,
+        action: 'update',
+        changedBy: byEmail,
+        before,
+        after,
+        notes: `etapa ${stage}`,
+      });
+    } catch (e) {
+      console.warn('logAudit stage_assignee:', e.message);
+    }
+
+    res.json({ ok: true, stage, assignee: assignee || null, stage_assignees: after });
+  } catch (err) {
+    console.error('POST assign-stage error:', err);
     res.status(500).json({ error: err.message });
   }
 });
