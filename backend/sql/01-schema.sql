@@ -8,7 +8,7 @@
 -- ║  Tabelas EXTERNAS que o Commplan apenas lê/escreve cross-dataset:     ║
 -- ║    - hypr_sales_center.checklists (write pelo Command, read pelo Compplan)║
 -- ║    - hypr_sales_center.team_members (read+write — compartilhado)      ║
--- ║    - prod_prod_hypr_reporthub.campaign_results (read pra Loom auto)   ║
+-- ║    - bidiq_app.reportcenter_campaign_results (read pra Loom auto)   ║
 -- ╚══════════════════════════════════════════════════════════════════════╝
 -- Substitua `site-hypr.hypr_commplan` pelo seu PROJECT.DATASET se diferente.
 

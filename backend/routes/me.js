@@ -219,7 +219,7 @@ router.get('/badges', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────
 async function fetchPerformanceMetrics(shortToken, clientName = null, totalValue = 0) {
   try {
-    // 1. Busca métricas brutas da campanha em prod_assets.unified_daily_performance_metrics (US).
+    // 1. Busca métricas brutas da campanha em bidiq_mart.unified_daily_performance (US).
     //
     // total_cost = custo REAL de plataforma (vs effective_total_cost de campaign_results,
     // que é o cobrado do cliente). Usar total_cost dá o eCPM real.
@@ -243,7 +243,7 @@ async function fetchPerformanceMetrics(shortToken, clientName = null, totalValue
          SUM(viewable_impressions)   AS total_viewable,
          SUM(clicks)                 AS total_clicks,
          SUM(total_cost)             AS total_cost
-       FROM \`site-hypr.prod_assets.unified_daily_performance_metrics\`
+       FROM \`site-hypr.bidiq_mart.unified_daily_performance\`
        WHERE short_token = @t
          AND LOWER(IFNULL(line_name, '')) NOT LIKE '%survey%'
          AND LOWER(IFNULL(line_name, '')) NOT LIKE '%controle%'
@@ -541,7 +541,7 @@ router.get('/dashboard/:q', async (req, res) => {
                SUM(IF(LOWER(media_type) = 'video',   video_starts, 0))            AS video_starts,
                SUM(IF(LOWER(media_type) = 'video',   video_view_100_complete, 0)) AS video_completions,
                SUM(IF(LOWER(media_type) = 'video',   total_cost, 0))              AS video_cost
-             FROM \`site-hypr.prod_assets.unified_daily_performance_metrics\`
+             FROM \`site-hypr.bidiq_mart.unified_daily_performance\`
              WHERE short_token IN UNNEST(@toks)
                AND LOWER(IFNULL(line_name, '')) NOT LIKE '%survey%'
                AND LOWER(IFNULL(line_name, '')) NOT LIKE '%controle%'

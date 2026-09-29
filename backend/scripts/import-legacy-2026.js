@@ -7,7 +7,7 @@
  *    Se cliente tem CS unânime em hypr_sales_center.checklists, herda.
  *
  * 2. REPORTCENTER_OVERRIDE (em US):
- *    Se já tem entry em prod_assets.report_owners_overrides (admin do RC
+ *    Se já tem entry em bidiq_app.reportcenter_owners_overrides (admin do RC
  *    configurou), reutiliza.
  *
  * IMPORTANTE: cada query usa `location` explícita porque os datasets estão
@@ -92,7 +92,7 @@ async function buildReportCenterOverridesMap() {
   try {
     const sql = `
       SELECT short_token, LOWER(TRIM(cs_email)) AS cs_email
-      FROM \`${PROJECT_ID}.prod_assets.report_owners_overrides\`
+      FROM \`${PROJECT_ID}.bidiq_app.reportcenter_owners_overrides\`
       WHERE cs_email IS NOT NULL AND TRIM(cs_email) != ''
     `;
     const rows = await runQuery(sql, 'US');

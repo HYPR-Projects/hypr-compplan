@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════════════════════╗
 -- ║  11 — Fix: volumetria contratada em cascata completa                      ║
--- ║       (coluna Command → extras JSON → prod_assets.checklist_info →         ║
+-- ║       (coluna Command → extras JSON → hyprops_mart.checklist_info →         ║
 -- ║        checklist_info_snapshot)                                            ║
 -- ║                                                                            ║
 -- ║  PROBLEMA (campanha WTKITT - UFC Freedom 250 White House):                ║
@@ -27,11 +27,11 @@
 -- ║  FIX — cascata de COALESCE pra cada um dos 8 campos de volumetria:        ║
 -- ║   1. coluna dedicada do Command (se popular certo)                        ║
 -- ║   2. JSON extras (onde o Command joga hoje)                               ║
--- ║   3. prod_assets.checklist_info (tabela nova, Q3+)                        ║
+-- ║   3. hyprops_mart.checklist_info (tabela nova, Q3+)                        ║
 -- ║   4. checklist_info_snapshot (fallback legado Q1/Q2)                      ║
 -- ║                                                                            ║
 -- ║  Mantém fixes das migrations 09 (studies_used) e engloba a 10            ║
--- ║  (prod_assets.checklist_info como fonte).                                 ║
+-- ║  (hyprops_mart.checklist_info como fonte).                                 ║
 -- ╚══════════════════════════════════════════════════════════════════════════╝
 
 CREATE OR REPLACE VIEW `site-hypr.hypr_commplan.commplan_checklists` AS
@@ -155,7 +155,7 @@ FROM `site-hypr.hypr_sales_center.checklists` AS c
 LEFT JOIN `site-hypr.hypr_commplan.commplan_command_overrides` AS o
   ON c.short_token = o.short_token
 -- tabela nova prod_assets (Q3+)
-LEFT JOIN `site-hypr.prod_assets.checklist_info` AS ci
+LEFT JOIN `site-hypr.hyprops_mart.checklist_info` AS ci
   ON c.short_token = ci.short_token
 -- snapshot velho (Q1/Q2)
 LEFT JOIN `site-hypr.hypr_commplan.checklist_info_snapshot` AS snap
