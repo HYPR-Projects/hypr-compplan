@@ -46,7 +46,7 @@ async function runQuery(sql, location, params = null) {
  */
 async function listPendingLegacyCampaigns() {
   const sql = `SELECT * FROM \`${PROJECT_ID}.${DATASET}.commplan_pending_legacy\``;
-  return runQuery(sql, 'us-central1');
+  return runQuery(sql, undefined);
 }
 
 /**
@@ -79,7 +79,7 @@ async function buildClientToCsMap() {
     FROM client_summary
     WHERE distinct_cs_count = 1
   `;
-  const rows = await runQuery(sql, 'us-central1');
+  const rows = await runQuery(sql, undefined);
   const map = new Map();
   for (const r of rows) map.set(r.client_norm, r.dominant_cs);
   return map;
@@ -109,7 +109,7 @@ async function buildReportCenterOverridesMap() {
  * Insere atribuição via streaming insert (us-central1).
  */
 async function insertAssignment({ shortToken, csEmail, source, attributedBy }) {
-  const dataset = bq.dataset(DATASET, { location: 'us-central1' });
+  const dataset = bq.dataset(DATASET);
   const table = dataset.table('commplan_legacy_assignments');
   await table.insert([{
     short_token: shortToken,

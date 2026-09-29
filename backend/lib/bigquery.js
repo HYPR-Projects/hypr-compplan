@@ -34,7 +34,10 @@ export const bq = new BigQuery({
  *
  * Params como objeto: { foo: 'bar', n: 42 }. BQ infere tipos.
  */
-export async function query(sql, params = {}, location = 'us-central1') {
+// location: omitida por padrão — o BigQuery roda o job na primária de cada
+// dataset. hypr_commplan/hypr_sales_center foram replicados para a US na
+// migração de região (set/2026); omitir funciona antes e depois da troca.
+export async function query(sql, params = {}, location = undefined) {
   const [rows] = await bq.query({
     query: sql,
     params,
