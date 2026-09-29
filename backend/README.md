@@ -85,6 +85,7 @@ Variantes do setup-schema:
 - `POST /commplan/evidences` — submeter claim
 - `PUT  /commplan/evidences/:id` — editar claim (antes de aprovado)
 - `DELETE /commplan/evidences/:id`
+- `POST /commplan/me/campaign/:token/assign-stage` — admin/CS dono define o responsável por uma etapa (`{ stage, cs_email|null }`); o bônus da etapa vai pra esse CS
 - `GET  /commplan/studies/available?version=2026` — lista estudos disponíveis (consumido pelo Command)
 
 ### Admin

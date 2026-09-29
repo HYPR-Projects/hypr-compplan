@@ -414,37 +414,42 @@ export default function CsDashboard() {
         </div>
       )}
 
-      {/* Pré Campanhas que este CS está cuidando em campanhas de outros */}
-      {data.pre_assigned_items && data.pre_assigned_items.length > 0 && (
+      {/* Etapas (Pré, Setup, Otimização...) que este CS tocou em campanhas de outros */}
+      {data.stage_assigned_items && data.stage_assigned_items.length > 0 && (
         <section className="cs-pre-assigned fade-up">
           <div className="cs-month-group__header">
             <span>
               <UserPlus size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />
-              Pré Campanha em campanhas de outros CSs
+              Etapas atribuídas a você em campanhas de outros CSs
             </span>
             <span className="cs-month-group__count">
-              {fmt.brl(data.kpis.bonus_pre_assigned)} · {data.pre_assigned_items.length} {data.pre_assigned_items.length === 1 ? 'campanha' : 'campanhas'}
+              {fmt.brl(data.kpis.bonus_stage_assigned)} · {data.stage_assigned_items.length} {data.stage_assigned_items.length === 1 ? 'campanha' : 'campanhas'}
             </span>
           </div>
           <div className="cs-pre-assigned__list">
-            {data.pre_assigned_items.map(pa => (
-              <div key={pa.short_token} className="cs-pre-assigned__card" onClick={() => navigate(`/cs/campanha/${pa.short_token}`)}>
+            {data.stage_assigned_items.map(sa => (
+              <div key={sa.short_token} className="cs-pre-assigned__card" onClick={() => navigate(getCampaignUrl(sa.short_token))}>
                 <div className="cs-pre-assigned__main">
                   <div className="cs-pre-assigned__title">
-                    <span className="cs-campaign-card__client">{pa.client_name}</span>
-                    <Badge variant="neutral">{pa.short_token}</Badge>
-                    {pa.is_legacy && <Badge variant="neutral">Legacy</Badge>}
+                    <span className="cs-campaign-card__client">{sa.client_name}</span>
+                    <Badge variant="neutral">{sa.short_token}</Badge>
+                    {sa.is_legacy && <Badge variant="neutral">Legacy</Badge>}
+                    {sa.stages.map(st => (
+                      <Badge key={st.stage} variant="cyan">
+                        {st.label} · {fmt.brl(st.subtotal_brl)}
+                      </Badge>
+                    ))}
                   </div>
-                  <div className="cs-pre-assigned__campaign">{pa.campaign_name}</div>
+                  <div className="cs-pre-assigned__campaign">{sa.campaign_name}</div>
                   <div className="cs-pre-assigned__meta">
-                    Dono: <strong>{pa.owner_cs_name || pa.owner_cs_email}</strong>
+                    Dono: <strong>{sa.owner_cs_name || sa.owner_cs_email}</strong>
                     <span className="page-subtitle__sep">·</span>
-                    {fmt.dateRange(pa.start_date, pa.end_date)}
+                    {fmt.dateRange(sa.start_date, sa.end_date)}
                   </div>
                 </div>
                 <div className="cs-pre-assigned__values">
-                  <span className="mono cs-campaign-card__pct">{(pa.pre_subtotal_pct * 100).toFixed(2)}%</span>
-                  <span className="mono cs-campaign-card__brl">{fmt.brl(pa.pre_subtotal_brl)}</span>
+                  <span className="mono cs-campaign-card__pct">{(sa.subtotal_pct * 100).toFixed(2)}%</span>
+                  <span className="mono cs-campaign-card__brl">{fmt.brl(sa.subtotal_brl)}</span>
                 </div>
                 <ArrowRight size={16} className="cs-campaign-card__arrow" />
               </div>

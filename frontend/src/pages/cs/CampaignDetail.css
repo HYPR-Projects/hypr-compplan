@@ -1329,3 +1329,34 @@
   font-size: 11px;
   color: var(--text-tertiary);
 }
+
+/* ── Responsável por etapa (admin / dono atribui) ─────────────── */
+.category-block__stage-assign {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 0 0 var(--space-3) 0;
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.category-block__stage-assign > svg {
+  color: #a855f7;
+  flex-shrink: 0;
+}
+
+.category-block__stage-assign select {
+  flex: 1 1 220px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 8px;
+  font-size: var(--text-xs);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}

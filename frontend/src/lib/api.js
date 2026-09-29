@@ -289,6 +289,11 @@ export const endpoints = {
     const q = opts.as ? `?as=${encodeURIComponent(opts.as)}` : '';
     return api.post(`/commplan/me/campaign/${token}/assign-pre${q}`, {});
   },
+  /** Define o CS responsável por uma etapa (null = volta pro dono). */
+  meAssignStage(token, stage, cs_email, opts = {}) {
+    const q = opts.as ? `?as=${encodeURIComponent(opts.as)}` : '';
+    return api.post(`/commplan/me/campaign/${token}/assign-stage${q}`, { stage, cs_email });
+  },
   meUnassignPre(token, opts = {}) {
     const q = opts.as ? `?as=${encodeURIComponent(opts.as)}` : '';
     return api.delete(`/commplan/me/campaign/${token}/assign-pre${q}`);

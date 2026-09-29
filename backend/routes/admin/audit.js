@@ -231,11 +231,13 @@ router.get('/:q', async (req, res) => {
           // Items presentes na lista JÁ são aplicáveis (engine já filtrou por
           // formato da campanha). Não filtrar por it.applicable (que é undefined).
           optTotal += 1;
-          if (it.earned) optEarned += 1;
+          // Etapa atribuída a outro CS: o item foi conquistado, só não é do dono
+          const optOk = !!(it.earned || it.assigned_to_other);
+          if (optOk) optEarned += 1;
           optDetails.push({
             id: it.id,
             label: it.label,
-            earned: !!it.earned,
+            earned: optOk,
             reason: it.reason || null,
           });
         }
@@ -268,7 +270,7 @@ router.get('/:q', async (req, res) => {
 
         // Tem shared_evidence? Se sim, 1 link cobre todos earned dessa categoria
         if (cat.shared_evidence) {
-          const anyEarned = catBreakdown.items.some(i => i.earned);
+          const anyEarned = catBreakdown.items.some(i => i.earned || i.assigned_to_other);
           if (anyEarned) {
             evTotal += 1;
             const link = evidenceMap[cat.shared_evidence.key] || '';
@@ -283,7 +285,7 @@ router.get('/:q', async (req, res) => {
 
         // Items individuais com needs_evidence
         for (const it of catBreakdown.items) {
-          if (!it.earned || !it.needs_evidence) continue;
+          if (!(it.earned || it.assigned_to_other) || !it.needs_evidence) continue;
           evTotal += 1;
           const link = evidenceMap[it.id] || '';
           if (link) {
