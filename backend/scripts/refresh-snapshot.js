@@ -15,11 +15,12 @@
 
 import 'dotenv/config';
 import { BigQuery } from '@google-cloud/bigquery';
+import { tableLocation } from '../lib/bigquery.js';
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID || 'site-hypr';
 const SOURCE_TABLE = `${PROJECT_ID}.hyprops_mart.checklist_info`;
-const SNAPSHOT_DATASET = 'hypr_commplan';
-const SNAPSHOT_TABLE_NAME = 'checklist_info_snapshot';
+// BQ_TABLE_LAYOUT=taxonomy → hyprops_app.commplan_checklist_snapshot
+const { dataset: SNAPSHOT_DATASET, table: SNAPSHOT_TABLE_NAME } = tableLocation('checklist_info_snapshot');
 
 const args = process.argv.slice(2);
 const sinceArg = args.find(a => a.startsWith('--since='));
@@ -35,7 +36,7 @@ const bq = new BigQuery({ projectId: PROJECT_ID });
 async function main() {
   console.log(`▸ Project: ${PROJECT_ID}`);
   console.log(`▸ Source:  ${SOURCE_TABLE}  (location: US)`);
-  console.log(`▸ Dest:    ${PROJECT_ID}.${SNAPSHOT_DATASET}.${SNAPSHOT_TABLE_NAME}  (location: us-central1)`);
+  console.log(`▸ Dest:    ${PROJECT_ID}.${SNAPSHOT_DATASET}.${SNAPSHOT_TABLE_NAME}  (location: US)`);
   console.log(`▸ Since:   ${SINCE}`);
   console.log('');
 

@@ -15,7 +15,7 @@
 
 import { Router } from 'express';
 import { authRequired, adminRequired } from '../../middleware/auth.js';
-import { query, tableRef, bq, DATASET } from '../../lib/bigquery.js';
+import { query, tableRef, tableLocation, bq } from '../../lib/bigquery.js';
 import { parseQuarter } from '../../engine/quarter-resolver.js';
 import { computeBonus } from '../../engine/compplan-engine.js';
 import { computeCsBonus, computeCsScore } from '../../lib/bonus-calc.js';
@@ -367,7 +367,8 @@ router.post('/pending/:token/assign', adminRequired, async (req, res) => {
     const tableName = 'commplan_legacy_assignments';
     const now = new Date().toISOString();
 
-    await bq.dataset(DATASET).table(tableName).insert([{
+    const loc = tableLocation(tableName);
+    await bq.dataset(loc.dataset).table(loc.table).insert([{
       short_token: token,
       cs_email: csEmail,
       features_manual: [],
