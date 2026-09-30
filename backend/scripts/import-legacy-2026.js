@@ -22,6 +22,7 @@
 
 import 'dotenv/config';
 import { BigQuery } from '@google-cloud/bigquery';
+import { tableLocation } from '../lib/bigquery.js';
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID || 'site-hypr';
 const DATASET = process.env.BQ_DATASET || 'hypr_commplan';
@@ -109,8 +110,8 @@ async function buildReportCenterOverridesMap() {
  * Insere atribuição via streaming insert (us-central1).
  */
 async function insertAssignment({ shortToken, csEmail, source, attributedBy }) {
-  const dataset = bq.dataset(DATASET);
-  const table = dataset.table('commplan_legacy_assignments');
+  const loc = tableLocation('commplan_legacy_assignments');
+  const table = bq.dataset(loc.dataset).table(loc.table);
   await table.insert([{
     short_token: shortToken,
     cs_email: csEmail.toLowerCase(),

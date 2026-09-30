@@ -132,9 +132,43 @@ export const escSql = {
   },
 };
 
+// Taxonomia do BigQuery (<pilar>_<camada>.<fonte>_<entidade>): com
+// BQ_TABLE_LAYOUT=taxonomy as tabelas do Commplan moram em hyprops_app (nomes
+// antigos em hypr_commplan viraram views). Fora do mapa ficam as views
+// commplan_checklists / commplan_pending_legacy e a compplan_team (junção).
+export const TAXONOMY_DATASET = 'hyprops_app';
+export const TAXONOMY_TABLES = {
+  checklist_info_snapshot: 'commplan_checklist_snapshot',
+  commplan_abs_clients: 'commplan_abs_clients',
+  commplan_audit_log: 'commplan_audit_log',
+  commplan_campaign_calc: 'commplan_campaign_calc',
+  commplan_command_overrides: 'commplan_command_overrides',
+  commplan_cs_config: 'commplan_cs_config',
+  commplan_evidences: 'commplan_evidences',
+  commplan_features_catalog: 'commplan_features_catalog',
+  commplan_floor_overrides: 'commplan_floor_overrides',
+  commplan_legacy_assignments: 'commplan_legacy_assignments',
+  commplan_mentorships: 'commplan_mentorships',
+  commplan_over_exceptions: 'commplan_over_exceptions',
+  commplan_quarter_summary: 'commplan_quarter_summary',
+  commplan_rules: 'commplan_rules',
+  commplan_studies_catalog: 'commplan_studies_catalog',
+  commplan_versions: 'commplan_versions',
+};
+
+/** { dataset, table } de uma tabela do Commplan, respeitando BQ_TABLE_LAYOUT. */
+export function tableLocation(name) {
+  const layout = (process.env.BQ_TABLE_LAYOUT || '').trim().toLowerCase();
+  if (layout === 'taxonomy' && TAXONOMY_TABLES[name]) {
+    return { dataset: TAXONOMY_DATASET, table: TAXONOMY_TABLES[name] };
+  }
+  return { dataset: DATASET, table: name };
+}
+
 /** Helper pra montar nome qualificado de tabela no dataset do Commplan. */
 export function tableRef(name) {
-  return `\`${PROJECT_ID}.${DATASET}.${name}\``;
+  const { dataset, table } = tableLocation(name);
+  return `\`${PROJECT_ID}.${dataset}.${table}\``;
 }
 
 /** Helper pra ler tabelas do Sales Center (checklists, team_members). */

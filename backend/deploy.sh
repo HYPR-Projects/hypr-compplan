@@ -105,6 +105,7 @@ trap "rm -f $ENV_FILE" EXIT
 cat > "$ENV_FILE" <<EOF
 GCP_PROJECT_ID: '${PROJECT_ID}'
 BQ_DATASET: 'hypr_commplan'
+BQ_TABLE_LAYOUT: 'taxonomy'
 BQ_SOURCE_DATASET: 'hypr_sales_center'
 BQ_REPORTHUB_DATASET: 'prod_prod_hypr_reporthub'
 NODE_ENV: 'production'
