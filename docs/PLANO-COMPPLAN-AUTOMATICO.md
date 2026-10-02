@@ -51,18 +51,50 @@ Reduzir ao mínimo o preenchimento manual do CS e, portanto, o erro humano:
 |---|---|
 | Pacing, over, CTR, VTR, eCPM efetivo por tática | `report_data?action=navi_metrics` (compacto, read-only) e `_compute_totals` em `backend/main.py` |
 | eCPM admin, custo total | `?list=true` (admin) → `admin_ecpm`, `display_ecpm`, `video_ecpm`, `admin_total_cost_full` |
+| Peças Max Attention (formato da feature) | `prod_assets.report_ma_links` + métricas via Platform (ver abaixo) |
 | Tech cost | Hoje calculado **no frontend do RC** (`costFull ÷ budget × 100`, `src/v2/admin/lib/aggregation.js`) → precisamos mover para o backend do RC ou replicar a mesma fórmula num único lugar compartilhado. |
 | Loom | `prod_assets.campaign_looms (short_token, loom_url, updated_at)` (ou `bidiq_app.reportcenter_campaign_looms` no layout de taxonomia) |
 | Link do relatório | `prod_assets.campaign_share_ids` → `https://report.hypr.mobi/report/{share_id}` (`?action=get_share_id&token=`) |
 | Métricas por audiência | Nome da audiência vem do **`line_name`** (`extract_audience` / `extractAudience`) |
 | Auth | JWT HS256 com `JWT_SECRET` (o mesmo do Compplan) → o Compplan consegue emitir um token admin de serviço. |
 
-> ⚠️ **Feature na "métrica por audiência":** pelo código do RC, o nome exibido é um segmento do
-> `line_name` depois da tática (`..._O2O_<AUDIENCIA>_LI-1`). A feature só aparece ali **se o
-> trafficking nomear a line com a feature** (ex.: `..._O2O_TAPTOGO_...`). Não há regra no código
-> para isso — precisamos confirmar com dados reais (Fase 0) e, se for o caso, **formalizar a
-> convenção de nomenclatura** com o time de tráfego. Fontes adicionais de "ativou de verdade":
-> `campaign_surveys` (Survey), `pdooh_data` (P-DOOH), `rmnd_data` (RMN Digital).
+> ✅ **Onde a feature aparece no Report Center — aba Max Attention.** É a fonte mais forte de
+> "ativou de verdade" para as features rich media. Como funciona hoje:
+> - O admin do RC **vincula** as peças da HYPR Platform (o2o-platform) à campanha. Os vínculos ficam em
+>   `prod_assets.report_ma_links` (`short_token, creative_id, template_slug, name, size, dsp_creative_names, linked_by, linked_at`)
+>   — `backend/ma_report.py`.
+> - O formato vem do `template_slug` da Platform, não do nome digitado → é confiável.
+> - As métricas da peça (impressões, cliques, engajamento, widgets) vêm do endpoint de serviço da
+>   Platform (o mesmo número do painel da Platform).
+>
+> Mapeamento formato da Platform → feature do checklist (a validar):
+>
+> | `template_slug` (RC) | Rótulo no RC | Feature no checklist |
+> |---|---|---|
+> | `tap-to-map` | Tap to Map | Tap to Map / Tap to Go |
+> | `carrossel` (`slider`) | Tap to Carousel | Tap To Carousel / Tap To Slide |
+> | `scratch` | Tap to Reveal | Tap To Scratch |
+> | `survey` | Tap to Choose | Survey? (confirmar — pode ser outro produto) |
+> | `play` | Tap to Game | (sem feature no checklist hoje) |
+> | `freeform`, `adserver` | Free Form / Creative Ad Server | não é feature (peça padrão) |
+> | widget `add_to_calendar` | Adicionar ao calendário | Click to Calendar |
+> | widget `close_to` | Loja mais próxima | (avaliar) |
+>
+> Regra proposta: feature rich media **ativada** = está no checklist **e** existe peça vinculada com
+> aquele formato na aba Max Attention **com impressões > 0**.
+>
+> Dependências: (1) o vínculo é manual no RC — se o admin não vincular, a feature fica "⚪ sem dado"
+> (não reprova); (2) o Compplan lê `report_ma_links` direto no BQ e, para impressões, chama o RC
+> (ou a Platform com a mesma service key).
+>
+> **Features fora da Max Attention** (Weather, Topics, Footfall, TV Sync, Downloaded Apps, Purchase
+> Context, HYPR Pass, Attention Ad…) não aparecem nessa aba — são segmentação/medição. Para elas:
+> - nome do criativo/line (ex.: `..._taptomap-shop_...` no print) quando houver convenção;
+> - `campaign_surveys` (Survey/Brand Lift), `pdooh_data` (P-DOOH), `rmnd_data` (RMN Digital);
+> - nas demais, o checklist é a fonte e a etapa fica "🟡 declarada" até existir prova.
+>
+> A "Métricas por audiência" (Visão Geral) usa só o segmento do `line_name` depois da tática; ali a
+> feature só aparece se o tráfego a colocar no nome da line.
 
 ### 2.3 HYPR Library
 - `backend/drive_client.py`: extrai texto de Google Slides (export), `.pptx` (python-pptx) e por slide.
@@ -158,7 +190,8 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
 - Ofereceu no documento de pré-campanha **e** ativou → ganha **Pré-campanha** (feature N) **e** **Setup** (tier).
 - **Não** ofereceu no documento, mas a campanha fechou com a feature e ele ativou → ganha **só Setup**.
 - Ofereceu e não ativou → não ganha nada.
-- "Ativou" = está no checklist **e** há prova de entrega (line com a feature no RC, ou survey/P-DOOH/RMND nas tabelas do RC).
+- "Ativou" = está no checklist **e** há prova de entrega: peça com o formato na aba **Max Attention** do RC
+  (rich media), ou survey/P-DOOH/RMND nas tabelas do RC, ou line/criativo com a feature no nome.
 
 ### Setup
 - Tiers ampliados com as features que hoje estão fora: `Tap To Slide`, `Tap To Hotspot`, `CTV`,
@@ -267,7 +300,7 @@ evidência · status de validação · preenchido por · quando · revisado por`
 
 | Fase | Entrega | Vai para produção? |
 |---|---|---|
-| **0 — Validação (agora, sem código em prod)** | (a) Query nos `line_name` para confirmar se features aparecem nas audiências do RC; (b) listar grafias de `cl_features` no Command × catálogo; (c) suas decisões da §12; (d) congelar regras do Q3. | Não |
+| **0 — Validação (agora, sem código em prod)** | (a) Confirmar o mapeamento formato Max Attention → feature e quanto das campanhas do Q3 tem peças vinculadas em `report_ma_links`; query nos `line_name`/criativos para as features fora da Max Attention; (b) listar grafias de `cl_features` no Command × catálogo; (c) suas decisões da §12; (d) congelar regras do Q3. | Não |
 | **1 — Fundação** | Catálogo em BQ + versão nova + editor de etapas + cards + normalização de features (aliases). | Depois do fechamento do Q3 |
 | **2 — Integrações de dados** | `integrations/` + `commplan_campaign_facts` + sync horário (Force, carteira, RC). Métricas do RC em **modo sombra** ao lado das atuais. | Sim, em modo sombra |
 | **3 — Account Management automático** | Loom e relatório do RC; pós-venda via Calendar. | Sim |
@@ -283,7 +316,7 @@ evidência · status de validação · preenchido por · quando · revisado por`
 2. **Quais etapas saem** além do Kepler e quais entram além de Mapas HYPR.
 3. **% da etapa Mapas HYPR** — mantém o 0,20% do Kepler?
 4. **"Ativou"** — basta estar no checklist ou exige prova de entrega no RC?
-5. **Convenção de nome de line** com o feature (alinhar com tráfego) — se hoje não existe.
+5. **Mapeamento Max Attention → feature** (`Tap to Choose` = Survey? `Tap to Game` entra como feature? widget "Adicionar ao calendário" = Click to Calendar?) e se o **vínculo de peças no RC** passa a ser obrigatório para toda campanha com rich media.
 6. **Vigência** da nova versão: Q4/2026 ou Q1/2027?
 7. **Calendar:** Compplan pede o próprio escopo (recomendado) ou reaproveita o token do Force?
 8. **Docs no Drive:** shared drive de propostas acessível à service account, ou leitura com o token do CS?
@@ -293,6 +326,7 @@ evidência · status de validação · preenchido por · quando · revisado por`
 ## 13. Riscos
 
 - **Divergência de métrica** RC × Compplan muda bônus → resolver com modo sombra antes de valer.
+- **Vínculo de peças Max Attention é manual no RC** → se não for feito, a feature rich media fica sem prova; tornar parte do checklist de go-live da campanha.
 - **Nomenclatura de lines** inconsistente → feature "ativada" não detectada → fallback para checklist + revisão.
 - **Permissão no Drive** → documento ilegível vira ⚪ Sem dado (não reprova o CS automaticamente).
 - **Command `GET /checklists?short_token=` ignora o filtro** → sync deve ler do BQ, não da API.
