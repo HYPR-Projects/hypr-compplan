@@ -67,9 +67,9 @@ Reduzir ao mínimo o preenchimento manual do CS e, portanto, o erro humano:
 > - As métricas da peça (impressões, cliques, engajamento, widgets) vêm do endpoint de serviço da
 >   Platform (o mesmo número do painel da Platform).
 >
-> **Decisão: no Compplan, tudo que é "Tap To" vira uma feature só — `Max Attention`.** No Force/Command
-> os formatos continuam separados (o CP marca Tap to Go, Tap To Scratch etc.); o Compplan só os trata
-> como **aliases** de Max Attention na hora de calcular.
+> **Decisão: no Compplan, tudo que é "Tap To" vira `Max Attention` (Tier 1).** No Force/Command os
+> formatos continuam separados (o CP marca Tap to Go, Tap To Scratch etc.). **Cada formato Max Attention
+> diferente conta como uma feature**: Tap to Go + Tap to Choose = 2× Max Attention = 2 slots do Tier 1.
 >
 > | No Force (checklist) | No Report Center (`template_slug`) | No Compplan |
 > |---|---|---|
@@ -78,13 +78,17 @@ Reduzir ao mínimo o preenchimento manual do CS e, portanto, o erro humano:
 > | Tap To Scratch | `scratch` (Tap to Reveal) | **Max Attention** |
 > | Tap To Chat, Tap To Hotspot, Tap to Max, Tap to Experience | — | **Max Attention** |
 > | — | `play` (Tap to Game) | **Max Attention** |
-> | — | `survey` (Tap to Choose) | **Max Attention** (a confirmar: não confundir com Survey/Brand Lift) |
+> | — | `survey` (Tap to Choose) | **Max Attention** (✔ decidido — não é o Survey/Brand Lift) |
 > | — | `freeform`, `adserver` | a confirmar se conta como Max Attention |
 > | Click to Calendar | widget `add_to_calendar` | Click to Calendar (feature própria) |
 >
-> Regra proposta: **Max Attention ativado** = checklist tem pelo menos um "Tap To" **e** existe peça
-> vinculada na aba Max Attention do RC **com impressões > 0**. Vários formatos Tap To na mesma
-> campanha contam como **uma** feature.
+> Regra proposta: **cada formato Max Attention ativado** = formato no checklist **e** peça vinculada
+> daquele formato na aba Max Attention do RC **com impressões > 0**. Formatos diferentes somam
+> slots no Tier 1 (até 3).
+>
+> ⚠️ "Formato diferente" é medido pelo formato da Platform (`template_slug`). Tap to Go e Tap to Map
+> usam o mesmo template (`tap-to-map`), assim como Tap To Carousel e Tap To Slide (`carrossel`) —
+> nesses pares conta 1 (a confirmar).
 >
 > Dependências: (1) o vínculo é manual no RC — se o admin não vincular, a feature fica "⚪ sem dado"
 > (não reprova); (2) o Compplan lê `report_ma_links` direto no BQ e, para impressões, chama o RC
@@ -197,11 +201,11 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
   (rich media), ou survey/P-DOOH/RMND nas tabelas do RC, ou line/criativo com a feature no nome.
 
 ### Setup
-- **Max Attention** substitui no catálogo os itens Tap to Go, Tap to Chat, Tap to Max, Tap to Carousel,
-  Tap to Scratch, Tap to Map e Tap to Experience (hoje 7 itens do Tier 1). Os "Tap To" do Force são aliases.
-  Efeito: uma campanha com 3 formatos Tap To, que hoje pode pagar 3 slots do Tier 1, passa a pagar **1**.
-- Tiers ampliados com as features que hoje estão fora: `CTV`, `Video Survey` (e outras que você
-  quiser) — **você define o tier de cada uma**.
+- **Max Attention** (Tier 1) agrupa no catálogo Tap to Go, Tap to Chat, Tap to Max, Tap to Carousel,
+  Tap to Scratch, Tap to Map, Tap to Experience, Tap To Slide, Tap To Hotspot, Tap to Choose e Tap to Game.
+  Cada formato diferente ativado conta como 1 feature do Tier 1 (o Tier 1 continua pagando até 3).
+  Ganho: pagamento exige **prova na aba Max Attention**, não só a marcação no checklist.
+- **Video Survey** entra no **Tier 3**. **CTV não é feature** (não entra nos tiers).
 - Pré-marcação via checklist normalizado + confirmação de entrega pelo RC.
 
 ### Otimização
@@ -318,11 +322,11 @@ evidência · status de validação · preenchido por · quando · revisado por`
 
 ## 12. Decisões que preciso de você
 
-1. **Tier da Max Attention** (Tier 1?) e **tiers das novas features** (`CTV`, `Video Survey`, outras?). Com Max Attention virando 1 item, o Tier 1 cai de 11 para 5 — rever se os 3 slots do Tier 1 continuam fazendo sentido.
+1. ✔ Max Attention = Tier 1, cada formato conta 1 (Tap to Go + Tap to Choose = 2); Tier 1 segue com até 3 slots; Video Survey = Tier 3; CTV não é feature. **Falta:** Tap to Go × Tap to Map (mesmo template) contam 1 ou 2?
 2. **Quais etapas saem** além do Kepler e quais entram além de Mapas HYPR.
 3. **% da etapa Mapas HYPR** — mantém o 0,20% do Kepler?
 4. **"Ativou"** — basta estar no checklist ou exige prova de entrega no RC?
-5. **Max Attention:** Free Form / Creative Ad Server contam? `Tap to Choose` é Max Attention ou Survey? Widget "Adicionar ao calendário" ativa Click to Calendar? e se o **vínculo de peças no RC** passa a ser obrigatório para toda campanha com rich media.
+5. **Max Attention:** Free Form / Creative Ad Server contam? (Tap to Choose = Max Attention ✔.) Widget "Adicionar ao calendário" ativa Click to Calendar? e se o **vínculo de peças no RC** passa a ser obrigatório para toda campanha com rich media.
 6. **Vigência** da nova versão: Q4/2026 ou Q1/2027?
 7. **Calendar:** Compplan pede o próprio escopo (recomendado) ou reaproveita o token do Force?
 8. **Docs no Drive:** shared drive de propostas acessível à service account, ou leitura com o token do CS?
