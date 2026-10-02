@@ -9,7 +9,7 @@ import {
   classifyFeatures2026Q4, proveMaxAttention, resolveCatalogVersion,
   VERSION_2026, VERSION_2026_Q4, detectDeckFeatures2026Q4, setCatalogOverrides,
 } from '../engine/compplan-catalog.js';
-import { validatePvMeeting } from '../engine/compplan-engine.js';
+import { validatePvMeeting, optimizationState } from '../engine/compplan-engine.js';
 
 const base = (over = {}) => ({
   short_token: 'TEST01', total_value: 100000, cs_email: 'cs@hypr.mobi',
@@ -201,4 +201,14 @@ test('Q4: features do Force (extras.cl_features) e produtos do checklist origina
   // Q3 não usa o checklist original
   const q3 = computeBonus(base({ start_date: '2026-08-01', features: [] }), {}, null, {}, { facts: { maLinks: [], checklist: { products: [], features: ['Survey'] } } });
   assert.equal(item(q3, 'setup', 'setup_tier1_1').earned, false);
+});
+
+test('Otimização ao vivo: estado por data e dados', () => {
+  const day = (n) => { const d = new Date(); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const m = { display_impressions: 1000, ecpm: 0.5, ctr: 0.01 };
+  assert.equal(optimizationState({ start_date: day(5), end_date: day(30) }, null).state, 'not_started');
+  assert.equal(optimizationState({ start_date: day(-2), end_date: day(30) }, null).state, 'awaiting_data');
+  assert.equal(optimizationState({ start_date: day(-2), end_date: day(30) }, m).state, 'live');
+  assert.equal(optimizationState({ start_date: day(-40), end_date: day(-5) }, m).state, 'final');
+  assert.equal(optimizationState({ start_date: day(-2), end_date: '2026-10-30' }, m).closes_on, '2026-10-31');
 });

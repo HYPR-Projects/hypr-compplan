@@ -289,3 +289,17 @@
 .q4-chipbtn--primary { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
 .q4-linkbtn { background: none; border: 0; padding: 0; color: var(--brand); font: inherit; font-size: inherit; cursor: pointer; text-decoration: underline; }
 .q4-deck .q4-note, .q4-pv .q4-note { margin: 0; }
+
+/* ── Otimização ao vivo ────────────────────────────────────── */
+.q4-note--live { background: color-mix(in srgb, var(--status-green) 10%, transparent); color: var(--text-secondary); align-items: center; }
+.q4-livedot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--status-green); box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-green) 60%, transparent);
+  animation: q4-pulse 1.8s infinite;
+}
+@keyframes q4-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-green) 55%, transparent); }
+  70% { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .q4-livedot { animation: none; } }

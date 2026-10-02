@@ -322,6 +322,33 @@ export function isCampaignStillInGracePeriod(campaign) {
 }
 
 /**
+ * Estado da Otimização para a tela:
+ *   not_started   — campanha ainda não começou
+ *   awaiting_data — começou, mas ainda sem entrega na base
+ *   live          — calculando com a entrega até hoje; muda até fechar
+ *   final         — passou 1 dia do fim: resultado definitivo
+ * `closes_on` = dia em que o resultado fica definitivo (fim + 1).
+ */
+export function optimizationState(campaign, metrics) {
+  const start = toDateStr(campaign?.start_date);
+  const end = toDateStr(campaign?.end_date);
+  const today = new Date().toISOString().slice(0, 10);
+  let closesOn = null;
+  if (end) {
+    const d = new Date(`${end}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 1);
+    closesOn = d.toISOString().slice(0, 10);
+  }
+  const hasData = !!metrics && (Number(metrics.display_impressions) > 0 || Number(metrics.video_starts) > 0
+    || Number(metrics.ecpm) > 0 || Number(metrics.ctr) > 0);
+  let state;
+  if (start && start > today) state = 'not_started';
+  else if (!hasData) state = isCampaignStillInGracePeriod(campaign) ? 'awaiting_data' : 'final';
+  else state = isCampaignStillInGracePeriod(campaign) ? 'live' : 'final';
+  return { state, closes_on: closesOn };
+}
+
+/**
  * Verifica se o setup deve ser zerado.
  * Retorna { invalidated: bool, reason: string|null, pending: bool } baseado nas métricas.
  *
@@ -717,6 +744,8 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
     pre_deck: inferred.__preDeck || null,
     pv_meeting: version === VERSION_2026_Q4 ? (manualChecks.__pv_meeting || null) : null,
     excluded_features: featuresByTier.excluded || [],
+    // Otimização "ao vivo": calcula com a entrega até hoje e só fecha depois do fim
+    optimization_state: optimizationState(campaign, metrics),
     // Produtos/features efetivamente usados no cálculo (para a tela mostrar)
     checklist_products: Array.isArray(effCampaign.products) ? effCampaign.products : [],
     checklist_features: Array.isArray(effCampaign.features) ? effCampaign.features : [],
