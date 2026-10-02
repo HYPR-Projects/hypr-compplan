@@ -482,7 +482,8 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
   // vazia (override com ARRAY [] ou features do Force em extras.cl_features).
   // Ajuste manual do admin (view não vazia) continua valendo.
   let effCampaign = campaign;
-  if (version === VERSION_2026_Q4 && facts.checklist) {
+  // opts.forceChecklistFallback: só para o script de impacto no Q3 (simula a correção na versão 2026).
+  if ((version === VERSION_2026_Q4 || opts.forceChecklistFallback) && facts.checklist) {
     const pick = (fromView, fromSource) =>
       (Array.isArray(fromView) && fromView.length > 0) ? fromView : (fromSource || []);
     effCampaign = {
