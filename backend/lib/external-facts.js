@@ -12,6 +12,7 @@
  */
 
 import { query } from './bigquery.js';
+import { fetchRcMetricsByToken } from './rc-metrics.js';
 
 const MA_LINKS_TABLE = process.env.RC_MA_LINKS_TABLE || 'site-hypr.prod_assets.report_ma_links';
 const LOOMS_TABLE = process.env.RC_LOOMS_TABLE || 'site-hypr.prod_assets.campaign_looms';
@@ -36,7 +37,7 @@ export async function fetchFactsByToken(tokens) {
   const out = {};
   if (toks.length === 0) return out;
 
-  const [maRows, loomRows, shareRows, clRows] = await Promise.all([
+  const [maRows, loomRows, shareRows, clRows, rcMetrics] = await Promise.all([
     safe('ma_links', () => query(
       `SELECT UPPER(short_token) AS short_token, creative_id, name, template_slug
        FROM \`${MA_LINKS_TABLE}\` WHERE UPPER(short_token) IN UNNEST(@toks)`, { toks })),
@@ -57,10 +58,12 @@ export async function fetchFactsByToken(tokens) {
        FROM \`${CHECKLISTS_TABLE}\`
        WHERE UPPER(short_token) IN UNNEST(@toks)
        QUALIFY ROW_NUMBER() OVER (PARTITION BY UPPER(short_token) ORDER BY created_at DESC) = 1`, { toks })),
+    safe('rc_metrics', () => fetchRcMetricsByToken()),
   ]);
 
   for (const t of toks) {
-    out[t] = { maLinks: maRows ? [] : null, loom_url: null, share_id: null, checklist: null };
+    out[t] = { maLinks: maRows ? [] : null, loom_url: null, share_id: null, checklist: null,
+               rc_metrics: rcMetrics ? (rcMetrics[t] || null) : null };
   }
   for (const r of maRows || []) out[r.short_token]?.maLinks?.push({
     creative_id: r.creative_id, name: r.name, template_slug: r.template_slug,
@@ -80,5 +83,5 @@ export async function fetchFactsByToken(tokens) {
 
 /** Fatos de um token a partir do mapa. */
 export function factsFor(map, token) {
-  return (map && map[String(token || '').toUpperCase()]) || { maLinks: null, loom_url: null, share_id: null, checklist: null };
+  return (map && map[String(token || '').toUpperCase()]) || { maLinks: null, loom_url: null, share_id: null, checklist: null, rc_metrics: null };
 }

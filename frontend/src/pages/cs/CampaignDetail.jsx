@@ -204,7 +204,8 @@ export default function CsCampaignDetail() {
 
   // Re-calcula localmente: aplica manualChecks atual em cima dos earned automáticos
   // E também recalcula Otimização quando is_abs muda (Para feedback imediato sem esperar o backend)
-  const breakdown = recomputeLocally(campaign.breakdown, manualChecks, campaign.metrics, effectiveIsAbs);
+  // 2026-Q4 com métricas do Report Center ligadas: a otimização usa os números do RC
+  const breakdown = recomputeLocally(campaign.breakdown, manualChecks, campaign.breakdown?.opt_metrics_used || campaign.metrics, effectiveIsAbs);
 
   // Responsáveis por etapa (ausente = dono)
   const viewerEmail = (user?.email || '').toLowerCase();

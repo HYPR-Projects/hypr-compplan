@@ -482,7 +482,8 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
   // vazia (override com ARRAY [] ou features do Force em extras.cl_features).
   // Ajuste manual do admin (view não vazia) continua valendo.
   let effCampaign = campaign;
-  if (version === VERSION_2026_Q4 && facts.checklist) {
+  // opts.forceChecklistFallback: só para o script de impacto no Q3 (simula a correção na versão 2026).
+  if ((version === VERSION_2026_Q4 || opts.forceChecklistFallback) && facts.checklist) {
     const pick = (fromView, fromSource) =>
       (Array.isArray(fromView) && fromView.length > 0) ? fromView : (fromSource || []);
     effCampaign = {
@@ -497,7 +498,22 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
   const featuresByTier = inferred.__featuresByTier || { tier1: [], tier2: [], tier3: [], unknown: [] };
 
   // 2. Items de métricas (Otimizações)
-  const metricEarned = inferMetricItems(campaign, metrics, manualChecks);
+  // 2026-Q4: com OPT_METRICS_SOURCE=rc, eCPM/CTR/VTR/Tech cost vêm do Report
+  // Center (mesma régua do painel). Over continua o do Compplan (o RC não
+  // tem essa métrica). Padrão: Compplan, com o RC exibido ao lado.
+  let optMetrics = metrics;
+  const rc = facts.rc_metrics || null;
+  const useRc = version === VERSION_2026_Q4 && rc && (process.env.OPT_METRICS_SOURCE || 'compplan') === 'rc';
+  if (useRc) {
+    optMetrics = {
+      ...(metrics || {}),
+      ecpm: rc.display_ecpm ?? metrics?.ecpm ?? 0,
+      ctr: rc.display_ctr_pct !== null && rc.display_ctr_pct !== undefined ? rc.display_ctr_pct / 100 : (metrics?.ctr ?? 0),
+      video_vtr_pct: rc.video_vtr_pct ?? metrics?.video_vtr_pct ?? 0,
+      video_tech_cost_pct: rc.tech_cost_pct ?? metrics?.video_tech_cost_pct,
+    };
+  }
+  const metricEarned = inferMetricItems(campaign, optMetrics, manualChecks);
 
   // 3. Constrói earned final por item:
   //    - 'auto':      sempre o inferido
@@ -744,10 +760,51 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
     pre_deck: inferred.__preDeck || null,
     pv_meeting: version === VERSION_2026_Q4 ? (manualChecks.__pv_meeting || null) : null,
     excluded_features: featuresByTier.excluded || [],
+    // Métricas do Report Center (exibidas ao lado; usadas no cálculo se OPT_METRICS_SOURCE=rc)
+    rc_metrics: version === VERSION_2026_Q4 ? rc : null,
+    opt_metrics_source: useRc ? 'rc' : 'compplan',
+    opt_metrics_used: useRc ? optMetrics : null,
     // Otimização "ao vivo": calcula com a entrega até hoje e só fecha depois do fim
     optimization_state: optimizationState(campaign, metrics),
     // Produtos/features efetivamente usados no cálculo (para a tela mostrar)
     checklist_products: Array.isArray(effCampaign.products) ? effCampaign.products : [],
     checklist_features: Array.isArray(effCampaign.features) ? effCampaign.features : [],
   };
+}
+
+/**
+ * Pendências de uma campanha 2026-Q4 (o que o CS ainda precisa fazer).
+ * Mesma lista do painel "Precisa da sua ação" da tela da campanha, usada no
+ * painel do CS. Retorna [{ stage, text }].
+ */
+export function collectPendingActions(breakdown, manualChecks = {}, campaign = {}) {
+  if (!breakdown || breakdown.version !== VERSION_2026_Q4) return [];
+  const actions = [];
+  const today = new Date().toISOString().slice(0, 10);
+  for (const m of breakdown.max_attention || []) {
+    if (m.proof === 'not_linked') actions.push({ stage: 'setup', text: `Vincular a peça ${m.name} no Report Hub` });
+  }
+  const evidence = manualChecks.__evidence || {};
+  for (const [catKey, cat] of Object.entries(breakdown.by_category || {})) {
+    if (cat.assigned_to_other) continue;
+    const anyChecked = cat.items.some(i => i.earned || manualChecks[i.id] === true);
+    if (catKey === 'pre_campaign') {
+      if (anyChecked && !manualChecks.__pre_deck && !String(evidence.pre_campaign || '').trim()) {
+        actions.push({ stage: catKey, text: 'Escolher o deck da pré-campanha' });
+      }
+      if (breakdown.pre_deck?.after_start) actions.push({ stage: catKey, text: 'Deck criado depois do início da campanha' });
+    }
+    for (const it of cat.items) {
+      if (it.needs_evidence && !it.auto_evidence && it.earned && !cat.invalidated && !String(evidence[it.id] || '').trim()) {
+        actions.push({ stage: catKey, text: `${it.label}: falta evidência` });
+      }
+      if (it.validation === 'divergent') actions.push({ stage: catKey, text: `${it.label}: divergente da fonte` });
+    }
+  }
+  const end = toDateStr(campaign.end_date);
+  if (!manualChecks.__pv_meeting && end && end <= today) {
+    const pvOther = (breakdown.by_category?.account_mgmt?.items || []).some(i => (i.id === 'am_pv_doc' || i.id === 'am_pv_onepage') && i.earned);
+    if (!pvOther) actions.push({ stage: 'account_mgmt', text: 'Vincular a reunião de pós-venda' });
+  }
+  return actions;
 }

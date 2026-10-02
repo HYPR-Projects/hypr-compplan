@@ -9,7 +9,7 @@ import {
   classifyFeatures2026Q4, proveMaxAttention, resolveCatalogVersion,
   VERSION_2026, VERSION_2026_Q4, detectDeckFeatures2026Q4, setCatalogOverrides,
 } from '../engine/compplan-catalog.js';
-import { validatePvMeeting, optimizationState } from '../engine/compplan-engine.js';
+import { validatePvMeeting, optimizationState, collectPendingActions } from '../engine/compplan-engine.js';
 
 const base = (over = {}) => ({
   short_token: 'TEST01', total_value: 100000, cs_email: 'cs@hypr.mobi',
@@ -211,4 +211,35 @@ test('Otimização ao vivo: estado por data e dados', () => {
   assert.equal(optimizationState({ start_date: day(-2), end_date: day(30) }, m).state, 'live');
   assert.equal(optimizationState({ start_date: day(-40), end_date: day(-5) }, m).state, 'final');
   assert.equal(optimizationState({ start_date: day(-2), end_date: '2026-10-30' }, m).closes_on, '2026-10-31');
+});
+
+test('Q4: métricas do Report Center só entram no cálculo com OPT_METRICS_SOURCE=rc', () => {
+  const metrics = { ecpm: 0.9, ctr: 0.006, over_percent: 10, display_impressions: 1000 };
+  const facts = { maLinks: [], rc_metrics: { display_ecpm: 0.6, display_ctr_pct: 0.8 } };
+  const off = computeBonus(base(), {}, metrics, {}, { facts });
+  assert.equal(item(off, 'optimization', 'opt_without_abs').earned, false);
+  assert.equal(off.opt_metrics_source, 'compplan');
+  assert.deepEqual(off.rc_metrics, facts.rc_metrics);
+  process.env.OPT_METRICS_SOURCE = 'rc';
+  try {
+    const on = computeBonus(base(), {}, metrics, {}, { facts });
+    assert.equal(item(on, 'optimization', 'opt_without_abs').earned, true);
+    assert.equal(on.opt_metrics_source, 'rc');
+    // Q3 nunca usa o RC
+    const q3 = computeBonus(base({ start_date: '2026-08-01' }), {}, metrics, {}, { facts });
+    assert.equal(item(q3, 'optimization', 'opt_without_abs').earned, false);
+  } finally {
+    delete process.env.OPT_METRICS_SOURCE;
+  }
+});
+
+test('Q4: pendências do CS para o painel', () => {
+  const c = base({ features: ['Tap to Go'], end_date: '2026-10-10' });
+  const mc = { pre_audiences: true, am_pv_doc: true };
+  const bd = computeBonus(c, mc, null, {}, { maLinks: [] });
+  const texts = collectPendingActions(bd, mc, c).map(a => a.text);
+  assert.ok(texts.includes('Vincular a peça Tap to Go no Report Hub'));
+  assert.ok(texts.includes('Escolher o deck da pré-campanha'));
+  assert.ok(texts.some(t => t.includes('Doc. Pós Venda') && t.includes('falta evidência')));
+  assert.deepEqual(collectPendingActions(computeBonus(base({ start_date: '2026-08-01' })), {}, {}), []);
 });
