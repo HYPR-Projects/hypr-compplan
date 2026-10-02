@@ -181,7 +181,7 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
 - Tudo vai para `commplan_audit_log`.
 
 ### 4.3 Exemplo de card (Pré-campanha → mapas GeoIQ e RevIQ)
-> **Enriquecimento — Uso de mapas do GeoIQ e RevIQ** · 0,20% (a confirmar)
+> **Enriquecimento — Uso de mapas do GeoIQ e RevIQ** · 0,20%
 > **O que configura:** proposta com mapa gerado no GeoIQ ou no RevIQ **específico da campanha**
 > (marca, praças, audiência ou dados de venda do cliente).
 > **Obs.:** não vale mapa genérico ou reaproveitado de outra proposta só para preencher slide. O
@@ -199,7 +199,8 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
 | Enriquecimento — Uso de dados de venda RMNF / Mapa no Kepler | **Vira** "Enriquecimento — Uso de mapas do GeoIQ e RevIQ" (card acima). ✔ |
 | Link da evidência da Pré-campanha | **Vira dropdown com busca**: digita o cliente → lista só os decks daquele cliente na pasta Audience Discovery (índice da Library). Colar link fica como exceção. |
 | Definição de features 1/2/3 | Passa a ser **automática**: conta `ofertadas no doc ∩ ativadas`. |
-| Definição de audiências, RMN Físico, Bench/estudo, Plano sazonal | Mantidas, com card + validação pelo doc. |
+| Enriquecimento — Bench/case/estudo/Explorer/Map Intelligence (0,10%) | **Vira** "Enriquecimento — Case, estudo ou bench" (0,10%). Explorer e Map Intelligence deixam de contar aqui. ✔ |
+| Definição de audiências, RMN Físico, Plano sazonal | Mantidas, com card + validação pelo doc. |
 
 **Regra de features (pré × setup):**
 - Ofereceu no documento de pré-campanha **e** ativou → ganha **Pré-campanha** (feature N) **e** **Setup** (tier).
@@ -369,7 +370,7 @@ evidência · status de validação · preenchido por · quando · revisado por`
    Carousel + Slide = 2, exigindo duas peças de carrossel vinculadas). Tap to Map não existe mais (é Tap to Go).
    Tap to Choose = Max Attention. Free Form e Creative Ad Server desconsiderados. Tier 1 segue com até 3 slots.
 2. Video Survey = Tier 3. CTV não é feature. Attention Ad e Seat saem do Tier 2.
-3. "Enriquecimento — Uso de dados de venda RMNF / Mapa no Kepler" vira "Enriquecimento — Uso de mapas do GeoIQ e RevIQ".
+3. "Enriquecimento — Uso de dados de venda RMNF / Mapa no Kepler" vira "Enriquecimento — Uso de mapas do GeoIQ e RevIQ" (0,20%). "Bench/case/estudo/Explorer/Map Intelligence" vira "Enriquecimento — Case, estudo ou bench" (0,10%).
 4. "Ativou" (fora Max Attention) = basta estar no checklist; taxonomia da line vira confirmação extra.
 5. Widget "Adicionar ao calendário" da Max Attention confirma Click to Calendar.
 6. Vigência: Q4/2026.
@@ -377,7 +378,6 @@ evidência · status de validação · preenchido por · quando · revisado por`
 8. Documento da pré-campanha: dropdown com os decks do cliente na pasta Audience Discovery, via índice da Library (§2.3, §7).
 
 **Em aberto**
-- % do item GeoIQ/RevIQ — mantém 0,20% do Kepler?
 - Vínculo de peças Max Attention no RC passa a ser obrigatório quando a campanha entra no ar?
 - Outras etapas que saem/entram (além da troca do Kepler).
 
