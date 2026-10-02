@@ -33,6 +33,7 @@ import { computeBonus } from '../../engine/compplan-engine.js';
 import { COMPPLAN_CATALOG } from '../../engine/compplan-catalog.js';
 import { resolveStudiesInfo } from '../../lib/bonus-calc.js';
 import { isOverException } from '../../data/over-exceptions.js';
+import { fetchMaLinksByToken, maLinksFor } from '../../lib/ma-links.js';
 
 export const router = Router();
 router.use(authRequired, adminRequired);
@@ -113,6 +114,7 @@ async function fetchAuditCampaigns({ quarter, tokenFilter, includeUnfinished = t
   if (campaigns.length === 0) return [];
 
   const tokens = campaigns.map(c => c.short_token);
+  const maLinksPromise = fetchMaLinksByToken(tokens);
 
   // 2. Métricas (display + video)
   const metricsByToken = {};
@@ -197,6 +199,7 @@ async function fetchAuditCampaigns({ quarter, tokenFilter, includeUnfinished = t
   }));
 
   // 4. Enriquece com breakdown calculado
+  const maLinksByToken = await maLinksPromise;
   const enriched = campaigns.map(c => {
     let mc = {};
     let ao = {};
@@ -210,6 +213,7 @@ async function fetchAuditCampaigns({ quarter, tokenFilter, includeUnfinished = t
       preAssignee: c.pre_assignee || null,
       csOwner: c.cs_email,
       studiesInfo,
+      maLinks: maLinksFor(maLinksByToken, c.short_token),
     });
 
     return {

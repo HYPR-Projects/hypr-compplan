@@ -7,7 +7,8 @@
     "start": "node index.js",
     "dev": "node --watch index.js",
     "setup-schema": "node scripts/setup-schema.js",
-    "functions-framework": "functions-framework --target=commplan --port=8080"
+    "functions-framework": "functions-framework --target=commplan --port=8080",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^7.9.1",

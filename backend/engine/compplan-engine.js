@@ -16,7 +16,10 @@
  *     - Under (entregou menos que contratado)
  */
 
-import { COMPPLAN_CATALOG, getFeatureTier, FEATURE_TIERS } from './compplan-catalog.js';
+import {
+  getFeatureTier, getCatalog, getFeatureTiers, resolveCatalogVersion,
+  VERSION_2026_Q4, classifyFeatures2026Q4, proveMaxAttention,
+} from './compplan-catalog.js';
 
 const TAX_RATE = 0.1653;
 const NET_FACTOR = 1 - TAX_RATE;
@@ -74,7 +77,8 @@ function inferAutoItems(campaign, opts = {}) {
   const features = Array.isArray(campaign.features) ? campaign.features : [];
   const products = Array.isArray(campaign.products) ? campaign.products : [];
   const formats = Array.isArray(campaign.formats) ? campaign.formats : [];
-  const { studiesInfo = [] } = opts;
+  const { studiesInfo = [], version = null, maLinks = null } = opts;
+  const isQ4 = version === VERSION_2026_Q4;
 
   // Pré Campanha — TUDO manual agora (CS marca o que fez).
   // (Removidos inferências automáticas de audiences e features.)
@@ -94,21 +98,41 @@ function inferAutoItems(campaign, opts = {}) {
                  || formats.some(f => /rmn\s*digital|rmnd/i.test(f));
   if (hasRmnDig) earned.add('setup_rmn_digital');
 
-  // Setup — RMN Físico (semi_auto)
-  const hasRmnFis = products.some(p => /rmn\s*f[ií]sico|rmnf/i.test(p))
-                 || formats.some(f => /rmn\s*f[ií]sico|rmnf/i.test(f))
-                 || (campaign.pracas_type && /f[ií]sico/i.test(campaign.pracas_type));
-  if (hasRmnFis) earned.add('setup_rmn_fisico');
+  // Setup — RMN Físico (2026) / GroundFlow (2026-Q4) — mesmo item, semi_auto
+  if (isQ4) {
+    const hasGroundflow = products.some(p => /ground\s*flow/i.test(p))
+                       || formats.some(f => /ground\s*flow/i.test(f));
+    if (hasGroundflow) earned.add('setup_rmn_fisico');
+  } else {
+    const hasRmnFis = products.some(p => /rmn\s*f[ií]sico|rmnf/i.test(p))
+                   || formats.some(f => /rmn\s*f[ií]sico|rmnf/i.test(f))
+                   || (campaign.pracas_type && /f[ií]sico/i.test(campaign.pracas_type));
+    if (hasRmnFis) earned.add('setup_rmn_fisico');
+  }
 
   // Setup — tiers de features (semi_auto)
   // Coleta features por tier pra UI mostrar quais foram detectadas
   const featuresByTier = { tier1: [], tier2: [], tier3: [], unknown: [] };
-  for (const f of features) {
-    const tier = getFeatureTier(f);
-    if (tier === 'tier1') featuresByTier.tier1.push(f);
-    else if (tier === 'tier2') featuresByTier.tier2.push(f);
-    else if (tier === 'tier3') featuresByTier.tier3.push(f);
-    else if (f) featuresByTier.unknown.push(f);
+  let maxAttention = null;
+  if (isQ4) {
+    // 2026-Q4: grafias normalizadas (P-DOOH = PDOOH) e "Tap to X" vira Max
+    // Attention — cada formato com peça vinculada no Report Hub conta 1 no Tier 1.
+    const cls = classifyFeatures2026Q4(features);
+    maxAttention = proveMaxAttention(cls.max_attention, maLinks);
+    const provenMa = maxAttention.filter(m => m.proven).map(m => `Max Attention — ${m.name}`);
+    featuresByTier.tier1.push(...provenMa, ...cls.tier1);
+    featuresByTier.tier2.push(...cls.tier2);
+    featuresByTier.tier3.push(...cls.tier3);
+    featuresByTier.unknown.push(...cls.unknown);
+    featuresByTier.excluded = cls.excluded;
+  } else {
+    for (const f of features) {
+      const tier = getFeatureTier(f);
+      if (tier === 'tier1') featuresByTier.tier1.push(f);
+      else if (tier === 'tier2') featuresByTier.tier2.push(f);
+      else if (tier === 'tier3') featuresByTier.tier3.push(f);
+      else if (f) featuresByTier.unknown.push(f);
+    }
   }
   const nT1 = featuresByTier.tier1.length;
   const nT2 = featuresByTier.tier2.length;
@@ -122,6 +146,7 @@ function inferAutoItems(campaign, opts = {}) {
 
   // Anexa pra ser usado lá fora (return value-like)
   earned.__featuresByTier = featuresByTier;
+  earned.__maxAttention = maxAttention;
 
   // Extras — Estudos: marca ex_estudos como earned se há algum estudo:
   //   - vindo do Command (studies_used não vazio), OU
@@ -342,7 +367,11 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
   const bruto = Number(campaign.total_value) || 0;
   const liquido = bruto * NET_FACTOR;
 
-  const { preAssignee = null, csOwner = null, studiesInfo = [] } = opts;
+  const { preAssignee = null, csOwner = null, studiesInfo = [], maLinks = null } = opts;
+  // Versão do Compplan pela data de início da campanha (2026 × 2026-Q4).
+  const version = resolveCatalogVersion(campaign.start_date);
+  const CATALOG = getCatalog(version);
+  const FEATURE_TIERS = getFeatureTiers(version);
   // Uma etapa entra no breakdown do CS APENAS se:
   //   - Não há responsável (sem atribuição → conta pro dono)
   //   - OU o CS olhando É o responsável (mesma pessoa)
@@ -351,7 +380,7 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
   const stageGoesToViewer = (stage) => !stageAssignees[stage] || stageAssignees[stage] === csOwnerLower;
 
   // 1. Items inferidos do checklist (auto + semi_auto)
-  const inferred = inferAutoItems(campaign, { studiesInfo });
+  const inferred = inferAutoItems(campaign, { studiesInfo, version, maLinks });
   // Captura features por tier (anexado pelo inferAutoItems)
   const featuresByTier = inferred.__featuresByTier || { tier1: [], tier2: [], tier3: [], unknown: [] };
 
@@ -367,7 +396,7 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
   const earned = new Set();
   const adminOverriddenItems = new Set();
   const allItems = [];
-  for (const [catKey, cat] of Object.entries(COMPPLAN_CATALOG)) {
+  for (const [catKey, cat] of Object.entries(CATALOG)) {
     for (const item of cat.items) {
       allItems.push({ ...item, category: catKey });
 
@@ -423,7 +452,7 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
   const byCategory = {};
   let totalPct = 0;
 
-  for (const [catKey, cat] of Object.entries(COMPPLAN_CATALOG)) {
+  for (const [catKey, cat] of Object.entries(CATALOG)) {
     const isSetupInvalidated = catKey === 'setup' && setupValidation.invalidated;
     // Etapa atribuída a outro CS: items aparecem mas value_brl=0 pra quem está olhando
     const isStageBlocked = !stageGoesToViewer(catKey);
@@ -521,6 +550,7 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
         value_brl: effectivelyEarned ? liquido * item.pct : 0,
         admin_overridden: !!adminOv,
         admin_override: adminOv || null,
+        card: item.card || null,
         studies_info: studiesAttachment,
         detected_features: detectedFeatures,
         tier_catalog: tierCatalog,
@@ -555,6 +585,7 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
   }
 
   return {
+    version,
     bruto,
     liquido,
     tax_rate: TAX_RATE,
@@ -564,5 +595,8 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
     setup_validation: setupValidation,
     auto_setup_validation: autoSetupValidation,  // pra UI ver o que era automático
     stage_assignees: stageAssignees,
+    // 2026-Q4: formatos Max Attention do checklist e se cada um tem peça no Report Hub
+    max_attention: inferred.__maxAttention || null,
+    excluded_features: featuresByTier.excluded || [],
   };
 }
