@@ -67,21 +67,24 @@ Reduzir ao mínimo o preenchimento manual do CS e, portanto, o erro humano:
 > - As métricas da peça (impressões, cliques, engajamento, widgets) vêm do endpoint de serviço da
 >   Platform (o mesmo número do painel da Platform).
 >
-> Mapeamento formato da Platform → feature do checklist (a validar):
+> **Decisão: no Compplan, tudo que é "Tap To" vira uma feature só — `Max Attention`.** No Force/Command
+> os formatos continuam separados (o CP marca Tap to Go, Tap To Scratch etc.); o Compplan só os trata
+> como **aliases** de Max Attention na hora de calcular.
 >
-> | `template_slug` (RC) | Rótulo no RC | Feature no checklist |
+> | No Force (checklist) | No Report Center (`template_slug`) | No Compplan |
 > |---|---|---|
-> | `tap-to-map` | Tap to Map | Tap to Map / Tap to Go |
-> | `carrossel` (`slider`) | Tap to Carousel | Tap To Carousel / Tap To Slide |
-> | `scratch` | Tap to Reveal | Tap To Scratch |
-> | `survey` | Tap to Choose | Survey? (confirmar — pode ser outro produto) |
-> | `play` | Tap to Game | (sem feature no checklist hoje) |
-> | `freeform`, `adserver` | Free Form / Creative Ad Server | não é feature (peça padrão) |
-> | widget `add_to_calendar` | Adicionar ao calendário | Click to Calendar |
-> | widget `close_to` | Loja mais próxima | (avaliar) |
+> | Tap to Go, Tap to Map | `tap-to-map` | **Max Attention** |
+> | Tap To Carousel, Tap To Slide | `carrossel` / `slider` | **Max Attention** |
+> | Tap To Scratch | `scratch` (Tap to Reveal) | **Max Attention** |
+> | Tap To Chat, Tap To Hotspot, Tap to Max, Tap to Experience | — | **Max Attention** |
+> | — | `play` (Tap to Game) | **Max Attention** |
+> | — | `survey` (Tap to Choose) | **Max Attention** (a confirmar: não confundir com Survey/Brand Lift) |
+> | — | `freeform`, `adserver` | a confirmar se conta como Max Attention |
+> | Click to Calendar | widget `add_to_calendar` | Click to Calendar (feature própria) |
 >
-> Regra proposta: feature rich media **ativada** = está no checklist **e** existe peça vinculada com
-> aquele formato na aba Max Attention **com impressões > 0**.
+> Regra proposta: **Max Attention ativado** = checklist tem pelo menos um "Tap To" **e** existe peça
+> vinculada na aba Max Attention do RC **com impressões > 0**. Vários formatos Tap To na mesma
+> campanha contam como **uma** feature.
 >
 > Dependências: (1) o vínculo é manual no RC — se o admin não vincular, a feature fica "⚪ sem dado"
 > (não reprova); (2) o Compplan lê `report_ma_links` direto no BQ e, para impressões, chama o RC
@@ -194,8 +197,11 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
   (rich media), ou survey/P-DOOH/RMND nas tabelas do RC, ou line/criativo com a feature no nome.
 
 ### Setup
-- Tiers ampliados com as features que hoje estão fora: `Tap To Slide`, `Tap To Hotspot`, `CTV`,
-  `Video Survey` (e outras que você quiser) — **você define o tier de cada uma**.
+- **Max Attention** substitui no catálogo os itens Tap to Go, Tap to Chat, Tap to Max, Tap to Carousel,
+  Tap to Scratch, Tap to Map e Tap to Experience (hoje 7 itens do Tier 1). Os "Tap To" do Force são aliases.
+  Efeito: uma campanha com 3 formatos Tap To, que hoje pode pagar 3 slots do Tier 1, passa a pagar **1**.
+- Tiers ampliados com as features que hoje estão fora: `CTV`, `Video Survey` (e outras que você
+  quiser) — **você define o tier de cada uma**.
 - Pré-marcação via checklist normalizado + confirmação de entrega pelo RC.
 
 ### Otimização
@@ -312,11 +318,11 @@ evidência · status de validação · preenchido por · quando · revisado por`
 
 ## 12. Decisões que preciso de você
 
-1. **Tiers das novas features** (`Tap To Slide`, `Tap To Hotspot`, `CTV`, `Video Survey`, outras?).
+1. **Tier da Max Attention** (Tier 1?) e **tiers das novas features** (`CTV`, `Video Survey`, outras?). Com Max Attention virando 1 item, o Tier 1 cai de 11 para 5 — rever se os 3 slots do Tier 1 continuam fazendo sentido.
 2. **Quais etapas saem** além do Kepler e quais entram além de Mapas HYPR.
 3. **% da etapa Mapas HYPR** — mantém o 0,20% do Kepler?
 4. **"Ativou"** — basta estar no checklist ou exige prova de entrega no RC?
-5. **Mapeamento Max Attention → feature** (`Tap to Choose` = Survey? `Tap to Game` entra como feature? widget "Adicionar ao calendário" = Click to Calendar?) e se o **vínculo de peças no RC** passa a ser obrigatório para toda campanha com rich media.
+5. **Max Attention:** Free Form / Creative Ad Server contam? `Tap to Choose` é Max Attention ou Survey? Widget "Adicionar ao calendário" ativa Click to Calendar? e se o **vínculo de peças no RC** passa a ser obrigatório para toda campanha com rich media.
 6. **Vigência** da nova versão: Q4/2026 ou Q1/2027?
 7. **Calendar:** Compplan pede o próprio escopo (recomendado) ou reaproveita o token do Force?
 8. **Docs no Drive:** shared drive de propostas acessível à service account, ou leitura com o token do CS?
