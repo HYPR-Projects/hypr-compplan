@@ -735,9 +735,9 @@ function OptimizationBox({ state, rc, source, metrics, isABS, isVideoOnly, locke
             </div>
           ))}
         </div>
-      ) : (
+      ) : (!st && (
         <div className="q4-muted">Aguardando dados de performance — calcula automaticamente quando a campanha entregar.</div>
-      )}
+      ))}
     </div>
   );
 }
@@ -763,7 +763,8 @@ function ItemRowQ4({
   const src = sourceOf(item, catKey);
   const adminOv = item.admin_override;
   const hasInfo = !!(item.card?.what || item.card?.obs || item.help || item.tier_catalog);
-  const metricInfo = item.source === 'metrics' ? formatMetricInfo(item, metrics, isABS) : null;
+  // Sem entrega ainda, o aviso do topo da Otimização já explica; não repete em cada item.
+  const metricInfo = item.source === 'metrics' && metrics ? formatMetricInfo(item, metrics, isABS) : null;
   // Setup por tier: cada slot (1ª, 2ª, 3ª implementação) mostra a feature que ocupa aquela posição.
   const slotMatch = /^setup_tier\d_(\d)$/.exec(item.id);
   const slotFeature = slotMatch ? (item.detected_features || [])[Number(slotMatch[1]) - 1] || null : null;
