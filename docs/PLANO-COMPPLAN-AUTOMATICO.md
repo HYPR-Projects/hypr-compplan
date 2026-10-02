@@ -91,8 +91,9 @@ Reduzir ao mínimo o preenchimento manual do CS e, portanto, o erro humano:
 > mesmo template na Platform (`carrossel`), exigem **duas peças de carrossel vinculadas**. Free Form e
 > Creative Ad Server são desconsiderados. A prova é peça daquele formato na aba Max Attention com impressões > 0.
 >
-> Dependências: (1) o vínculo é manual no RC — se o admin não vincular, a feature fica "⚪ sem dado"
-> (não reprova); (2) o Compplan lê `report_ma_links` direto no BQ e, para impressões, chama o RC
+> Dependências: (1) **vincular as peças no Report Hub é responsabilidade do CS** ✔ — sem peça
+> vinculada, o formato **não conta** no Compplan (a tela avisa "vincule a peça no Report Hub para
+> contar esta feature"); (2) o Compplan lê `report_ma_links` direto no BQ e, para impressões, chama o RC
 > (ou a Platform com a mesma service key).
 >
 > **Features fora da Max Attention** (Weather, Topics, Footfall, TV Sync, Downloaded Apps, Purchase
@@ -233,6 +234,14 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
 > `commplan_features_catalog` (seeds com tiers divergentes) será substituída por esta lista.
 - Pré-marcação via checklist normalizado + confirmação de entrega pelo RC.
 
+**Mídia no Setup:**
+
+| Item | % | Mudança |
+|---|---|---|
+| O2O / OOH | 0,45% | mantido |
+| RMN Digital | 0,15% | mantido |
+| RMN Físico | 0,55% | **Vira GroundFlow** ✔ (detecção automática: produto `Groundflow` no checklist do Force / tática `_GROUNDFLOW_` nas lines do RC). % mantido (a confirmar). |
+
 ### Otimização
 - 100% automática a partir do Report Center (pacing, over, CTR, eCPM, VTR, tech cost).
 - O card mostra o valor de cada métrica, o limite e se passou.
@@ -242,9 +251,13 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
 |---|---|
 | Loom | Auto: existe `loom_url` no RC para o short token. |
 | Relatório | Auto: existe `share_id` para o token (link montado direto). |
-| Pós-venda — Reunião | Só pode ser marcada **vinculando um evento do Google Calendar** (ver §6). |
-| Pós-venda — Doc/One page | Link do Drive lido automaticamente (verifica se é do cliente/campanha). |
-| Renovação | A definir: dá para detectar renovação via novo checklist do mesmo cliente na carteira do CS. |
+| Pós-venda — Reunião (0,30%) | Mantida ✔. Só pode ser marcada **vinculando um evento do Google Calendar** (ver §6). |
+| Pós-venda — Doc PDF (**0,20%**, antes 0,30%) | ✔ Link do Drive lido automaticamente (verifica se é do cliente/campanha). |
+| **Pós-venda — Slides / One page** (0,10%) | ✔ Novo (substitui o "One Page"). Link do Drive lido automaticamente. |
+| Renovação sem Value Proposition (0,25%) | Mantida (a confirmar). Dá para detectar via novo checklist do mesmo cliente na carteira do CS. |
+| ~~Renovação com Value Proposition (0,50%)~~ | **Sai** ✔ |
+
+> Pós-venda segue **não cumulativo** (paga o maior entre Reunião, Doc PDF e Slides/One page)? — a confirmar.
 
 ---
 
@@ -376,9 +389,15 @@ evidência · status de validação · preenchido por · quando · revisado por`
 6. Vigência: Q4/2026.
 7. Calendar: consulta só no vínculo, sem guardar token (§6).
 8. Documento da pré-campanha: dropdown com os decks do cliente na pasta Audience Discovery, via índice da Library (§2.3, §7).
+9. Vínculo de peças Max Attention no Report Hub é responsabilidade do CS; sem vínculo, o formato não conta.
+10. Setup: RMN Físico vira GroundFlow.
+11. Account Management: Reunião mantida (0,30%); Doc PDF 0,30% → 0,20%; novo "Slides / One page" 0,10%; Renovação com Value Proposition sai.
 
 **Em aberto**
-- Vínculo de peças Max Attention no RC passa a ser obrigatório quando a campanha entra no ar?
+- GroundFlow mantém os 0,55% do RMN Físico?
+- Pré-campanha "Definição de features — RMN Físico" (0,25%) também vira GroundFlow ou continua?
+- Pós-venda continua não cumulativo (paga só o maior)?
+- Renovação sem VP fica como "Renovação" (0,25%)?
 - Outras etapas que saem/entram (além da troca do Kepler).
 
 ---
@@ -386,7 +405,7 @@ evidência · status de validação · preenchido por · quando · revisado por`
 ## 13. Riscos
 
 - **Divergência de métrica** RC × Compplan muda bônus → resolver com modo sombra antes de valer.
-- **Vínculo de peças Max Attention é manual no RC** → se não for feito, a feature rich media fica sem prova; tornar parte do checklist de go-live da campanha.
+- **Vínculo de peças Max Attention é manual no Report Hub** → responsabilidade do CS; sem vínculo o formato não conta. Mitigação: aviso na tela da campanha e lembrete antes do fechamento do quarter.
 - **Nomenclatura de lines** inconsistente → feature "ativada" não detectada → fallback para checklist + revisão.
 - **Permissão no Drive** → documento ilegível vira ⚪ Sem dado (não reprova o CS automaticamente).
 - **Command `GET /checklists?short_token=` ignora o filtro** → sync deve ler do BQ, não da API.
