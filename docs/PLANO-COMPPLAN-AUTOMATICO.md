@@ -104,13 +104,20 @@ Reduzir ao mínimo o preenchimento manual do CS e, portanto, o erro humano:
 > A "Métricas por audiência" (Visão Geral) usa só o segmento do `line_name` depois da tática; ali a
 > feature só aparece se o tráfego a colocar no nome da line.
 
-### 2.3 HYPR Library
-- `backend/drive_client.py`: extrai texto de Google Slides (export), `.pptx` (python-pptx) e por slide.
-- `backend/tagging.py`: `TAXONOMY` (tag → regex) + normalização sem acento + `tag_slide`/`tag_deck`.
-- Não há endpoint que receba um link arbitrário → **portar para o Compplan** (Node, `googleapis`)
-  ou criar `POST /analyze` na Library. Recomendação: **portar** (código pequeno, evita acoplamento e deploy de outro serviço).
-- Lacunas a cobrir no port: Google **Docs**, **PDF** (o caminho atual da Library provavelmente
-  retorna vazio), parser de link → `fileId`, detecção de `mimeType`.
+### 2.3 HYPR Library (pasta Audience Discovery)
+- A Library já tem acesso à pasta **Audience Discovery** no Drive (service account `biblioteca-hypr@site-hypr`,
+  escopo `drive.readonly`) e **já indexa tudo no BigQuery** (resync diário às 6h):
+  - `hyprops_app.library_decks_metadata` — `deck_id`, `client` (= nome da pasta do cliente), nome,
+    `mime_type`, `created_time`, `modified_time`;
+  - `hyprops_app.library_decks_content` — texto do deck;
+  - `hyprops_app.library_decks_slide_tags` — tags por slide (`solucao`, `feature`, `audiencia`) via `tagging.py`.
+- **Caminho escolhido:** o Compplan **lê direto essas tabelas** (mesmo projeto BQ) para montar o dropdown
+  e para saber quais features o deck oferece — sem chamar a API da Library e sem acesso novo ao Drive.
+- Ajustes na Library: (1) incluir no `TAXONOMY` todas as features do Compplan (formatos Max Attention,
+  Weather, Topics, Footfall, Video Survey, Purchase Context, HYPR Signals, GeoIQ, Groundflow…);
+  (2) expor um "sincronizar este cliente agora" para deck criado depois do resync das 6h.
+- Fallback (deck fora da pasta ou ainda não indexado): ler o arquivo na hora com o código portado de
+  `drive_client.py` + `tagging.py` (precisa cobrir Google Docs e PDF, que a Library hoje não lê bem).
 
 ---
 
@@ -173,14 +180,14 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
 - Pré-visualização: "se eu mudar isso, quanto muda o bônus do time no último quarter?".
 - Tudo vai para `commplan_audit_log`.
 
-### 4.3 Exemplo de card (Pré-campanha → Mapas HYPR)
-> **Enriquecimento — Mapas HYPR (Explorer / GeoIQ)** · 0,20%
-> **O que configura:** proposta com mapa gerado no Explorer ou GeoIQ **específico da campanha**
+### 4.3 Exemplo de card (Pré-campanha → mapas GeoIQ e Groundflow)
+> **Enriquecimento — Uso de mapas do GeoIQ e Groundflow** · 0,20% (a confirmar)
+> **O que configura:** proposta com mapa gerado no GeoIQ ou no Groundflow **específico da campanha**
 > (marca, praças, audiência ou dados de venda do cliente).
 > **Obs.:** não vale mapa genérico ou reaproveitado de outra proposta só para preencher slide. O
 > mapa precisa estar contextualizado (legenda/insight ligado ao objetivo da campanha).
 > **Evidência:** link do documento da pré-campanha (lido automaticamente).
-> **Validação:** documento cita Explorer/GeoIQ + mesmo mapa/link não usado em outro cliente no quarter.
+> **Validação:** deck do Audience Discovery cita GeoIQ/Groundflow + mesmo mapa não usado em outro cliente no quarter.
 
 ---
 
@@ -189,8 +196,8 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
 ### Pré-campanha
 | Etapa | Mudança |
 |---|---|
-| Enriquecimento — Mapa no Kepler | **Sai.** |
-| Enriquecimento — Mapas HYPR (Explorer / GeoIQ) | **Entra** (card acima). |
+| Enriquecimento — Uso de dados de venda RMNF / Mapa no Kepler | **Vira** "Enriquecimento — Uso de mapas do GeoIQ e Groundflow" (card acima). ✔ |
+| Link da evidência da Pré-campanha | **Vira dropdown com busca**: digita o cliente → lista só os decks daquele cliente na pasta Audience Discovery (índice da Library). Colar link fica como exceção. |
 | Definição de features 1/2/3 | Passa a ser **automática**: conta `ofertadas no doc ∩ ativadas`. |
 | Definição de audiências, RMN Físico, Bench/estudo, Plano sazonal | Mantidas, com card + validação pelo doc. |
 
@@ -198,8 +205,11 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
 - Ofereceu no documento de pré-campanha **e** ativou → ganha **Pré-campanha** (feature N) **e** **Setup** (tier).
 - **Não** ofereceu no documento, mas a campanha fechou com a feature e ele ativou → ganha **só Setup**.
 - Ofereceu e não ativou → não ganha nada.
-- "Ativou" = está no checklist **e** há prova de entrega: peça com o formato na aba **Max Attention** do RC
-  (rich media), ou survey/P-DOOH/RMND nas tabelas do RC, ou line/criativo com a feature no nome.
+- "Ativou":
+  - **Max Attention:** formato no checklist **e** peça vinculada na aba Max Attention do RC com impressões.
+  - **Demais features:** **basta estar no checklist** ✔. Quando a feature entrar na taxonomia da line
+    (e portanto aparecer como audiência no report), o Compplan usa isso como confirmação extra
+    (🟡 declarado → ✅ confirmado), sem bloquear o pagamento.
 
 ### Setup
 - **Max Attention** (Tier 1) agrupa no catálogo Tap to Go, Tap to Chat, Tap to Max, Tap to Carousel,
@@ -239,29 +249,37 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
 
 ## 6. Pós-venda × Google Calendar
 
-1. **Login no Compplan** pede o escopo `calendar.readonly` (incremental, mesmo OAuth client do Force
-   para o usuário consentir uma vez só).
-2. Na etapa "Reunião pós-venda", o Compplan lista eventos do CS na janela
-   `[fim da campanha − 7 dias, fim + 45 dias]`, priorizando os que têm convidados com domínio do cliente
-   (mesma lógica de `reuniao-agenda.ts` do Force).
-3. O CS **escolhe qual evento** é o pós-venda daquela campanha → gravamos `event_id`, data,
-   título, convidados.
-4. Validação automática: evento aconteceu (não cancelado), tem convidado externo, data na janela.
-   Sem evento vinculado, a etapa não pode ser marcada.
+**Caminho recomendado: consultar a agenda só no momento de vincular, sem guardar token.**
 
-**Segurança:** o Force guarda refresh token em texto puro em `force_google_tokens`. Recomendo o
-Compplan **não reutilizar** essa tabela; pedir o escopo próprio e guardar o token criptografado
-(KMS/Secret Manager) — e levar a mesma correção para o Force.
+1. Na etapa "Reunião pós-venda", o CS clica em **"Vincular reunião"**. O navegador pede a permissão
+   `calendar.readonly` ao Google (autorização incremental — a primeira vez aparece o consentimento,
+   depois é um clique). Todo mundo já loga com a conta Google @hypr.mobi.
+2. O Compplan lista os eventos do CS na janela `[fim da campanha − 7 dias, fim + 45 dias]`, com os que
+   têm convidados do domínio do cliente no topo (mesma lógica de `reuniao-agenda.ts` do Force).
+3. O CS **escolhe qual evento** é o pós-venda daquela campanha → gravamos só `event_id`, calendário,
+   data, título e convidados (sem o token).
+4. Validação no ato: evento não cancelado, com convidado externo, data na janela. Sem evento vinculado,
+   a etapa não pode ser marcada.
+
+Por que esse caminho:
+- **Não reaproveitar o token do Force:** `force_google_tokens` guarda refresh token em texto puro; ler
+  essa tabela daria ao Compplan acesso à agenda de todo mundo, a qualquer hora. (Vale corrigir no Force.)
+- **Não guardar refresh token no Compplan:** só precisamos da agenda no instante do vínculo; o token de
+  acesso dura 1h e morre sozinho. Menos risco, nada para criptografar ou rotacionar.
+- Custo: o CS precisa estar na tela para vincular (não há vínculo automático em segundo plano) — que é
+  justamente o comportamento desejado (ele confirma qual reunião é o pós-venda).
 
 ---
 
 ## 7. Leitura automática do documento de pré-campanha
 
 **Sim, dá para fazer.** Fluxo:
-1. CS cola o link do Drive → backend extrai `fileId`, descobre `mimeType`.
-2. Extrai texto (Docs/Slides via export, `.pptx`, PDF via download + parser).
-3. Procura cada feature do catálogo pelos `doc_keywords`/aliases (normalizado, sem acento) →
-   lista de **features ofertadas** com o trecho e o número do slide como prova.
+1. CS abre o **dropdown** "Documento da pré-campanha", que já vem filtrado pelo cliente da campanha
+   (cliente do checklist × pasta do cliente no Audience Discovery, com busca por nome) e escolhe o deck.
+2. O Compplan lê do índice da Library as **tags de feature por slide** (`library_decks_slide_tags`) —
+   texto já extraído, nada a baixar.
+3. Mapeia as tags para as features do catálogo (aliases) → lista de **features ofertadas**, com o
+   número do slide como prova (link direto para o slide).
 4. (Opcional, fase 2) LLM para casos ambíguos ("vamos usar clima para ativar…" → Weather).
 5. Cruza com as features ativadas (§5) e calcula Pré-campanha automaticamente.
 
@@ -271,8 +289,12 @@ Compplan **não reutilizar** essa tabela; pedir o escopo próprio e guardar o to
 - Documento menciona o cliente/marca da campanha.
 - Mesmo documento usado em mais de uma campanha → sinaliza.
 
-**Pré-requisito:** a service account do Compplan precisa ter leitura nos documentos (pasta
-compartilhada / shared drive de propostas). Alternativa: ler com o token Google do próprio CS.
+**Pré-requisito:** a service account do Compplan precisa de leitura nas tabelas `library_decks_*`
+(mesmo projeto `site-hypr`). Para o fallback (link colado fora da pasta), leitura do arquivo com a
+service account — se ela não tiver acesso, o item fica ⚪ "sem dado" para o admin revisar.
+
+**Recomendação:** exigir que o deck esteja no Audience Discovery (é onde a Library já procura). Isso
+padroniza onde as propostas ficam e elimina o problema de permissão.
 
 ---
 
@@ -322,28 +344,42 @@ evidência · status de validação · preenchido por · quando · revisado por`
 
 ## 11. Fases
 
-| Fase | Entrega | Vai para produção? |
+> **Vigência decidida: Q4/2026.** O Q4 começou em 01/10, então a nova versão vale para campanhas com
+> início a partir de 01/10/2026, mesmo que o código entre no ar depois do fechamento do Q3. O
+> fechamento do Q4 (jan/2027) já roda inteiro na versão nova. Consequências:
+> - nada de "um quarter em modo sombra": o teste de impacto é **recalcular o Q3 com as regras novas**
+>   (sem pagar nada) e comparar com o que foi pago;
+> - o que o CS já marcou em campanhas de Q4 na tela atual é migrado para os itens novos (ex.: Kepler →
+>   GeoIQ/Groundflow) e aparece como "🟡 declarado" para revalidação.
+
+| Fase | Entrega | Quando |
 |---|---|---|
-| **0 — Validação (agora, sem código em prod)** | (a) Confirmar o mapeamento formato Max Attention → feature e quanto das campanhas do Q3 tem peças vinculadas em `report_ma_links`; query nos `line_name`/criativos para as features fora da Max Attention; (b) listar grafias de `cl_features` no Command × catálogo; (c) suas decisões da §12; (d) congelar regras do Q3. | Não |
-| **1 — Fundação** | Catálogo em BQ + versão nova + editor de etapas + cards + normalização de features (aliases). | Depois do fechamento do Q3 |
-| **2 — Integrações de dados** | `integrations/` + `commplan_campaign_facts` + sync horário (Force, carteira, RC). Métricas do RC em **modo sombra** ao lado das atuais. | Sim, em modo sombra |
-| **3 — Account Management automático** | Loom e relatório do RC; pós-venda via Calendar. | Sim |
-| **4 — Documento de pré-campanha** | Leitura de Drive + detecção de features + regra ofertou × ativou. | Sim |
-| **5 — Validação e auditoria** | Status por item, fila de divergências, painel de qualidade, tabela de preenchimentos. | Sim |
-| **6 — Nova versão valendo** | Comparativo sombra × atual de um quarter inteiro → ativa a versão nova no quarter seguinte. | Sim |
+| **0 — Preparação (agora, sem deploy)** | Fechar decisões da §12; queries de validação (cobertura de `report_ma_links` no Q3, grafias de `cl_features`, decks do Audience Discovery por cliente); congelar regras do Q3. | Já |
+| **1 — Regras Q4** | Catálogo em BQ + versão `2026-Q4` (vigência 01/10) + tiers novos + Max Attention por formato + normalização de features + item GeoIQ/Groundflow + cards. Recalcular Q3 com regras novas para medir impacto. | 1º deploy após fechar o Q3 |
+| **2 — Dados automáticos** | `integrations/` + `commplan_campaign_facts` + sync horário (Force, carteira, RC, Max Attention). Métricas do RC lado a lado com as atuais até validar. | Logo depois |
+| **3 — Pré-campanha e Account** | Dropdown de decks + features ofertadas (Library) · Loom e relatório do RC · vínculo de reunião via Calendar. | Meio do Q4 |
+| **4 — Validação e auditoria** | Status por item, fila de divergências, painel de qualidade, tabela de preenchimentos, editor de etapas para admin. | Antes do fechamento do Q4 |
 
 ---
 
-## 12. Decisões que preciso de você
+## 12. Decisões
 
-1. ✔ Max Attention = Tier 1, cada formato conta 1 (Tap to Go + Tap to Choose = 2); Tier 1 segue com até 3 slots; Video Survey = Tier 3; CTV não é feature. Attention Ad e Seat saem do Tier 2. Tap to Map não existe mais (é Tap to Go). Cada formato diferente no checklist = 1 feature (Tap to Go + Tap to Carousel = 2; 3 diferentes = 3). Tap To Carousel + Tap To Slide = 2, com duas peças de carrossel vinculadas como prova. Free Form e Creative Ad Server desconsiderados.
-2. **Quais etapas saem** além do Kepler e quais entram além de Mapas HYPR.
-3. **% da etapa Mapas HYPR** — mantém o 0,20% do Kepler?
-4. **"Ativou"** — basta estar no checklist ou exige prova de entrega no RC?
-5. **Max Attention:** (Tap to Choose = Max Attention ✔; Free Form e Creative Ad Server desconsiderados ✔; Carousel + Slide exigem 2 peças de carrossel ✔.) Widget "Adicionar ao calendário" ativa Click to Calendar? e se o **vínculo de peças no RC** passa a ser obrigatório para toda campanha com rich media.
-6. **Vigência** da nova versão: Q4/2026 ou Q1/2027?
-7. **Calendar:** Compplan pede o próprio escopo (recomendado) ou reaproveita o token do Force?
-8. **Docs no Drive:** shared drive de propostas acessível à service account, ou leitura com o token do CS?
+**Fechadas ✔**
+1. Max Attention = Tier 1; cada formato diferente no checklist = 1 feature (Tap to Go + Tap to Carousel = 2;
+   Carousel + Slide = 2, exigindo duas peças de carrossel vinculadas). Tap to Map não existe mais (é Tap to Go).
+   Tap to Choose = Max Attention. Free Form e Creative Ad Server desconsiderados. Tier 1 segue com até 3 slots.
+2. Video Survey = Tier 3. CTV não é feature. Attention Ad e Seat saem do Tier 2.
+3. "Enriquecimento — Uso de dados de venda RMNF / Mapa no Kepler" vira "Enriquecimento — Uso de mapas do GeoIQ e Groundflow".
+4. "Ativou" (fora Max Attention) = basta estar no checklist; taxonomia da line vira confirmação extra.
+5. Widget "Adicionar ao calendário" da Max Attention confirma Click to Calendar.
+6. Vigência: Q4/2026.
+7. Calendar: consulta só no vínculo, sem guardar token (§6).
+8. Documento da pré-campanha: dropdown com os decks do cliente na pasta Audience Discovery, via índice da Library (§2.3, §7).
+
+**Em aberto**
+- % do item GeoIQ/Groundflow — mantém 0,20% do Kepler?
+- Vínculo de peças Max Attention no RC passa a ser obrigatório quando a campanha entra no ar?
+- Outras etapas que saem/entram (além da troca do Kepler).
 
 ---
 
