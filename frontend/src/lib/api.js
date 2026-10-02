@@ -264,6 +264,25 @@ export const endpoints = {
     const filename = `audit_${quarter}.${ext}`;
     return api.download(`/commplan/admin/export/audit/${quarter}?format=${format}`, filename);
   },
+  // ── Versão 2026-Q4: integrações da tela da campanha ──
+  meDecks(token, q, opts = {}) {
+    const p = new URLSearchParams();
+    if (q) p.set('q', q);
+    if (opts.as) p.set('as', opts.as);
+    const qs = p.toString();
+    return api.get(`/commplan/me/campaign/${token}/decks${qs ? `?${qs}` : ''}`);
+  },
+  meLinkDeck(token, deckId, opts = {}) { return api.post(`/commplan/me/campaign/${token}/pre-deck${asQuery(opts)}`, { deck_id: deckId }); },
+  meUnlinkDeck(token, opts = {}) { return api.delete(`/commplan/me/campaign/${token}/pre-deck${asQuery(opts)}`); },
+  meLinkPvMeeting(token, body, opts = {}) { return api.post(`/commplan/me/campaign/${token}/pv-meeting${asQuery(opts)}`, body); },
+  meUnlinkPvMeeting(token, opts = {}) { return api.delete(`/commplan/me/campaign/${token}/pv-meeting${asQuery(opts)}`); },
+
+  // ── Admin: Etapas & regras (catálogo 2026-Q4) e Preenchimentos ──
+  adminCatalog() { return api.get('/commplan/admin/catalog'); },
+  adminCatalogUpdate(body) { return api.put('/commplan/admin/catalog/item', body); },
+  adminCatalogCreate(body) { return api.post('/commplan/admin/catalog/item', body); },
+  adminFillMatrix(q) { return api.get(`/commplan/admin/fill-matrix/${q}`); },
+
   adminExportCampaign(token, format = 'xlsx') {
     const ext = format === 'csv' ? 'zip' : 'xlsx';
     const filename = `audit_campanha_${token}.${ext}`;

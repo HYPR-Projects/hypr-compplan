@@ -23,7 +23,7 @@ import { computeBonus, ASSIGNABLE_STAGES, stageSubtotal } from '../engine/comppl
 import { COMPPLAN_CATALOG } from '../engine/compplan-catalog.js';
 import { isOverException } from '../data/over-exceptions.js';
 import { findStudyByName, getStudyById } from '../data/studies.js';
-import { fetchMaLinksByToken, maLinksFor } from './ma-links.js';
+import { fetchFactsByToken, factsFor } from './external-facts.js';
 
 const VERSION_ID = '2026';
 const TAX_RATE = 0.1653;
@@ -317,9 +317,9 @@ async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
   }
 
   // 3. Batch: métricas (display + video) + peças Max Attention vinculadas no RC
-  const [metricsByToken, maLinksByToken] = await Promise.all([
+  const [metricsByToken, factsByToken] = await Promise.all([
     fetchMetricsByToken(campaigns),
-    fetchMaLinksByToken(tokens),
+    fetchFactsByToken(tokens),
   ]);
 
   // 4. Resolve studiesInfo em paralelo
@@ -348,7 +348,7 @@ async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
 
     const breakdown = computeBonus(c, mc, metrics, ao, {
       preAssignee, csOwner: csEmail, studiesInfo,
-      maLinks: maLinksFor(maLinksByToken, c.short_token),
+      facts: factsFor(factsByToken, c.short_token),
     });
 
     total += breakdown.total_brl;
@@ -403,9 +403,9 @@ export async function computeStageAssignedBonus({ csEmail, startDate, endDate })
     );
     if (rows.length === 0) return { total_brl: 0, items: [] };
 
-    const [metricsByToken, maLinksByToken] = await Promise.all([
+    const [metricsByToken, factsByToken] = await Promise.all([
       fetchMetricsByToken(rows),
-      fetchMaLinksByToken(rows.map(r => r.short_token)),
+      fetchFactsByToken(rows.map(r => r.short_token)),
     ]);
 
     let total = 0;
@@ -420,7 +420,7 @@ export async function computeStageAssignedBonus({ csEmail, startDate, endDate })
       const breakdown = computeBonus(c, mc, metricsByToken[c.short_token] || null, ao, {
         preAssignee: c.ov_pre_assignee || null,
         csOwner: csLower,
-        maLinks: maLinksFor(maLinksByToken, c.short_token),
+        facts: factsFor(factsByToken, c.short_token),
       });
 
       const stages = [];

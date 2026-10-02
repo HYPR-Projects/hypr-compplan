@@ -114,8 +114,9 @@ async function resolveStudiesInfo(campaign, studyAssigneeOverride = null, studyI
 }
 import { parseQuarter } from '../engine/quarter-resolver.js';
 import { computeBonus, isCampaignStillInGracePeriod, ASSIGNABLE_STAGES, resolveStageAssignees } from '../engine/compplan-engine.js';
-import { COMPPLAN_CATALOG, getFeatureTiers, VERSION_2026_Q4, MAX_ATTENTION_FORMATS_2026Q4 } from '../engine/compplan-catalog.js';
-import { fetchMaLinksByToken, maLinksFor } from '../lib/ma-links.js';
+import { COMPPLAN_CATALOG, getCatalog, getFeatureTiers, VERSION_2026_Q4, MAX_ATTENTION_FORMATS_2026Q4 } from '../engine/compplan-catalog.js';
+import { fetchFactsByToken, factsFor } from '../lib/external-facts.js';
+import { SERVER_OWNED_KEYS } from '../lib/manual-checks.js';
 
 export const router = Router();
 router.use(authRequired);
@@ -353,11 +354,15 @@ function resolveTargetCs(req) {
 // ─────────────────────────────────────────────────────────────────────
 function stageManualKeys(stages) {
   const keys = new Set();
-  for (const st of stages) {
-    const cat = COMPPLAN_CATALOG[st];
-    if (!cat) continue;
-    for (const item of cat.items) keys.add(item.id);
-    if (cat.shared_evidence?.key) keys.add(cat.shared_evidence.key);
+  // Versão 2026 + 2026-Q4 (com itens criados pelo admin): os IDs coincidem
+  // onde o item só mudou de nome, então a união cobre as duas.
+  for (const catalog of [COMPPLAN_CATALOG, getCatalog(VERSION_2026_Q4)]) {
+    for (const st of stages) {
+      const cat = catalog[st];
+      if (!cat) continue;
+      for (const item of cat.items) keys.add(item.id);
+      if (cat.shared_evidence?.key) keys.add(cat.shared_evidence.key);
+    }
   }
   // Toggle Com/Sem ABS muda o resultado da Otimização
   if (stages.includes('optimization')) keys.add('__is_abs');
@@ -486,7 +491,7 @@ router.get('/dashboard/:q', async (req, res) => {
 
     // Pra cada campanha, busca manual_checks + admin_overrides + métricas em batch
     const tokens = campaigns.map(c => c.short_token);
-    const maLinksPromise = fetchMaLinksByToken(tokens);
+    const factsPromise = fetchFactsByToken(tokens);
     let manualChecksByToken = {};
     let adminOverridesByToken = {};
     let preAssigneeByToken = {};
@@ -639,7 +644,7 @@ router.get('/dashboard/:q', async (req, res) => {
       }
     }));
 
-    const maLinksByToken = await maLinksPromise;
+    const factsByToken = await factsPromise;
     const items = campaigns.map(c => {
       const mc = manualChecksByToken[c.short_token] || {};
       const ao = adminOverridesByToken[c.short_token] || {};
@@ -648,7 +653,7 @@ router.get('/dashboard/:q', async (req, res) => {
       const studiesInfo = studiesInfoByToken[c.short_token] || [];
       const breakdown = computeBonus(c, mc, metrics, ao, {
         preAssignee, csOwner: csEmail, studiesInfo,
-        maLinks: maLinksFor(maLinksByToken, c.short_token),
+        facts: factsFor(factsByToken, c.short_token),
       });
       totalBonusBrl += breakdown.total_brl;
       return {
@@ -905,10 +910,10 @@ router.get('/campaign/:token', async (req, res) => {
     const isLegacy = !!campaign.is_legacy;
 
     // Pega manual_checks e métricas em paralelo
-    const [mcData, metrics, maLinksByToken] = await Promise.all([
+    const [mcData, metrics, factsByToken] = await Promise.all([
       fetchManualChecks(campaign.short_token, isLegacy),
       fetchPerformanceMetrics(campaign.short_token, campaign.client_name, campaign.total_value),
-      fetchMaLinksByToken([campaign.short_token]),
+      fetchFactsByToken([campaign.short_token]),
     ]);
     const { manualChecks, adminOverrides, adminOverridesBy, adminOverridesAt, preAssignee, preAssignedAt, studyAssignee, studyIdOverride } = mcData;
 
@@ -929,7 +934,7 @@ router.get('/campaign/:token', async (req, res) => {
       preAssignee,
       csOwner: csEmail,
       studiesInfo,
-      maLinks: maLinksFor(maLinksByToken, campaign.short_token),
+      facts: factsFor(factsByToken, campaign.short_token),
     });
 
     // Status reviewed
@@ -1155,6 +1160,16 @@ router.put('/campaign/:token', async (req, res) => {
         if (Object.keys(ev).length > 0 || manualChecksFromBody.__evidence) manualChecks.__evidence = ev;
       }
     }
+    // Deck da pré-campanha e reunião de pós-venda são gravados só pelas rotas
+    // de integração (routes/q4.js): aqui vale sempre o que está no banco.
+    if (prev.readError && SERVER_OWNED_KEYS.some(k => k in manualChecksFromBody)) {
+      return res.status(503).json({ error: 'Não foi possível ler os dados atuais da campanha. Tente de novo.' });
+    }
+    manualChecks = { ...manualChecks };
+    for (const k of SERVER_OWNED_KEYS) {
+      if (prev.manualChecks && k in prev.manualChecks) manualChecks[k] = prev.manualChecks[k];
+      else delete manualChecks[k];
+    }
     const manualChecksJson = JSON.stringify(manualChecks);
     const notes = body.notes || '';
 
@@ -1256,9 +1271,9 @@ router.put('/campaign/:token', async (req, res) => {
        WHERE c.short_token = @t LIMIT 1`,
       { t: token }
     );
-    const [metrics, maLinksByTokenPost] = await Promise.all([
+    const [metrics, factsByTokenPost] = await Promise.all([
       fetchPerformanceMetrics(token, updated?.client_name, updated?.total_value),
-      fetchMaLinksByToken([token]),
+      fetchFactsByToken([token]),
     ]);
     // Re-busca admin_overrides + pre_assignee (não mudam pelo PUT, mas garante consistência)
     const post = await fetchManualChecks(token, !!campaign.is_legacy);
@@ -1267,7 +1282,7 @@ router.put('/campaign/:token', async (req, res) => {
       preAssignee: post.preAssignee,
       csOwner: csEmail,
       studiesInfo: studiesInfoPost,
-      maLinks: maLinksFor(maLinksByTokenPost, token),
+      facts: factsFor(factsByTokenPost, token),
     });
 
     res.json({

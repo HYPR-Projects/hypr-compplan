@@ -33,7 +33,7 @@ import { computeBonus } from '../../engine/compplan-engine.js';
 import { COMPPLAN_CATALOG } from '../../engine/compplan-catalog.js';
 import { resolveStudiesInfo } from '../../lib/bonus-calc.js';
 import { isOverException } from '../../data/over-exceptions.js';
-import { fetchMaLinksByToken, maLinksFor } from '../../lib/ma-links.js';
+import { fetchFactsByToken, factsFor } from '../../lib/external-facts.js';
 
 export const router = Router();
 router.use(authRequired, adminRequired);
@@ -52,7 +52,7 @@ router.use(authRequired, adminRequired);
  *
  * NOTA: a query e o cálculo replicam a lógica de audit.js. Se mudar lá, mude aqui.
  */
-async function fetchAuditCampaigns({ quarter, tokenFilter, includeUnfinished = true }) {
+export async function fetchAuditCampaigns({ quarter, tokenFilter, includeUnfinished = true }) {
   let startDate, endDate, filterEnd, todayStr;
 
   if (quarter) {
@@ -81,7 +81,9 @@ async function fetchAuditCampaigns({ quarter, tokenFilter, includeUnfinished = t
          IFNULL(o.admin_overrides, la.admin_overrides) AS admin_overrides,
          IFNULL(o.pre_campaign_assignee_email, la.pre_campaign_assignee_email) AS pre_assignee,
          IFNULL(o.study_assignee_email, la.study_assignee_email)               AS study_assignee,
-         IFNULL(o.study_id_override, la.study_id_override)                     AS study_id_override
+         IFNULL(o.study_id_override, la.study_id_override)                     AS study_id_override,
+         IFNULL(o.updated_by, la.updated_by)                                   AS last_edit_by,
+         IFNULL(o.updated_at, la.updated_at)                                   AS last_edit_at
        FROM ${tableRef('commplan_checklists')} c
        LEFT JOIN ${tableRef('commplan_command_overrides')}  o  ON c.short_token = o.short_token
        LEFT JOIN ${tableRef('commplan_legacy_assignments')} la ON c.short_token = la.short_token
@@ -101,7 +103,9 @@ async function fetchAuditCampaigns({ quarter, tokenFilter, includeUnfinished = t
          IFNULL(o.admin_overrides, la.admin_overrides) AS admin_overrides,
          IFNULL(o.pre_campaign_assignee_email, la.pre_campaign_assignee_email) AS pre_assignee,
          IFNULL(o.study_assignee_email, la.study_assignee_email)               AS study_assignee,
-         IFNULL(o.study_id_override, la.study_id_override)                     AS study_id_override
+         IFNULL(o.study_id_override, la.study_id_override)                     AS study_id_override,
+         IFNULL(o.updated_by, la.updated_by)                                   AS last_edit_by,
+         IFNULL(o.updated_at, la.updated_at)                                   AS last_edit_at
        FROM ${tableRef('commplan_checklists')} c
        LEFT JOIN ${tableRef('commplan_command_overrides')}  o  ON c.short_token = o.short_token
        LEFT JOIN ${tableRef('commplan_legacy_assignments')} la ON c.short_token = la.short_token
@@ -114,7 +118,7 @@ async function fetchAuditCampaigns({ quarter, tokenFilter, includeUnfinished = t
   if (campaigns.length === 0) return [];
 
   const tokens = campaigns.map(c => c.short_token);
-  const maLinksPromise = fetchMaLinksByToken(tokens);
+  const factsPromise = fetchFactsByToken(tokens);
 
   // 2. Métricas (display + video)
   const metricsByToken = {};
@@ -199,7 +203,7 @@ async function fetchAuditCampaigns({ quarter, tokenFilter, includeUnfinished = t
   }));
 
   // 4. Enriquece com breakdown calculado
-  const maLinksByToken = await maLinksPromise;
+  const factsByToken = await factsPromise;
   const enriched = campaigns.map(c => {
     let mc = {};
     let ao = {};
@@ -213,7 +217,7 @@ async function fetchAuditCampaigns({ quarter, tokenFilter, includeUnfinished = t
       preAssignee: c.pre_assignee || null,
       csOwner: c.cs_email,
       studiesInfo,
-      maLinks: maLinksFor(maLinksByToken, c.short_token),
+      facts: factsFor(factsByToken, c.short_token),
     });
 
     return {

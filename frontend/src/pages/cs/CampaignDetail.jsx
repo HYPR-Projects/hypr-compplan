@@ -51,6 +51,27 @@ export default function CsCampaignDetail() {
     }
   }
 
+  /**
+   * Recarrega a campanha sem perder o que o CS marcou e ainda não salvou —
+   * só atualiza o que veio do servidor (deck da pré-campanha, reunião de
+   * pós-venda e o link do deck). Usado pelas integrações da tela 2026-Q4.
+   */
+  async function reloadKeepingEdits() {
+    const c = await endpoints.meCampaign(token, opts);
+    setCampaign(c);
+    const srv = c.manual_checks || {};
+    setManualChecks(prev => {
+      const next = { ...prev };
+      for (const k of ['__pre_deck', '__pv_meeting', 'am_pv_meeting']) {
+        if (k in srv) next[k] = srv[k]; else delete next[k];
+      }
+      const ev = { ...(prev.__evidence || {}) };
+      if (srv.__evidence?.pre_campaign) ev.pre_campaign = srv.__evidence.pre_campaign;
+      next.__evidence = ev;
+      return next;
+    });
+  }
+
   // Carrega lista do time (pra mostrar nome de pre_assignee + admin atribuir estudo)
   useEffect(() => {
     endpoints.adminTeam()
@@ -238,6 +259,8 @@ export default function CsCampaignDetail() {
         load={load}
         navigate={navigate}
         ownerEmail={ownerEmail}
+        reloadKeepingEdits={reloadKeepingEdits}
+        viewerEmail={viewerEmail}
       />
     );
   }

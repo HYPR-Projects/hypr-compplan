@@ -156,6 +156,7 @@ export function recomputeLocally(serverBreakdown, manualChecks, metrics, effecti
         value_brl: effectivelyEarned ? liquido * item.pct : 0,
       };
     });
+    applyLocalConstraints(newItems);
     const subtotalPct = newItems.filter(i => i.earned).reduce((s, i) => s + i.pct, 0);
     const subtotalBrl = newItems.filter(i => i.earned).reduce((s, i) => s + i.value_brl, 0);
     newByCategory[catKey] = { ...cat, items: newItems, subtotal_pct: subtotalPct, subtotal_brl: subtotalBrl };
@@ -168,6 +169,28 @@ export function recomputeLocally(serverBreakdown, manualChecks, metrics, effecti
     total_pct: totalPct,
     total_brl: liquido * totalPct,
   };
+}
+
+// Espelho do applyConstraints do backend: em grupos "não cumulativos"
+// (pós-venda, renovação) e "um ou outro" (otimização) só o maior % paga — o
+// forçado pelo admin tem prioridade. Sem isso a tela somava todos os marcados.
+function applyLocalConstraints(items) {
+  const groups = {};
+  for (const it of items) {
+    if (!it.earned || !it.constraint) continue;
+    const [type, name] = it.constraint.split(':');
+    if (type !== 'non_cumulative_group' && type !== 'oneof_group') continue;
+    (groups[`${type}:${name}`] ||= []).push(it);
+  }
+  for (const list of Object.values(groups)) {
+    if (list.length <= 1) continue;
+    const forced = list.filter(i => i.admin_override && i.admin_override.earned === true);
+    const pool = forced.length ? forced : list;
+    const keep = [...pool].sort((a, b) => b.pct - a.pct)[0];
+    for (const it of list) {
+      if (it !== keep) { it.earned = false; it.value_brl = 0; }
+    }
+  }
 }
 
 // Espelho local da função do backend pra Otimizações

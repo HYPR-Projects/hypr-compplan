@@ -15,6 +15,7 @@ import {
   ArrowLeft, CheckCircle2, AlertCircle, AlertTriangle, Save, Info, Eye, Link2,
   MessageSquare, Shield, Copy, BookOpen, X, Download, FileSpreadsheet, UserPlus,
   MoreHorizontal, ExternalLink, Sparkles, ChevronDown, ChevronUp, CircleDashed,
+  Search, CalendarCheck, FileText, Unlink,
 } from 'lucide-react';
 import AppShell from '../../components/layout/AppShell.jsx';
 import { Card } from '../../components/ui/Card.jsx';
@@ -22,6 +23,8 @@ import { Badge } from '../../components/ui/Badge.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { fmt } from '../../lib/format.js';
 import { endpoints } from '../../lib/api.js';
+import { requestCalendarToken, listCalendarEvents } from '../../lib/googleCalendar.js';
+import { Modal } from '../../components/ui/Modal.jsx';
 import {
   CATEGORY_ORDER, STAGE_EXEMPT_ITEMS, RoField, RoTags,
   isEffectivelyEarned, formatMetricInfo, ReplicateModal,
@@ -50,8 +53,11 @@ const MA_PROOF = {
 function sourceOf(item, catKey) {
   if (item.source === 'metrics') return { label: 'Métricas da campanha', tone: 'metric' };
   if (item.source === 'auto') return { label: 'Automático', tone: 'auto' };
+  if (item.source === 'calendar') return { label: 'Agenda Google', tone: 'auto' };
   if (item.source === 'semi_auto') {
     if (item.id.startsWith('setup_tier1')) return { label: 'Checklist + Report Hub', tone: 'auto' };
+    if (item.id === 'am_loom' || item.id === 'am_reports') return { label: 'Report Center', tone: 'auto' };
+    if (item.id.startsWith('pre_feat_')) return { label: 'Deck + checklist', tone: 'auto' };
     return { label: 'Checklist (Force)', tone: 'auto' };
   }
   if (catKey === 'pre_campaign') return { label: 'Você marca · deck', tone: 'manual' };
@@ -59,8 +65,9 @@ function sourceOf(item, catKey) {
 }
 
 /** Itens que exigem ação do CS (painel "Precisa da sua ação"). */
-function collectActions(breakdown, manualChecks) {
+function collectActions(breakdown, manualChecks, campaign) {
   const actions = [];
+  const today = new Date().toISOString().slice(0, 10);
   for (const m of breakdown.max_attention || []) {
     if (m.proof === 'not_linked') {
       actions.push({ stage: 'setup', tone: 'warn', text: `Vincule a peça ${m.name} na aba Max Attention do Report Hub para contar como feature.`, link: true });
@@ -72,11 +79,21 @@ function collectActions(breakdown, manualChecks) {
   for (const [catKey, cat] of Object.entries(breakdown.by_category || {})) {
     if (cat.assigned_to_other) continue;
     const anyChecked = cat.items.some(i => isEffectivelyEarned(i, manualChecks));
-    if (cat.shared_evidence && anyChecked && !(evidence[cat.shared_evidence.key] || '').trim()) {
-      actions.push({ stage: catKey, tone: 'warn', text: `${cat.shared_evidence.label}: cole o link do deck que comprova os itens marcados.` });
+    if (catKey === 'pre_campaign') {
+      if (anyChecked && !manualChecks.__pre_deck && !(evidence.pre_campaign || '').trim()) {
+        actions.push({ stage: catKey, tone: 'warn', text: 'Escolha o deck da pré-campanha (pasta Audience Discovery) para comprovar os itens marcados.' });
+      }
+      if (breakdown.pre_deck?.after_start) {
+        actions.push({ stage: catKey, tone: 'warn', text: 'O deck escolhido foi criado depois do início da campanha — as features da pré-campanha não contam.' });
+      }
+    } else if (cat.shared_evidence && anyChecked && !(evidence[cat.shared_evidence.key] || '').trim()) {
+      actions.push({ stage: catKey, tone: 'warn', text: `${cat.shared_evidence.label}: cole o link que comprova os itens marcados.` });
+    }
+    if (catKey === 'account_mgmt' && !manualChecks.__pv_meeting && campaign?.end_date && campaign.end_date <= today) {
+      actions.push({ stage: catKey, tone: 'info', text: 'Fez reunião de pós-venda? Vincule o evento da sua agenda para contar.' });
     }
     for (const it of cat.items) {
-      if (it.needs_evidence && isEffectivelyEarned(it, manualChecks) && !cat.invalidated && !(evidence[it.id] || '').trim()) {
+      if (it.needs_evidence && !it.auto_evidence && it.earned && !cat.invalidated && !(evidence[it.id] || '').trim()) {
         actions.push({ stage: catKey, tone: 'warn', text: `${it.label}: falta o link da evidência.` });
       }
     }
@@ -91,6 +108,7 @@ export default function CampaignDetailQ4(props) {
     saving, savedAt, savedAs, error, isAdmin, onlyAssignedStages, viewerAssignedStages,
     stageAssignees, canAssignStages, nameForEmail, teamList, studiesCatalog, effectiveIsAbs,
     impersonateEmail, backUrl, token, opts, load, navigate, ownerEmail,
+    reloadKeepingEdits, viewerEmail,
   } = props;
 
   const [showReplicateModal, setShowReplicateModal] = useState(false);
@@ -102,7 +120,7 @@ export default function CampaignDetailQ4(props) {
   ).filter(st => breakdown.by_category[st]);
 
   const [activeStage, setActiveStage] = useState(stages[0] || 'pre_campaign');
-  const actions = useMemo(() => collectActions(breakdown, manualChecks), [breakdown, manualChecks]);
+  const actions = useMemo(() => collectActions(breakdown, manualChecks, campaign), [breakdown, manualChecks, campaign]);
 
   const counts = useMemo(() => {
     let earned = 0, total = 0;
@@ -296,6 +314,10 @@ export default function CampaignDetailQ4(props) {
             ownerName: campaign.cs_name || campaign.cs_email,
           }}
           onAssignStage={handleAssignStage}
+          token={token}
+          opts={opts}
+          reload={reloadKeepingEdits || load}
+          viewerEmail={viewerEmail}
         />
       )}
 
@@ -440,7 +462,7 @@ export default function CampaignDetailQ4(props) {
 function StagePanel({
   catKey, cat, breakdown, campaign, manualChecks, setManualChecks, onCheck, onEvidenceChange,
   isABS, isAdmin, onAdminOverride, onSetupForce, teamList, studiesCatalog, onAssignStudy,
-  stageInfo, onAssignStage,
+  stageInfo, onAssignStage, token, opts, reload, viewerEmail,
 }) {
   const locked = !!stageInfo.locked;
   const assignedElsewhere = !!stageInfo.assignedToOther;
@@ -531,7 +553,35 @@ function StagePanel({
         />
       )}
 
-      {sharedEv && (
+      {catKey === 'pre_campaign' && (
+        <DeckPicker
+          campaign={campaign}
+          breakdown={breakdown}
+          manualChecks={manualChecks}
+          locked={locked}
+          token={token}
+          opts={opts}
+          reload={reload}
+          sharedLink={sharedLink}
+          onEvidenceChange={onEvidenceChange}
+          sharedKey={sharedEv?.key}
+        />
+      )}
+
+      {catKey === 'account_mgmt' && (
+        <PvMeetingBox
+          campaign={campaign}
+          meeting={manualChecks.__pv_meeting || breakdown.pv_meeting}
+          item={cat.items.find(i => i.id === 'am_pv_meeting')}
+          locked={locked}
+          token={token}
+          opts={opts}
+          reload={reload}
+          viewerEmail={viewerEmail}
+        />
+      )}
+
+      {sharedEv && catKey !== 'pre_campaign' && (
         <div className={`q4-evidence ${!sharedLink.trim() && cat.items.some(i => isEffectivelyEarned(i, manualChecks)) ? 'q4-evidence--warn' : ''}`}>
           <div className="q4-evidence__label"><Link2 size={13} /> {sharedEv.label}</div>
           <div className="q4-evidence__row">
@@ -679,7 +729,8 @@ function ItemRowQ4({
   const editable = (isManual || isSemiAuto) && !locked;
   const checked = isEffectivelyEarned(item, manualChecks);
   const evidenceLink = (manualChecks.__evidence || {})[item.id] || '';
-  const needsEvidence = item.needs_evidence && checked && !invalidated;
+  // Só pede evidência do que está pagando (no pós-venda só o maior paga)
+  const needsEvidence = item.needs_evidence && checked && (item.earned || item.assigned_to_other) && !invalidated;
   const missingEvidence = needsEvidence && !evidenceLink.trim();
   const src = sourceOf(item, catKey);
   const adminOv = item.admin_override;
@@ -689,10 +740,17 @@ function ItemRowQ4({
   const slotMatch = /^setup_tier\d_(\d)$/.exec(item.id);
   const slotFeature = slotMatch ? (item.detected_features || [])[Number(slotMatch[1]) - 1] || null : null;
 
+  const VALIDATION = {
+    confirmed: { label: 'Confirmado', tone: 'ok' },
+    declared:  { label: 'Declarado', tone: 'info' },
+    divergent: { label: 'Divergente', tone: 'bad' },
+    admin:     { label: 'Admin', tone: 'info' },
+  };
   let status = null;
   if (invalidated && item.was_earned) status = { label: 'Anulado', tone: 'bad' };
   else if (item.assigned_to_other) status = { label: 'Vai pro responsável', tone: 'info' };
   else if (missingEvidence) status = { label: 'Falta evidência', tone: 'warn' };
+  else if (checked && item.validation && VALIDATION[item.validation]) status = VALIDATION[item.validation];
   else if (item.earned) status = { label: 'Conquistado', tone: 'ok' };
 
   return (
@@ -744,6 +802,14 @@ function ItemRowQ4({
         )}
 
         {metricInfo && <div className="q4-muted q4-item__metric">{metricInfo}</div>}
+        {item.auto_evidence && (
+          <div className="q4-item__metric">
+            <a className="q4-inline-link" href={item.auto_evidence} target="_blank" rel="noreferrer">
+              Link no Report Center <ExternalLink size={11} />
+            </a>
+          </div>
+        )}
+        {item.validation_reason && !item.earned && <div className="q4-muted q4-item__metric">{item.validation_reason}</div>}
 
         {slotFeature && (
           <div className="q4-item__features">
@@ -828,6 +894,216 @@ function ItemRowQ4({
         <span className={`mono q4-item__pct ${invalidated && item.was_earned ? 'is-strike' : ''}`}>{(item.pct * 100).toFixed(2)}%</span>
         {item.earned && <span className="mono q4-item__brl">{fmt.brl(item.value_brl)}</span>}
       </div>
+    </div>
+  );
+}
+
+// ─── Pré-campanha: deck do Audience Discovery ────────────────────────
+
+function DeckPicker({ campaign, breakdown, manualChecks, locked, token, opts, reload, sharedLink, onEvidenceChange, sharedKey }) {
+  const deck = manualChecks.__pre_deck || null;
+  const info = breakdown.pre_deck || null;
+  const [open, setOpen] = useState(!deck);
+  const [q, setQ] = useState(campaign.client_name || '');
+  const [items, setItems] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [showLink, setShowLink] = useState(!!sharedLink && !deck);
+
+  async function search(e) {
+    e?.preventDefault();
+    setBusy(true); setErr(null);
+    try {
+      const d = await endpoints.meDecks(token, q, opts);
+      setItems(d.items || []);
+    } catch (ex) { setErr(ex.message); setItems([]); }
+    finally { setBusy(false); }
+  }
+
+  async function choose(deckId) {
+    setBusy(true); setErr(null);
+    try {
+      await endpoints.meLinkDeck(token, deckId, opts);
+      await reload();
+      setOpen(false);
+    } catch (ex) { setErr(ex.message); }
+    finally { setBusy(false); }
+  }
+
+  async function unlink() {
+    if (!window.confirm('Remover o deck desta campanha?')) return;
+    setBusy(true); setErr(null);
+    try { await endpoints.meUnlinkDeck(token, opts); await reload(); setOpen(true); }
+    catch (ex) { setErr(ex.message); }
+    finally { setBusy(false); }
+  }
+
+  const matched = new Set(info?.matched || []);
+
+  return (
+    <div className="q4-evidence q4-deck">
+      <div className="q4-evidence__label"><FileText size={13} /> Deck da pré-campanha</div>
+
+      {deck && (
+        <div className="q4-deck__selected">
+          <div className="q4-deck__title">
+            <a href={deck.url} target="_blank" rel="noreferrer">{deck.title} <ExternalLink size={11} /></a>
+            <span className="q4-muted">
+              {deck.client}{deck.created_time && <> · criado em {fmt.date(deck.created_time)}</>}
+            </span>
+          </div>
+          {info?.after_start && (
+            <div className="q4-note q4-note--bad"><AlertTriangle size={13} /> Criado depois do início da campanha — as features da pré-campanha não contam.</div>
+          )}
+          <div className="q4-deck__features">
+            <span className="q4-muted">Features no deck:</span>
+            {(deck.offered_features || []).length === 0 && <span className="q4-muted">nenhuma encontrada{deck.text_indexed ? '' : ' (texto ainda não indexado pela Library)'}</span>}
+            {(deck.offered_features || []).map(f => (
+              <span key={f} className={`q4-chip ${matched.has(f) ? 'q4-chip--ok' : ''}`} title={matched.has(f) ? 'Ofertada e ativada' : 'Ofertada'}>{f}</span>
+            ))}
+          </div>
+          {!locked && (
+            <div className="q4-deck__actions">
+              <button type="button" className="q4-chipbtn" onClick={() => setOpen(o => !o)}>Trocar deck</button>
+              <button type="button" className="q4-chipbtn" onClick={unlink} disabled={busy}><Unlink size={11} /> Remover</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {open && !locked && (
+        <div className="q4-deck__search">
+          <form className="q4-evidence__row" onSubmit={search}>
+            <Search size={13} />
+            <input type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Nome do cliente ou do deck" />
+            <button type="submit" className="q4-chipbtn" disabled={busy}>{busy ? 'Buscando…' : 'Buscar'}</button>
+          </form>
+          {items && items.length === 0 && <div className="q4-muted">Nenhum deck encontrado na pasta Audience Discovery.</div>}
+          {items && items.length > 0 && (
+            <ul className="q4-deck__list">
+              {items.map(d => (
+                <li key={d.deck_id}>
+                  <button type="button" onClick={() => choose(d.deck_id)} disabled={busy}>
+                    <span className="q4-deck__item-title">{d.title}</span>
+                    <span className="q4-muted">{d.client} · {d.modified_time ? `editado ${fmt.date(d.modified_time)}` : ''}{d.owner_name ? ` · ${d.owner_name}` : ''}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="q4-muted q4-evidence__help">
+            Busca no índice da HYPR Library (pasta Audience Discovery, atualizado todo dia às 6h).{' '}
+            <button type="button" className="q4-linkbtn" onClick={() => setShowLink(v => !v)}>Deck fora da pasta? Colar link</button>
+          </div>
+        </div>
+      )}
+
+      {showLink && !locked && sharedKey && (
+        <div className="q4-evidence__row" style={{ marginTop: 8 }}>
+          <Link2 size={12} />
+          <input type="url" placeholder="Link do deck no Drive (conta como declarado)" value={sharedLink}
+            onChange={(e) => onEvidenceChange(sharedKey, e.target.value)} />
+          {sharedLink && <a href={sharedLink} target="_blank" rel="noreferrer">Abrir <ExternalLink size={11} /></a>}
+        </div>
+      )}
+      {err && <div className="q4-note q4-note--bad"><AlertCircle size={13} /> {err}</div>}
+    </div>
+  );
+}
+
+// ─── Account: reunião de pós-venda pela agenda ───────────────────────
+
+function addDays(dateStr, n) {
+  const d = new Date(`${dateStr}T12:00:00`);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function PvMeetingBox({ campaign, meeting, item, locked, token, opts, reload, viewerEmail }) {
+  const [events, setEvents] = useState(null);
+  const [accessToken, setAccessToken] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const from = campaign.end_date ? addDays(campaign.end_date, -7) : null;
+  const to = campaign.end_date ? addDays(campaign.end_date, 45) : null;
+
+  async function openPicker() {
+    setBusy(true); setErr(null);
+    try {
+      const tk = accessToken || await requestCalendarToken(viewerEmail);
+      setAccessToken(tk);
+      setEvents(await listCalendarEvents(tk, from, to));
+    } catch (ex) { setErr(ex.message); }
+    finally { setBusy(false); }
+  }
+
+  async function choose(ev) {
+    setBusy(true); setErr(null);
+    try {
+      await endpoints.meLinkPvMeeting(token, { access_token: accessToken, event_id: ev.id, calendar_id: 'primary' }, opts);
+      setEvents(null);
+      await reload();
+    } catch (ex) { setErr(ex.message); }
+    finally { setBusy(false); }
+  }
+
+  async function unlink() {
+    if (!window.confirm('Desvincular a reunião de pós-venda?')) return;
+    setBusy(true); setErr(null);
+    try { await endpoints.meUnlinkPvMeeting(token, opts); await reload(); }
+    catch (ex) { setErr(ex.message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="q4-evidence q4-pv">
+      <div className="q4-evidence__label"><CalendarCheck size={13} /> Reunião de pós-venda</div>
+      {meeting ? (
+        <div className="q4-pv__linked">
+          <div>
+            <strong>{meeting.summary}</strong>{' '}
+            <span className="q4-muted">
+              · {meeting.start ? new Date(meeting.start).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: meeting.start.length > 10 ? 'short' : undefined }) : '—'}
+              · {meeting.external_attendees} convidado(s) externo(s){meeting.external_domains?.length ? ` (${meeting.external_domains.join(', ')})` : ''}
+            </span>
+          </div>
+          {item && !item.earned && item.validation_reason && <div className="q4-note q4-note--bad"><AlertTriangle size={13} /> {item.validation_reason}</div>}
+          <div className="q4-deck__actions">
+            {meeting.html_link && <a className="q4-inline-link" href={meeting.html_link} target="_blank" rel="noreferrer">Abrir na agenda <ExternalLink size={11} /></a>}
+            {!locked && <button type="button" className="q4-chipbtn" onClick={unlink} disabled={busy}><Unlink size={11} /> Desvincular</button>}
+          </div>
+        </div>
+      ) : (
+        <div className="q4-muted">
+          Só conta com o evento da sua agenda vinculado (entre {from ? fmt.date(from) : '—'} e {to ? fmt.date(to) : '—'}, com alguém de fora da HYPR).
+        </div>
+      )}
+      {!locked && !meeting && (
+        <div style={{ marginTop: 8 }}>
+          <button type="button" className="q4-chipbtn q4-chipbtn--primary" onClick={openPicker} disabled={busy || !from}>
+            {busy ? 'Abrindo agenda…' : 'Vincular reunião da agenda'}
+          </button>
+        </div>
+      )}
+      {err && <div className="q4-note q4-note--bad"><AlertCircle size={13} /> {err}</div>}
+
+      {events && (
+        <Modal open={true} title="Qual evento foi o pós-venda?" onClose={() => setEvents(null)}>
+          <div className="q4-pv__events">
+            {events.length === 0 && <div className="q4-muted">Nenhum evento na sua agenda entre {fmt.date(from)} e {fmt.date(to)}.</div>}
+            {[...events].sort((a, b) => b.external - a.external).map(ev => (
+              <button key={ev.id} type="button" className="q4-pv__event" onClick={() => choose(ev)} disabled={busy || ev.external === 0}>
+                <span className="q4-pv__event-title">{ev.summary}</span>
+                <span className="q4-muted">
+                  {ev.start ? new Date(ev.start).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: ev.start.length > 10 ? 'short' : undefined }) : ''}
+                  {' · '}{ev.external > 0 ? `${ev.external} externo(s): ${ev.domains.join(', ')}` : 'sem convidado externo'}
+                </span>
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

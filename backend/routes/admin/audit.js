@@ -32,7 +32,7 @@ import { COMPPLAN_CATALOG } from '../../engine/compplan-catalog.js';
 import { resolveStudiesInfo } from '../../lib/bonus-calc.js';
 import { isOverException } from '../../data/over-exceptions.js';
 import { logAudit } from '../../lib/audit.js';
-import { fetchMaLinksByToken, maLinksFor } from '../../lib/ma-links.js';
+import { fetchFactsByToken, factsFor } from '../../lib/external-facts.js';
 
 export const router = Router();
 router.use(authRequired, adminRequired);
@@ -110,7 +110,7 @@ router.get('/:q', async (req, res) => {
     }
 
     const tokens = campaigns.map(c => c.short_token);
-    const maLinksPromise = fetchMaLinksByToken(tokens);
+    const factsPromise = fetchFactsByToken(tokens);
 
     // 2. Batch: métricas (display + video) — pra computeBonus + over check
     const metricsByToken = {};
@@ -196,7 +196,7 @@ router.get('/:q', async (req, res) => {
     }));
 
     // 4. Processa cada campanha
-    const maLinksByToken = await maLinksPromise;
+    const factsByToken = await factsPromise;
     const enriched = campaigns.map(c => {
       let mc = {};
       let ao = {};
@@ -210,7 +210,7 @@ router.get('/:q', async (req, res) => {
         preAssignee: c.pre_assignee || null,
         csOwner: c.cs_email,
         studiesInfo,
-        maLinks: maLinksFor(maLinksByToken, c.short_token),
+        facts: factsFor(factsByToken, c.short_token),
       });
 
       // ─── SETUP STATUS ────────────────────────────────────────────────

@@ -68,6 +68,39 @@ export function stageSubtotal(breakdown, stage) {
   };
 }
 
+function toDateStr(v) {
+  const raw = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
+  if (!raw) return null;
+  if (raw instanceof Date) return raw.toISOString().slice(0, 10);
+  return String(raw).slice(0, 10);
+}
+
+const PV_DAYS_BEFORE = 7;
+const PV_DAYS_AFTER = 45;
+
+/**
+ * Reunião de pós-venda vinculada (2026-Q4): o evento foi lido da agenda do CS
+ * pelo backend no momento do vínculo. Conta se não foi cancelado, tem
+ * convidado de fora da HYPR e cai na janela do fim da campanha.
+ * Retorna { ok, reason }.
+ */
+export function validatePvMeeting(meeting, campaign) {
+  if (!meeting || !meeting.event_id) return { ok: false, reason: 'Nenhuma reunião vinculada.' };
+  if (meeting.status === 'cancelled') return { ok: false, reason: 'O evento foi cancelado.' };
+  if (!(Number(meeting.external_attendees) > 0)) return { ok: false, reason: 'O evento não tem convidado de fora da HYPR.' };
+  const end = toDateStr(campaign.end_date);
+  const day = toDateStr(meeting.start);
+  if (end && day) {
+    const endMs = Date.parse(`${end}T00:00:00Z`);
+    const dayMs = Date.parse(`${day}T00:00:00Z`);
+    const DAY = 86400000;
+    if (dayMs < endMs - PV_DAYS_BEFORE * DAY || dayMs > endMs + PV_DAYS_AFTER * DAY) {
+      return { ok: false, reason: `A reunião precisa ser entre ${PV_DAYS_BEFORE} dias antes e ${PV_DAYS_AFTER} dias depois do fim da campanha.` };
+    }
+  }
+  return { ok: true, reason: null };
+}
+
 /**
  * Infere quais items AUTOMÁTICOS e SEMI_AUTO estão atingidos baseado no checklist.
  * Retorna Set de ids inferidos.
@@ -77,7 +110,8 @@ function inferAutoItems(campaign, opts = {}) {
   const features = Array.isArray(campaign.features) ? campaign.features : [];
   const products = Array.isArray(campaign.products) ? campaign.products : [];
   const formats = Array.isArray(campaign.formats) ? campaign.formats : [];
-  const { studiesInfo = [], version = null, maLinks = null } = opts;
+  const { studiesInfo = [], version = null, facts = {}, manualChecks = {} } = opts;
+  const maLinks = facts.maLinks ?? null;
   const isQ4 = version === VERSION_2026_Q4;
 
   // Pré Campanha — TUDO manual agora (CS marca o que fez).
@@ -147,6 +181,40 @@ function inferAutoItems(campaign, opts = {}) {
   // Anexa pra ser usado lá fora (return value-like)
   earned.__featuresByTier = featuresByTier;
   earned.__maxAttention = maxAttention;
+
+  if (isQ4) {
+    // Account Management — Report Center (Loom cadastrado / relatório compartilhado)
+    if (facts.loom_url) earned.add('am_loom');
+    if (facts.share_id) earned.add('am_reports');
+
+    // Pré-campanha — deck do Audience Discovery escolhido pelo CS.
+    // Feature N = features ofertadas no deck ∩ ativadas na campanha.
+    const deck = manualChecks.__pre_deck || null;
+    if (deck) {
+      const offered = new Set(Array.isArray(deck.offered_features) ? deck.offered_features : []);
+      const activated = [
+        ...(maxAttention || []).filter(m => m.proven).map(m => m.name),
+        ...featuresByTier.tier1.filter(f => !f.startsWith('Max Attention — ')),
+        ...featuresByTier.tier2,
+        ...featuresByTier.tier3,
+      ];
+      const matched = activated.filter(f => offered.has(f));
+      const startStr = toDateStr(campaign.start_date);
+      const createdStr = toDateStr(deck.created_time);
+      const afterStart = !!(startStr && createdStr && createdStr > startStr);
+      if (!afterStart) {
+        if (matched.length >= 1) earned.add('pre_feat_1');
+        if (matched.length >= 2) earned.add('pre_feat_2');
+        if (matched.length >= 3) earned.add('pre_feat_3');
+        if (offered.has('GroundFlow') && earned.has('setup_rmn_fisico')) earned.add('pre_feat_rmnf');
+      }
+      earned.__preDeck = {
+        deck_id: deck.deck_id, title: deck.title || null, url: deck.url || null,
+        created_time: deck.created_time || null,
+        offered: [...offered], matched, after_start: afterStart,
+      };
+    }
+  }
 
   // Extras — Estudos: marca ex_estudos como earned se há algum estudo:
   //   - vindo do Command (studies_used não vazio), OU
@@ -367,7 +435,10 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
   const bruto = Number(campaign.total_value) || 0;
   const liquido = bruto * NET_FACTOR;
 
-  const { preAssignee = null, csOwner = null, studiesInfo = [], maLinks = null } = opts;
+  const { preAssignee = null, csOwner = null, studiesInfo = [] } = opts;
+  // Dados externos (2026-Q4): peças Max Attention, Loom e relatório do Report
+  // Center. `maLinks` solto continua aceito (testes / chamadas antigas).
+  const facts = opts.facts || { maLinks: opts.maLinks ?? null };
   // Versão do Compplan pela data de início da campanha (2026 × 2026-Q4).
   const version = resolveCatalogVersion(campaign.start_date);
   const CATALOG = getCatalog(version);
@@ -380,7 +451,8 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
   const stageGoesToViewer = (stage) => !stageAssignees[stage] || stageAssignees[stage] === csOwnerLower;
 
   // 1. Items inferidos do checklist (auto + semi_auto)
-  const inferred = inferAutoItems(campaign, { studiesInfo, version, maLinks });
+  const inferred = inferAutoItems(campaign, { studiesInfo, version, facts, manualChecks });
+  const pvCheck = version === VERSION_2026_Q4 ? validatePvMeeting(manualChecks.__pv_meeting, campaign) : null;
   // Captura features por tier (anexado pelo inferAutoItems)
   const featuresByTier = inferred.__featuresByTier || { tier1: [], tier2: [], tier3: [], unknown: [] };
 
@@ -415,6 +487,8 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
         if (manualVal) earned.add(item.id);
       } else if (item.source === 'metrics') {
         if (metricEarned.has(item.id)) earned.add(item.id);
+      } else if (item.source === 'calendar') {
+        if (pvCheck?.ok) earned.add(item.id);
       }
 
       // Admin override: sobrescreve a decisão automática
@@ -532,14 +606,44 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
         };
       }
 
+      // Evidência automática (2026-Q4): link vindo do Report Center
+      let autoEvidence = null;
+      if (version === VERSION_2026_Q4) {
+        if (item.id === 'am_loom' && facts.loom_url) autoEvidence = facts.loom_url;
+        if (item.id === 'am_reports' && facts.share_id) autoEvidence = `https://report.hypr.mobi/report/${facts.share_id}`;
+      }
+
+      // Status de validação (2026-Q4): de onde vem a certeza do item.
+      //   confirmed = veio de fonte automática (checklist, RC, deck, agenda, métrica)
+      //   declared  = marcado pelo CS sem prova automática
+      //   divergent = CS marcou, mas a fonte automática diz que não
+      //   admin     = forçado pelo admin
+      let validation = null;
+      if (version === VERSION_2026_Q4) {
+        const markedByCs = manualChecks[item.id] === true;
+        const isInferred = inferred.has(item.id);
+        if (adminOv && typeof adminOv.earned === 'boolean') validation = 'admin';
+        else if (item.source === 'metrics' || item.source === 'auto' || item.source === 'calendar') validation = wasEarned ? 'confirmed' : null;
+        else if (item.source === 'semi_auto') {
+          if (wasEarned && isInferred) validation = 'confirmed';
+          else if (wasEarned && markedByCs) {
+            const deterministic = item.id.startsWith('setup_') || item.id.startsWith('pre_feat_');
+            validation = deterministic && (item.id.startsWith('setup_') || manualChecks.__pre_deck) ? 'divergent' : 'declared';
+          }
+        } else if (wasEarned) validation = 'declared';
+      }
+
       return {
         id: item.id,
         label: item.label,
         pct: item.pct,
         source: item.source,
+        validation,
+        auto_evidence: autoEvidence,
+        validation_reason: item.source === 'calendar' && pvCheck && !pvCheck.ok ? pvCheck.reason : null,
         constraint: item.constraint || null,
         help: item.help || null,
-        needs_evidence: !!item.needs_evidence,
+        needs_evidence: !!item.needs_evidence && !autoEvidence,
         evidence_type: item.evidence_type || null,
         earned: effectivelyEarned,
         was_earned: wasEarned,
@@ -597,6 +701,8 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
     stage_assignees: stageAssignees,
     // 2026-Q4: formatos Max Attention do checklist e se cada um tem peça no Report Hub
     max_attention: inferred.__maxAttention || null,
+    pre_deck: inferred.__preDeck || null,
+    pv_meeting: version === VERSION_2026_Q4 ? (manualChecks.__pv_meeting || null) : null,
     excluded_features: featuresByTier.excluded || [],
   };
 }

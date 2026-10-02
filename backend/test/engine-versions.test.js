@@ -7,8 +7,9 @@ import assert from 'node:assert/strict';
 import { computeBonus } from '../engine/compplan-engine.js';
 import {
   classifyFeatures2026Q4, proveMaxAttention, resolveCatalogVersion,
-  VERSION_2026, VERSION_2026_Q4,
+  VERSION_2026, VERSION_2026_Q4, detectDeckFeatures2026Q4, setCatalogOverrides,
 } from '../engine/compplan-catalog.js';
+import { validatePvMeeting } from '../engine/compplan-engine.js';
 
 const base = (over = {}) => ({
   short_token: 'TEST01', total_value: 100000, cs_email: 'cs@hypr.mobi',
@@ -90,9 +91,13 @@ test('Q4: GroundFlow no lugar de RMN Físico', () => {
 });
 
 test('Q4: Account Management — novos % e pós-venda não cumulativo', () => {
-  const mc = { am_pv_meeting: true, am_pv_doc: true, am_pv_onepage: true, am_ren_no_vp: true };
+  const meeting = { event_id: 'e1', start: '2026-11-05T15:00:00Z', status: 'confirmed', external_attendees: 2 };
+  const mc = { __pv_meeting: meeting, am_pv_doc: true, am_pv_onepage: true, am_ren_no_vp: true };
   const bd = computeBonus(base(), mc, null, {}, { maLinks: [] });
   assert.deepEqual(earnedIds(bd, 'account_mgmt'), ['am_pv_meeting', 'am_ren_no_vp']);
+  // Sem reunião vinculada, marcar o checkbox não conta (paga o Doc PDF, maior restante)
+  const noMeeting = computeBonus(base(), { am_pv_meeting: true, am_pv_doc: true }, null, {}, { maLinks: [] });
+  assert.deepEqual(earnedIds(noMeeting, 'account_mgmt'), ['am_pv_doc']);
   assert.equal(item(bd, 'account_mgmt', 'am_pv_doc').pct, 0.002);
   assert.equal(item(bd, 'account_mgmt', 'am_ren_no_vp').label, 'Renovação');
   assert.equal(item(bd, 'account_mgmt', 'am_ren_vp'), undefined);
@@ -112,4 +117,72 @@ test('2026 (Q3) não muda: tiers antigos com match exato', () => {
   assert.deepEqual(earnedIds(bd, 'setup').filter(id => id.startsWith('setup_tier')), ['setup_tier1_1', 'setup_tier1_2', 'setup_tier1_3', 'setup_tier2_1']);
   assert.equal(item(bd, 'account_mgmt', 'am_pv_doc').pct, 0.003);
   assert.ok(item(bd, 'account_mgmt', 'am_ren_vp'));
+});
+
+test('Q4: reunião de pós-venda — janela, cancelada e convidado externo', () => {
+  const c = base(); // fim 2026-10-30
+  const ok = { event_id: 'e', start: '2026-11-10T10:00:00Z', status: 'confirmed', external_attendees: 1 };
+  assert.equal(validatePvMeeting(ok, c).ok, true);
+  assert.equal(validatePvMeeting({ ...ok, start: '2026-12-31T10:00:00Z' }, c).ok, false);
+  assert.equal(validatePvMeeting({ ...ok, start: '2026-10-10T10:00:00Z' }, c).ok, false);
+  assert.equal(validatePvMeeting({ ...ok, status: 'cancelled' }, c).ok, false);
+  assert.equal(validatePvMeeting({ ...ok, external_attendees: 0 }, c).ok, false);
+});
+
+test('Q4: Loom e relatório vêm do Report Center com evidência automática', () => {
+  const bd = computeBonus(base(), {}, null, {}, { facts: { maLinks: [], loom_url: 'https://loom.com/x', share_id: 'abc123' } });
+  assert.equal(item(bd, 'account_mgmt', 'am_loom').earned, true);
+  assert.equal(item(bd, 'account_mgmt', 'am_loom').auto_evidence, 'https://loom.com/x');
+  assert.equal(item(bd, 'account_mgmt', 'am_loom').needs_evidence, false);
+  assert.equal(item(bd, 'account_mgmt', 'am_reports').auto_evidence, 'https://report.hypr.mobi/report/abc123');
+  assert.equal(item(bd, 'account_mgmt', 'am_loom').validation, 'confirmed');
+  const none = computeBonus(base(), { am_loom: true }, null, {}, { facts: { maLinks: [] } });
+  assert.equal(item(none, 'account_mgmt', 'am_loom').validation, 'declared');
+});
+
+test('Q4: feature na pré-campanha = ofertada no deck ∩ ativada', () => {
+  const c = base({ features: ['Tap to Go', 'PDOOH', 'Weather'], products: ['Groundflow'] });
+  const deck = { deck_id: 'd', title: 'Proposta', created_time: '2026-09-20T10:00:00Z',
+    offered_features: ['Tap to Go', 'Weather', 'Footfall', 'GroundFlow'] };
+  const links = [{ creative_id: '1', name: 'x', template_slug: 'tap-to-map' }];
+  const bd = computeBonus(c, { __pre_deck: deck }, null, {}, { maLinks: links });
+  // ofertadas e ativadas: Tap to Go + Weather (Footfall não ativou; PDOOH não ofertado)
+  assert.deepEqual(earnedIds(bd, 'pre_campaign'), ['pre_feat_rmnf', 'pre_feat_1', 'pre_feat_2']);
+  assert.deepEqual(bd.pre_deck.matched.sort(), ['Tap to Go', 'Weather']);
+  // PDOOH ativou sem ser ofertado: paga só no Setup
+  assert.ok(bd.by_category.setup.items.find(i => i.id === 'setup_tier1_2').earned);
+  // Deck criado depois do início da campanha não conta
+  const late = computeBonus(c, { __pre_deck: { ...deck, created_time: '2026-10-20T10:00:00Z' } }, null, {}, { maLinks: links });
+  assert.deepEqual(earnedIds(late, 'pre_campaign'), []);
+  assert.equal(late.pre_deck.after_start, true);
+});
+
+test('Q4: detecção de features no texto do deck', () => {
+  const f = detectDeckFeatures2026Q4('Vamos usar Tap to Map, P-DOOH e Brand Lift; gatilhos climáticos; mapa do RevIQ. Video survey no fim.');
+  assert.deepEqual(f, ['Tap to Go', 'PDOOH', 'Survey', 'Weather', 'Video Survey', 'RevIQ']);
+});
+
+test('Q4: setup marcado pelo CS sem dado do checklist = divergente', () => {
+  const bd = computeBonus(base(), { setup_tier3_1: true }, null, {}, { maLinks: [] });
+  assert.equal(item(bd, 'setup', 'setup_tier3_1').validation, 'divergent');
+});
+
+test('Q4: ajustes do admin no catálogo (nome, %, item novo, desativar)', () => {
+  setCatalogOverrides([
+    { category: 'extras', item_id: 'ex_design_studio', label: 'Design Studio HYPR', pct: 0.002 },
+    { category: 'extras', item_id: 'ex_novo', label: 'Item novo', pct: 0.001, is_new: true },
+    { category: 'onboarding', item_id: 'on_implementation', active: false },
+  ]);
+  try {
+    const bd = computeBonus(base(), { ex_novo: true }, null, {}, { maLinks: [] });
+    assert.equal(item(bd, 'extras', 'ex_design_studio').label, 'Design Studio HYPR');
+    assert.equal(item(bd, 'extras', 'ex_design_studio').pct, 0.002);
+    assert.equal(item(bd, 'extras', 'ex_novo').earned, true);
+    assert.equal(item(bd, 'onboarding', 'on_implementation'), undefined);
+    // Q3 não é afetado
+    const q3 = computeBonus(base({ start_date: '2026-08-01' }));
+    assert.equal(item(q3, 'extras', 'ex_design_studio').label, 'Design studio');
+  } finally {
+    setCatalogOverrides([]);
+  }
 });

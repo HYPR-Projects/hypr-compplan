@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Home, Calendar, FileText, Users, BookOpen, Shield, ShieldAlert,
   Settings, LogOut, Sun, Moon, History, Sparkles, Archive, MessageSquare,
-  ClipboardList,
+  ClipboardList, ListChecks, Table2,
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.jsx';
 import { auth, endpoints } from '../../lib/api.js';
@@ -36,6 +36,8 @@ const NAV_ADMIN = [
   { to: '/admin/time',             label: 'Time',            icon: Users },
   { to: '/admin/estudos',          label: 'Estudos',         icon: BookOpen },
   { to: '/admin/excecoes-over',    label: 'Exceções OVER',   icon: ShieldAlert },
+  { to: '/admin/etapas',           label: 'Etapas & regras', icon: ListChecks },
+  { to: '/admin/preenchimentos',   label: 'Preenchimentos',  icon: Table2 },
 ];
 
 export default function AppShell({ children, pendingEvidences = 0, pendingCount = 0 }) {
