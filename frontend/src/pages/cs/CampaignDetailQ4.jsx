@@ -335,9 +335,9 @@ export default function CampaignDetailQ4(props) {
             {campaign.cp_name && <RoField label="Salesman" value={campaign.cp_name} />}
             {campaign.agency && <RoField label="Agência" value={campaign.agency} />}
             {campaign.industry && <RoField label="Setor" value={campaign.industry} />}
-            {campaign.products?.length > 0 && <RoTags label="Produtos" items={campaign.products} variant="cyan" />}
+            {(breakdown.checklist_products || campaign.products)?.length > 0 && <RoTags label="Produtos" items={breakdown.checklist_products || campaign.products} variant="cyan" />}
             {campaign.formats?.length > 0 && <RoTags label="Formatos" items={campaign.formats} />}
-            {campaign.features?.length > 0 && <RoTags label={`Features (${campaign.features.length})`} items={campaign.features} variant="cyan" />}
+            {(breakdown.checklist_features || campaign.features)?.length > 0 && <RoTags label={`Features (${(breakdown.checklist_features || campaign.features).length})`} items={breakdown.checklist_features || campaign.features} variant="cyan" />}
             {campaign.studies_used?.length > 0 && <RoTags label="Estudos usados" items={campaign.studies_used} />}
             {campaign.audiences && (
               <div className="ro-field ro-field--wide">
