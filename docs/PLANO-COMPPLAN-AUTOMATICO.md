@@ -450,6 +450,8 @@ evidência · status de validação · preenchido por · quando · revisado por`
 13. Pós-venda continua não cumulativo (paga o maior). Renovação fica como item único "Renovação" (0,25%).
 
 14. Otimização, Extras e Onboarding mantidos sem mudança.
+15. Tap To Chat, Tap To Hotspot, Tap to Max e Tap to Experience (sem tipo de peça na Platform) contam como formato Max Attention só pelo checklist.
+16. Tap to Choose e Tap to Game passam a existir como features no checklist do Force (feito pelo time do Force); no Compplan já são reconhecidos como formatos Max Attention.
 
 **Em aberto:** nada — catálogo Q4/2026 fechado (§5).
 
