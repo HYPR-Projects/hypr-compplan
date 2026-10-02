@@ -67,7 +67,10 @@ export async function overviewHandler(req, res) {
     const byCsRaw = await query(
       `SELECT
          c.cs_email,
-         ANY_VALUE(c.cs_name) AS cs_name,
+         -- Nome do cadastro do time (por e-mail). O cs_name do checklist vem da
+         -- planilha de carteira do Command e pode não bater com o e-mail
+         -- (ex.: "Isaac Lobo" ao lado de mariana.lewinski@).
+         COALESCE(ANY_VALUE(tm.name), ANY_VALUE(c.cs_name)) AS cs_name,
          ANY_VALUE(tm.photo_url) AS photo_url,
          COUNT(*) AS n_camp,
          COUNTIF(IFNULL(o.reviewed, FALSE) = TRUE OR (la.updated_at IS NOT NULL AND la.updated_at > la.attributed_at)) AS n_reviewed,
