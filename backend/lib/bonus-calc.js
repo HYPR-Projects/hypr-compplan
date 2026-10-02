@@ -23,6 +23,7 @@ import { computeBonus, ASSIGNABLE_STAGES, stageSubtotal } from '../engine/comppl
 import { COMPPLAN_CATALOG } from '../engine/compplan-catalog.js';
 import { isOverException } from '../data/over-exceptions.js';
 import { findStudyByName, getStudyById } from '../data/studies.js';
+import { fetchMaLinksByToken, maLinksFor } from './ma-links.js';
 
 const VERSION_ID = '2026';
 const TAX_RATE = 0.1653;
@@ -259,7 +260,7 @@ async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
        c.formats, c.audiences, c.studies_used, c.pracas_type,
        c.o2o_display_impressions, c.bonus_o2o_display_impressions,
        c.ooh_display_impressions, c.bonus_ooh_display_impressions,
-       c.end_date,
+       c.start_date, c.end_date,
        (IFNULL(o.reviewed, FALSE) = TRUE
         OR (la.updated_at IS NOT NULL AND la.updated_at > la.attributed_at)) AS is_reviewed
      FROM ${tableRef('commplan_checklists')} c
@@ -315,8 +316,11 @@ async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
     console.warn('_computeOwnCampaignsBonus overlays:', e.message);
   }
 
-  // 3. Batch: métricas (display + video)
-  const metricsByToken = await fetchMetricsByToken(campaigns);
+  // 3. Batch: métricas (display + video) + peças Max Attention vinculadas no RC
+  const [metricsByToken, maLinksByToken] = await Promise.all([
+    fetchMetricsByToken(campaigns),
+    fetchMaLinksByToken(tokens),
+  ]);
 
   // 4. Resolve studiesInfo em paralelo
   const studiesInfoByToken = {};
@@ -343,7 +347,8 @@ async function _computeOwnCampaignsBonus({ csEmail, startDate, endDate }) {
     const studiesInfo = studiesInfoByToken[c.short_token] || [];
 
     const breakdown = computeBonus(c, mc, metrics, ao, {
-      preAssignee, csOwner: csEmail, studiesInfo
+      preAssignee, csOwner: csEmail, studiesInfo,
+      maLinks: maLinksFor(maLinksByToken, c.short_token),
     });
 
     total += breakdown.total_brl;
@@ -398,7 +403,10 @@ export async function computeStageAssignedBonus({ csEmail, startDate, endDate })
     );
     if (rows.length === 0) return { total_brl: 0, items: [] };
 
-    const metricsByToken = await fetchMetricsByToken(rows);
+    const [metricsByToken, maLinksByToken] = await Promise.all([
+      fetchMetricsByToken(rows),
+      fetchMaLinksByToken(rows.map(r => r.short_token)),
+    ]);
 
     let total = 0;
     const items = [];
@@ -412,6 +420,7 @@ export async function computeStageAssignedBonus({ csEmail, startDate, endDate })
       const breakdown = computeBonus(c, mc, metricsByToken[c.short_token] || null, ao, {
         preAssignee: c.ov_pre_assignee || null,
         csOwner: csLower,
+        maLinks: maLinksFor(maLinksByToken, c.short_token),
       });
 
       const stages = [];
