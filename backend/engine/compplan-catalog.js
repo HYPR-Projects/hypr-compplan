@@ -300,13 +300,13 @@ export const COMPPLAN_CATALOG_2026Q4 = {
     items: [
       { id: 'pre_audiences',     label: 'Definição de audiências (OOH, O2O ou RMN)', pct: PCT(0.15), source: 'manual',
         card: { what: 'Você definiu as audiências da campanha (OOH, O2O ou RMN) na proposta.', obs: 'A definição precisa estar no deck da pré-campanha.' } },
-      { id: 'pre_feat_rmnf',     label: 'Definição de features — GroundFlow',        pct: PCT(0.25), source: 'manual',
-        card: { what: 'A proposta definiu o uso de GroundFlow para a campanha.', obs: 'Precisa estar no deck da pré-campanha.' } },
-      { id: 'pre_feat_1',        label: 'Definição de features — Feature 1',          pct: PCT(0.20), source: 'manual',
-        card: { what: 'Você ofereceu no deck da pré-campanha pelo menos 1 feature e ela foi ativada na campanha.', obs: 'Feature ativada mas não oferecida no deck paga só no Setup.' } },
-      { id: 'pre_feat_2',        label: 'Definição de features — Feature 2',          pct: PCT(0.15), source: 'manual',
+      { id: 'pre_feat_rmnf',     label: 'Definição de features — GroundFlow',        pct: PCT(0.25), source: 'semi_auto',
+        card: { what: 'A proposta definiu o uso de GroundFlow e a campanha rodou com GroundFlow.', obs: 'Marcado automaticamente quando o deck cita GroundFlow e o checklist tem GroundFlow.' } },
+      { id: 'pre_feat_1',        label: 'Definição de features — Feature 1',          pct: PCT(0.20), source: 'semi_auto',
+        card: { what: 'Você ofereceu no deck da pré-campanha pelo menos 1 feature e ela foi ativada na campanha.', obs: 'Calculado pelo deck escolhido (features ofertadas ∩ ativadas). Feature ativada mas não oferecida no deck paga só no Setup.' } },
+      { id: 'pre_feat_2',        label: 'Definição de features — Feature 2',          pct: PCT(0.15), source: 'semi_auto',
         card: { what: 'Ofereceu e ativou 2 ou mais features.', obs: 'Feature ativada mas não oferecida no deck paga só no Setup.' } },
-      { id: 'pre_feat_3',        label: 'Definição de features — Feature 3',          pct: PCT(0.10), source: 'manual',
+      { id: 'pre_feat_3',        label: 'Definição de features — Feature 3',          pct: PCT(0.10), source: 'semi_auto',
         card: { what: 'Ofereceu e ativou 3 ou mais features.', obs: 'Feature ativada mas não oferecida no deck paga só no Setup.' } },
       { id: 'pre_enrich_bench',  label: 'Enriquecimento — Case, estudo ou bench',      pct: PCT(0.10), source: 'manual',
         card: { what: 'A proposta usou um case, estudo ou benchmark.', obs: 'Explorer e Map Intelligence não contam mais aqui.' } },
@@ -340,9 +340,12 @@ export const COMPPLAN_CATALOG_2026Q4 = {
     label: 'Account Management',
     items: [
       { id: 'am_analytics',  label: 'Visão analytics', pct: PCT(0.20), source: 'manual' },
-      { id: 'am_reports',    label: 'Relatórios',      pct: PCT(0.10), source: 'manual', needs_evidence: true, evidence_type: 'link' },
-      { id: 'am_loom',       label: 'Loom',            pct: PCT(0.10), source: 'manual', needs_evidence: true, evidence_type: 'link' },
-      { id: 'am_pv_meeting', label: 'Pós-venda — Reunião (online/presencial)', pct: PCT(0.30), source: 'manual', needs_evidence: true, evidence_type: 'link', constraint: 'non_cumulative_group:posvenda' },
+      { id: 'am_reports',    label: 'Relatórios',      pct: PCT(0.10), source: 'semi_auto', needs_evidence: true, evidence_type: 'link',
+        card: { what: 'O relatório da campanha foi compartilhado no Report Center (link de compartilhamento gerado).', obs: 'Marcado automaticamente quando o Report Center tem o link da campanha.' } },
+      { id: 'am_loom',       label: 'Loom',            pct: PCT(0.10), source: 'semi_auto', needs_evidence: true, evidence_type: 'link',
+        card: { what: 'O Loom da campanha está cadastrado no Report Center.', obs: 'Marcado automaticamente quando o Loom está no Report Center.' } },
+      { id: 'am_pv_meeting', label: 'Pós-venda — Reunião (online/presencial)', pct: PCT(0.30), source: 'calendar', constraint: 'non_cumulative_group:posvenda',
+        card: { what: 'Reunião de pós-venda com o cliente, vinculada a um evento da sua agenda Google.', obs: 'Só conta com o evento vinculado: não cancelado, com convidado de fora da HYPR, entre 7 dias antes e 45 dias depois do fim da campanha.' } },
       { id: 'am_pv_doc',     label: 'Pós-venda — Doc. Pós Venda (PDF)',        pct: PCT(0.20), source: 'manual', needs_evidence: true, evidence_type: 'link', constraint: 'non_cumulative_group:posvenda' },
       { id: 'am_pv_onepage', label: 'Pós-venda — Slides / One page',           pct: PCT(0.10), source: 'manual', needs_evidence: true, evidence_type: 'link', constraint: 'non_cumulative_group:posvenda' },
       { id: 'am_ren_no_vp',  label: 'Renovação',                               pct: PCT(0.25), source: 'manual' },
@@ -362,7 +365,7 @@ export function resolveCatalogVersion(startDate) {
 }
 
 export function getCatalog(version) {
-  return version === VERSION_2026_Q4 ? COMPPLAN_CATALOG_2026Q4 : COMPPLAN_CATALOG;
+  return version === VERSION_2026_Q4 ? applyCatalogOverrides(COMPPLAN_CATALOG_2026Q4) : COMPPLAN_CATALOG;
 }
 
 export function getFeatureTiers(version) {
@@ -425,4 +428,109 @@ export function proveMaxAttention(maFormats, maLinks) {
     }
     return { ...f, proven: false, proof: 'not_linked' };
   });
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// Detecção de features no deck da pré-campanha (2026-Q4)
+// O texto vem do índice da HYPR Library (pasta Audience Discovery).
+// Cada entrada: nome canônico (o mesmo do Setup/Max Attention) → padrões
+// sobre o texto normalizado (minúsculo, sem acento).
+// ═══════════════════════════════════════════════════════════════════════
+
+export const DECK_FEATURE_PATTERNS_2026Q4 = {
+  // Max Attention (formatos)
+  'Tap to Go':         [/tap.?to.?go\b/, /tap.?to.?map\b/],
+  'Tap to Carousel':   [/tap.?to.?carousel/, /tap.?to.?carrossel/],
+  'Tap to Slide':      [/tap.?to.?slide/],
+  'Tap to Scratch':    [/tap.?to.?scratch/, /tap.?to.?reveal/, /raspadinha/],
+  'Tap to Choose':     [/tap.?to.?choose/],
+  'Tap to Game':       [/tap.?to.?game/],
+  'Tap to Chat':       [/tap.?to.?chat/],
+  'Tap to Hotspot':    [/tap.?to.?hotspot/],
+  'Tap to Max':        [/tap.?to.?max\b/],
+  'Tap to Experience': [/tap.?to.?experience/],
+  // Tier 1
+  'PDOOH':             [/\bp-?dooh\b/, /dooh programatico/],
+  'Survey':            [/(?<!video )\bsurvey\b/, /brand lift/, /brand recall/],
+  'Purchase Context':  [/purchase context/],
+  'HYPR Signals':      [/hypr signals/],
+  // Tier 2
+  'Spotify':           [/\bspotify\b/],
+  'Map Intelligence':  [/map intelligence/],
+  'Downloaded apps':   [/downloaded ?apps/, /aplicativos instalados/],
+  'Click to Calendar': [/click.?to.?calendar/],
+  'Carbon Neutral':    [/carbon neutral/],
+  'Footfall':          [/\bfootfall\b/],
+  // Tier 3
+  'TV Sync':           [/tv ?sync/],
+  'HYPR Pass':         [/hypr pass/],
+  'Brand Query':       [/brand query/],
+  'Topics':            [/\btopics\b/],
+  'Weather':           [/\bweather\b/, /gatilhos? climatic/, /condic(ao|oes) climatica/],
+  'Twitch TV':         [/\btwitch/],
+  'Video Survey':      [/video survey/],
+  // Produtos usados em outros itens da pré-campanha
+  'GroundFlow':        [/ground ?flow/],
+  'GeoIQ':             [/geo ?iq\b/],
+  'RevIQ':             [/rev ?iq\b/],
+};
+
+function _normText(t) {
+  return String(t ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ');
+}
+
+/** Features citadas no texto do deck (nomes canônicos, sem repetição). */
+export function detectDeckFeatures2026Q4(text) {
+  const norm = _normText(text);
+  const out = [];
+  for (const [name, patterns] of Object.entries(DECK_FEATURE_PATTERNS_2026Q4)) {
+    if (patterns.some(re => re.test(norm))) out.push(name);
+  }
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Ajustes do admin no catálogo 2026-Q4 (tela "Etapas & regras").
+// Ficam em BigQuery (data/catalog-overrides.js) e são aplicados por cima do
+// catálogo do código: nome, %, ativo, texto do card e itens manuais novos.
+// Regras automáticas continuam no código.
+// ═══════════════════════════════════════════════════════════════════════
+
+let _catalogOverrides = [];
+
+/** Define os ajustes em memória (carregados do BigQuery). */
+export function setCatalogOverrides(rows) {
+  _catalogOverrides = Array.isArray(rows) ? rows : [];
+}
+
+export function getCatalogOverrides() {
+  return _catalogOverrides;
+}
+
+/** Catálogo 2026-Q4 com os ajustes do admin aplicados. */
+export function applyCatalogOverrides(catalog, overrides = _catalogOverrides) {
+  if (!overrides || overrides.length === 0) return catalog;
+  const out = {};
+  for (const [catKey, cat] of Object.entries(catalog)) {
+    out[catKey] = { ...cat, items: cat.items.map(it => ({ ...it })) };
+  }
+  for (const ov of overrides) {
+    const cat = out[ov.category];
+    if (!cat) continue;
+    let item = cat.items.find(i => i.id === ov.item_id);
+    if (!item) {
+      if (!ov.is_new) continue;
+      item = { id: ov.item_id, label: ov.label || ov.item_id, pct: 0, source: 'manual', custom: true };
+      cat.items.push(item);
+    }
+    if (ov.label) item.label = ov.label;
+    if (ov.pct !== null && ov.pct !== undefined && Number.isFinite(Number(ov.pct))) item.pct = Number(ov.pct);
+    if (ov.card_what || ov.card_obs) {
+      item.card = { ...(item.card || {}), ...(ov.card_what ? { what: ov.card_what } : {}), ...(ov.card_obs ? { obs: ov.card_obs } : {}) };
+    }
+    if (ov.active === false) item.inactive = true;
+  }
+  for (const cat of Object.values(out)) cat.items = cat.items.filter(i => !i.inactive);
+  return out;
 }

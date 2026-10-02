@@ -19,6 +19,7 @@ import cors from 'cors';
 import { router as authRouter } from './routes/auth.js';
 import { router as meRouter } from './routes/me.js';
 import { router as studiesPublicRouter } from './routes/studies-public.js';
+import { router as q4Router } from './routes/q4.js';
 
 import { router as adminCsConfig } from './routes/admin/cs-config.js';
 import { router as adminOverExceptions } from './routes/admin/over-exceptions.js';
@@ -28,6 +29,9 @@ import { router as adminTeamMembers } from './routes/admin/team-members.js';
 import { router as adminOverview } from './routes/admin/overview.js';
 import { router as adminAudit } from './routes/admin/audit.js';
 import { router as adminExport } from './routes/admin/export.js';
+import { router as adminCatalog } from './routes/admin/catalog.js';
+import { router as adminFillMatrix } from './routes/admin/fill-matrix.js';
+import { catalogOverridesMiddleware } from './data/catalog-overrides.js';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -47,6 +51,8 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '1mb' }));
+// Ajustes do admin no catálogo 2026-Q4 (Etapas & regras) em memória
+app.use('/commplan', catalogOverridesMiddleware);
 
 // ─── Health ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
@@ -62,6 +68,7 @@ app.get('/health', (req, res) => {
 app.use('/auth', authRouter);
 
 // ─── CS-side ─────────────────────────────────────────────────────────────
+app.use('/commplan/me', q4Router);
 app.use('/commplan/me', meRouter);
 app.use('/commplan/studies', studiesPublicRouter);
 
@@ -72,6 +79,8 @@ app.use('/commplan/admin/studies', adminStudies);
 app.use('/commplan/admin/team-members', adminTeamMembers);
 app.use('/commplan/admin/audit', adminAudit);
 app.use('/commplan/admin/export', adminExport);
+app.use('/commplan/admin/catalog', adminCatalog);
+app.use('/commplan/admin/fill-matrix', adminFillMatrix);
 // Mais genéricos por último (eles têm router.use(adminRequired) global,
 // e Express casa por prefixo — então routers de path mais específico
 // devem vir antes pra não serem interceptados.

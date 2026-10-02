@@ -3,7 +3,7 @@
 # Deploy da Cloud Function do HYPR Commplan.
 #
 # Mesmo padrão do Report Center (backend Python) — uniformidade de operação:
-#   - Cloud Functions Gen2 em us-central1
+#   - Cloud Functions Gen2 em us-central1 (Node 22)
 #   - min-instances=1 pra eliminar cold start
 #   - Captura secrets da revisão atual e re-passa via YAML temp
 #     (gcloud functions deploy NÃO preserva envvars existentes)
@@ -131,7 +131,7 @@ echo "▸ Iniciando deploy (3-5 min)..."
 
 gcloud functions deploy "$FUNCTION_NAME" \
   --gen2 \
-  --runtime=nodejs20 \
+  --runtime=nodejs22 \
   --region="$REGION" \
   --project="$PROJECT_ID" \
   --source=. \
@@ -145,7 +145,9 @@ gcloud functions deploy "$FUNCTION_NAME" \
   --min-instances=1 \
   --max-instances=10 \
   --concurrency=20 \
-  --env-vars-file="$ENV_FILE"
+  --env-vars-file="$ENV_FILE" \
+  --format=none
+# --format=none: não imprime a configuração no fim (ela inclui JWT_SECRET).
 
 # ── 4. Rotear 100% do tráfego para a revisão recém-deployada ─────────────────
 echo ""
