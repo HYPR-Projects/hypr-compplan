@@ -113,7 +113,7 @@ async function resolveStudiesInfo(campaign, studyAssigneeOverride = null, studyI
   return result;
 }
 import { parseQuarter } from '../engine/quarter-resolver.js';
-import { computeBonus, isCampaignStillInGracePeriod, ASSIGNABLE_STAGES, resolveStageAssignees } from '../engine/compplan-engine.js';
+import { computeBonus, isCampaignStillInGracePeriod, ASSIGNABLE_STAGES, resolveStageAssignees, collectPendingActions } from '../engine/compplan-engine.js';
 import { COMPPLAN_CATALOG, getCatalog, getFeatureTiers, VERSION_2026_Q4, MAX_ATTENTION_FORMATS_2026Q4 } from '../engine/compplan-catalog.js';
 import { fetchFactsByToken, factsFor } from '../lib/external-facts.js';
 import { SERVER_OWNED_KEYS } from '../lib/manual-checks.js';
@@ -673,6 +673,10 @@ router.get('/dashboard/:q', async (req, res) => {
         liquido: (Number(c.total_value) || 0) * NET_FACTOR,
         bonus_brl: breakdown.total_brl,
         bonus_pct: breakdown.total_pct,
+        // 2026-Q4: versão, pendências do CS e estado da otimização (painel)
+        version: breakdown.version,
+        pending_actions: collectPendingActions(breakdown, mc, c),
+        optimization_state: breakdown.optimization_state?.state || null,
       };
     });
 

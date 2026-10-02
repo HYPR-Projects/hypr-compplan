@@ -771,3 +771,40 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
     checklist_features: Array.isArray(effCampaign.features) ? effCampaign.features : [],
   };
 }
+
+/**
+ * Pendências de uma campanha 2026-Q4 (o que o CS ainda precisa fazer).
+ * Mesma lista do painel "Precisa da sua ação" da tela da campanha, usada no
+ * painel do CS. Retorna [{ stage, text }].
+ */
+export function collectPendingActions(breakdown, manualChecks = {}, campaign = {}) {
+  if (!breakdown || breakdown.version !== VERSION_2026_Q4) return [];
+  const actions = [];
+  const today = new Date().toISOString().slice(0, 10);
+  for (const m of breakdown.max_attention || []) {
+    if (m.proof === 'not_linked') actions.push({ stage: 'setup', text: `Vincular a peça ${m.name} no Report Hub` });
+  }
+  const evidence = manualChecks.__evidence || {};
+  for (const [catKey, cat] of Object.entries(breakdown.by_category || {})) {
+    if (cat.assigned_to_other) continue;
+    const anyChecked = cat.items.some(i => i.earned || manualChecks[i.id] === true);
+    if (catKey === 'pre_campaign') {
+      if (anyChecked && !manualChecks.__pre_deck && !String(evidence.pre_campaign || '').trim()) {
+        actions.push({ stage: catKey, text: 'Escolher o deck da pré-campanha' });
+      }
+      if (breakdown.pre_deck?.after_start) actions.push({ stage: catKey, text: 'Deck criado depois do início da campanha' });
+    }
+    for (const it of cat.items) {
+      if (it.needs_evidence && !it.auto_evidence && it.earned && !cat.invalidated && !String(evidence[it.id] || '').trim()) {
+        actions.push({ stage: catKey, text: `${it.label}: falta evidência` });
+      }
+      if (it.validation === 'divergent') actions.push({ stage: catKey, text: `${it.label}: divergente da fonte` });
+    }
+  }
+  const end = toDateStr(campaign.end_date);
+  if (!manualChecks.__pv_meeting && end && end <= today) {
+    const pvOther = (breakdown.by_category?.account_mgmt?.items || []).some(i => (i.id === 'am_pv_doc' || i.id === 'am_pv_onepage') && i.earned);
+    if (!pvOther) actions.push({ stage: 'account_mgmt', text: 'Vincular a reunião de pós-venda' });
+  }
+  return actions;
+}

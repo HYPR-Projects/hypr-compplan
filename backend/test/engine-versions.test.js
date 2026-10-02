@@ -9,7 +9,7 @@ import {
   classifyFeatures2026Q4, proveMaxAttention, resolveCatalogVersion,
   VERSION_2026, VERSION_2026_Q4, detectDeckFeatures2026Q4, setCatalogOverrides,
 } from '../engine/compplan-catalog.js';
-import { validatePvMeeting, optimizationState } from '../engine/compplan-engine.js';
+import { validatePvMeeting, optimizationState, collectPendingActions } from '../engine/compplan-engine.js';
 
 const base = (over = {}) => ({
   short_token: 'TEST01', total_value: 100000, cs_email: 'cs@hypr.mobi',
@@ -231,4 +231,15 @@ test('Q4: métricas do Report Center só entram no cálculo com OPT_METRICS_SOUR
   } finally {
     delete process.env.OPT_METRICS_SOURCE;
   }
+});
+
+test('Q4: pendências do CS para o painel', () => {
+  const c = base({ features: ['Tap to Go'], end_date: '2026-10-10' });
+  const mc = { pre_audiences: true, am_pv_doc: true };
+  const bd = computeBonus(c, mc, null, {}, { maLinks: [] });
+  const texts = collectPendingActions(bd, mc, c).map(a => a.text);
+  assert.ok(texts.includes('Vincular a peça Tap to Go no Report Hub'));
+  assert.ok(texts.includes('Escolher o deck da pré-campanha'));
+  assert.ok(texts.some(t => t.includes('Doc. Pós Venda') && t.includes('falta evidência')));
+  assert.deepEqual(collectPendingActions(computeBonus(base({ start_date: '2026-08-01' })), {}, {}), []);
 });

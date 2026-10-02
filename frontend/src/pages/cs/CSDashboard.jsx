@@ -104,6 +104,7 @@ export default function CsDashboard() {
     let filtered = items.filter(c => {
       if (statusFilter === 'revisadas' && !c.reviewed) return false;
       if (statusFilter === 'pendentes' && c.reviewed) return false;
+      if (statusFilter === 'acao' && !(c.pending_actions || []).length) return false;
       if (!t) return true;
       return (
         (c.client_name || '').toLowerCase().includes(t) ||
@@ -261,6 +262,23 @@ export default function CsDashboard() {
         />
       </section>
 
+      {/* Q4/2026: campanhas com pendências do CS */}
+      {(() => {
+        const withActions = items.filter(c => (c.pending_actions || []).length > 0);
+        if (withActions.length === 0) return null;
+        const total = withActions.reduce((s, c) => s + c.pending_actions.length, 0);
+        return (
+          <button type="button" className="cs-actions-strip fade-up" onClick={() => setStatusFilter(statusFilter === 'acao' ? 'todas' : 'acao')}>
+            <span className="cs-actions-strip__dot" />
+            <span>
+              <strong>{withActions.length} {withActions.length === 1 ? 'campanha precisa' : 'campanhas precisam'} da sua ação</strong>
+              {' '}· {total} {total === 1 ? 'pendência' : 'pendências'} (deck, peça Max Attention, reunião, evidência)
+            </span>
+            <span className="cs-actions-strip__cta">{statusFilter === 'acao' ? 'Ver todas' : 'Filtrar'}</span>
+          </button>
+        );
+      })()}
+
       {/* Admin-only: controle de override do piso */}
       {impersonateEmail && (
         <FloorOverrideControl
@@ -313,6 +331,7 @@ export default function CsDashboard() {
             <option value="todas">Todas</option>
             <option value="revisadas">Revisadas</option>
             <option value="pendentes">Pendentes</option>
+            <option value="acao">Precisa da minha ação</option>
           </select>
         </div>
       </div>
@@ -609,6 +628,7 @@ function CampaignRowNew({ campaign, onClick, i }) {
           {campaign.audit_flagged && (
             <Badge variant="red">⚠ Sinalizada</Badge>
           )}
+          <Q4Badges campaign={campaign} />
         </div>
         <div className="cs-campaign-card__campaign">{campaign.campaign_name}</div>
         <div className="cs-campaign-card__meta">
@@ -648,6 +668,23 @@ function CampaignRowNew({ campaign, onClick, i }) {
   );
 }
 
+/** Selos da versão Q4/2026 no painel: pendências do CS e otimização ao vivo. */
+function Q4Badges({ campaign, compact = false }) {
+  if (campaign.version !== '2026-Q4') return null;
+  const actions = campaign.pending_actions || [];
+  return (
+    <>
+      {!compact && <span className="cs-q4-tag">Q4/2026</span>}
+      {actions.length > 0 && (
+        <span className="cs-q4-pending" title={actions.map(a => `• ${a.text}`).join('\n')}>
+          {actions.length} {compact ? '' : (actions.length === 1 ? 'pendência' : 'pendências')}
+        </span>
+      )}
+      {campaign.optimization_state === 'live' && <span className="cs-q4-live" title="Otimização ao vivo — fecha no dia seguinte ao fim" />}
+    </>
+  );
+}
+
 function CampaignRowList({ campaign, onClick }) {
   const reviewed = campaign.reviewed;
   return (
@@ -658,6 +695,7 @@ function CampaignRowList({ campaign, onClick }) {
         {campaign.is_legacy && <Badge variant="neutral">Legacy</Badge>}
         {campaign.review_requested && <Badge variant="yellow">📋</Badge>}
         {campaign.audit_flagged && <Badge variant="red">⚠</Badge>}
+        <Q4Badges campaign={campaign} compact />
       </div>
       <div className="cs-campaign-row__campaign">{campaign.campaign_name}</div>
       <div className="cs-campaign-row__prazo mono">
