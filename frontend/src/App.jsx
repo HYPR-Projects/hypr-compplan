@@ -10,6 +10,8 @@ import AdminPending from './pages/admin/Pending.jsx';
 import AdminCampaigns from './pages/admin/Campaigns.jsx';
 import AdminTeam from './pages/admin/Team.jsx';
 import AdminOverExceptions from './pages/admin/OverExceptions.jsx';
+import AdminCatalog from './pages/admin/Catalog.jsx';
+import AdminFillMatrix from './pages/admin/FillMatrix.jsx';
 import AdminReviewRequests from './pages/admin/ReviewRequests.jsx';
 import AdminStudies from './pages/admin/Studies.jsx';
 import AdminAudit from './pages/admin/Audit.jsx';
@@ -56,6 +58,8 @@ export default function App() {
         <Route path="/admin/excecoes-over" element={<ProtectedRoute adminOnly><AdminOverExceptions /></ProtectedRoute>} />
         <Route path="/admin/estudos"   element={<ProtectedRoute adminOnly><AdminStudies /></ProtectedRoute>} />
         <Route path="/admin/checklists" element={<ProtectedRoute adminOnly><CsChecklists /></ProtectedRoute>} />
+        <Route path="/admin/etapas"    element={<ProtectedRoute adminOnly><AdminCatalog /></ProtectedRoute>} />
+        <Route path="/admin/preenchimentos" element={<ProtectedRoute adminOnly><AdminFillMatrix /></ProtectedRoute>} />
 
         {/* Admin impersonando CS */}
         <Route path="/admin/cs/:csEmail"                       element={<ProtectedRoute adminOnly><CsDashboard /></ProtectedRoute>} />
