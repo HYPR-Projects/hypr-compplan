@@ -192,7 +192,59 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
 
 ---
 
-## 5. Mudanças nas etapas (proposta inicial — validar com você)
+## 5. Catálogo da versão Q4/2026 (fechado ✔)
+
+Vale para campanhas com início a partir de 01/10/2026. Q3/2026 e anteriores seguem a versão 2026 atual.
+
+**Pré-campanha**
+
+| Item | % | Origem |
+|---|---|---|
+| Definição de audiências (OOH, O2O ou RMN) | 0,15% | manual + deck |
+| Definição de features — GroundFlow | 0,25% | manual + deck |
+| Definição de features — Feature 1 / 2 / 3 | 0,20% / 0,15% / 0,10% | **auto**: ofertada no deck ∩ ativada |
+| Enriquecimento — Case, estudo ou bench | 0,10% | manual + deck |
+| Enriquecimento — Uso de mapas do GeoIQ e RevIQ | 0,20% | manual + deck |
+| Criação de plano sazonal | 0,20% | manual + deck |
+
+**Setup**
+
+| Item | % | Origem |
+|---|---|---|
+| O2O / OOH | 0,45% | auto (checklist) |
+| RMN Digital | 0,15% | auto (checklist) |
+| GroundFlow | 0,55% | auto (checklist / line `_GROUNDFLOW_`) |
+| Tier 1 — Max Attention (cada formato) · PDOOH · Survey · Purchase Context · HYPR Signals | até 3: 0,25% + 0,20% + 0,15% | auto (checklist; Max Attention exige peça vinculada no RC) |
+| Tier 2 — Spotify · Map Intelligence · Downloaded apps · Click to Calendar · Carbon Neutral · Footfall | até 2: 0,20% + 0,15% | auto (checklist) |
+| Tier 3 — TV Sync · HYPR Pass · Brand Query · Topics · Weather · Twitch TV · Video Survey | 1: 0,20% | auto (checklist) |
+
+Invalidação do Setup mantida: creative fee > R$ 1.000, over > 50% sem justificativa ou under = perde 100% do Setup.
+
+**Otimização** (sem mudança — paga só uma, 0,30%) · auto pelo Report Center
+- Com ABS: Over ≤ 25% e eCPM ≤ R$ 1,50 e CTR ≥ 0,50%
+- Sem ABS: Over ≤ 25% e eCPM ≤ R$ 0,70 e CTR ≥ 0,70%
+- Vídeo (só vídeo): Tech Cost ≤ 3% e VTR ≥ 85%
+
+**Account Management**
+
+| Item | % | Origem |
+|---|---|---|
+| Visão analytics | 0,20% | manual |
+| Relatórios | 0,10% | auto (share_id no RC) |
+| Loom | 0,10% | auto (loom_url no RC) |
+| Pós-venda — Reunião | 0,30% | evento do Google Calendar vinculado |
+| Pós-venda — Doc PDF | 0,20% | link Drive |
+| Pós-venda — Slides / One page | 0,10% | link Drive |
+| Renovação | 0,25% | manual (+ detecção por novo checklist) |
+
+Pós-venda não cumulativo: paga só o maior.
+
+**Extras** (sem mudança): Dark test 0,10% · Design studio 0,15% · Estudos 0,30% (vai para o autor).
+**Onboarding** (sem mudança): Acompanhamento de implementação de CS novo 0,25%.
+
+---
+
+## 5.1 Detalhe das mudanças por etapa
 
 ### Pré-campanha
 | Etapa | Mudança |
@@ -397,8 +449,9 @@ evidência · status de validação · preenchido por · quando · revisado por`
 12. GroundFlow mantém 0,55% no Setup; na Pré-campanha "Definição de features — RMN Físico" vira "GroundFlow" (0,25%).
 13. Pós-venda continua não cumulativo (paga o maior). Renovação fica como item único "Renovação" (0,25%).
 
-**Em aberto**
-- Outras etapas que saem/entram (além da troca do Kepler).
+14. Otimização, Extras e Onboarding mantidos sem mudança.
+
+**Em aberto:** nada — catálogo Q4/2026 fechado (§5).
 
 ---
 
