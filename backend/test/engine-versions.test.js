@@ -186,3 +186,19 @@ test('Q4: ajustes do admin no catálogo (nome, %, item novo, desativar)', () => 
     setCatalogOverrides([]);
   }
 });
+
+test('Q4: features do Force (extras.cl_features) e produtos do checklist original', () => {
+  // View veio vazia (override com ARRAY []), checklist original tem Survey e Groundflow
+  const c = base({ features: [], products: [] });
+  const bd = computeBonus(c, {}, null, {}, { facts: { maLinks: [], checklist: { products: ['O2O', 'OOH', 'Groundflow'], features: ['Survey'] } } });
+  assert.equal(item(bd, 'setup', 'setup_rmn_fisico').earned, true);   // GroundFlow
+  assert.equal(item(bd, 'setup', 'setup_tier1_1').earned, true);      // Survey
+  assert.deepEqual(bd.checklist_features, ['Survey']);
+  // Ajuste manual na view (não vazio) continua valendo
+  const ov = computeBonus(base({ features: ['Weather'] }), {}, null, {}, { facts: { maLinks: [], checklist: { products: [], features: ['Survey'] } } });
+  assert.equal(item(ov, 'setup', 'setup_tier1_1').earned, false);
+  assert.equal(item(ov, 'setup', 'setup_tier3_1').earned, true);
+  // Q3 não usa o checklist original
+  const q3 = computeBonus(base({ start_date: '2026-08-01', features: [] }), {}, null, {}, { facts: { maLinks: [], checklist: { products: [], features: ['Survey'] } } });
+  assert.equal(item(q3, 'setup', 'setup_tier1_1').earned, false);
+});

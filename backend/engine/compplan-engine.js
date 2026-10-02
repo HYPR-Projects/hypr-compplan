@@ -451,7 +451,20 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
   const stageGoesToViewer = (stage) => !stageAssignees[stage] || stageAssignees[stage] === csOwnerLower;
 
   // 1. Items inferidos do checklist (auto + semi_auto)
-  const inferred = inferAutoItems(campaign, { studiesInfo, version, facts, manualChecks });
+  // 2026-Q4: produtos e features do checklist original quando a view vem
+  // vazia (override com ARRAY [] ou features do Force em extras.cl_features).
+  // Ajuste manual do admin (view não vazia) continua valendo.
+  let effCampaign = campaign;
+  if (version === VERSION_2026_Q4 && facts.checklist) {
+    const pick = (fromView, fromSource) =>
+      (Array.isArray(fromView) && fromView.length > 0) ? fromView : (fromSource || []);
+    effCampaign = {
+      ...campaign,
+      products: pick(campaign.products, facts.checklist.products),
+      features: pick(campaign.features, facts.checklist.features),
+    };
+  }
+  const inferred = inferAutoItems(effCampaign, { studiesInfo, version, facts, manualChecks });
   const pvCheck = version === VERSION_2026_Q4 ? validatePvMeeting(manualChecks.__pv_meeting, campaign) : null;
   // Captura features por tier (anexado pelo inferAutoItems)
   const featuresByTier = inferred.__featuresByTier || { tier1: [], tier2: [], tier3: [], unknown: [] };
@@ -704,5 +717,8 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
     pre_deck: inferred.__preDeck || null,
     pv_meeting: version === VERSION_2026_Q4 ? (manualChecks.__pv_meeting || null) : null,
     excluded_features: featuresByTier.excluded || [],
+    // Produtos/features efetivamente usados no cálculo (para a tela mostrar)
+    checklist_products: Array.isArray(effCampaign.products) ? effCampaign.products : [],
+    checklist_features: Array.isArray(effCampaign.features) ? effCampaign.features : [],
   };
 }

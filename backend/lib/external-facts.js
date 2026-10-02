@@ -16,6 +16,11 @@ import { query } from './bigquery.js';
 const MA_LINKS_TABLE = process.env.RC_MA_LINKS_TABLE || 'site-hypr.prod_assets.report_ma_links';
 const LOOMS_TABLE = process.env.RC_LOOMS_TABLE || 'site-hypr.prod_assets.campaign_looms';
 const SHARES_TABLE = process.env.RC_SHARES_TABLE || 'site-hypr.prod_assets.campaign_share_ids';
+// Checklist original do Command/Force. O Force grava as features em
+// extras.cl_features (não na coluna `features`), e a view commplan_checklists
+// perde produtos/features quando a campanha tem linha de override (ARRAY nulo
+// vira [] no BigQuery). Lido direto daqui só para a versão 2026-Q4.
+const CHECKLISTS_TABLE = process.env.SOURCE_CHECKLISTS_TABLE || 'site-hypr.hypr_sales_center.checklists';
 
 async function safe(label, fn) {
   try { return await fn(); } catch (e) { console.warn(`external-facts ${label}:`, e.message); return null; }
@@ -31,7 +36,7 @@ export async function fetchFactsByToken(tokens) {
   const out = {};
   if (toks.length === 0) return out;
 
-  const [maRows, loomRows, shareRows] = await Promise.all([
+  const [maRows, loomRows, shareRows, clRows] = await Promise.all([
     safe('ma_links', () => query(
       `SELECT UPPER(short_token) AS short_token, creative_id, name, template_slug
        FROM \`${MA_LINKS_TABLE}\` WHERE UPPER(short_token) IN UNNEST(@toks)`, { toks })),
@@ -43,20 +48,37 @@ export async function fetchFactsByToken(tokens) {
     safe('shares', () => query(
       `SELECT UPPER(short_token) AS short_token, ANY_VALUE(share_id) AS share_id
        FROM \`${SHARES_TABLE}\` WHERE UPPER(short_token) IN UNNEST(@toks) GROUP BY 1`, { toks })),
+    safe('checklists', () => query(
+      `SELECT UPPER(short_token) AS short_token,
+              IFNULL(products, []) AS products,
+              IFNULL(features, []) AS features,
+              IFNULL(JSON_EXTRACT_STRING_ARRAY(extras, '$.cl_features'), []) AS cl_features,
+              IFNULL(JSON_EXTRACT_STRING_ARRAY(extras, '$.products'), []) AS extra_products
+       FROM \`${CHECKLISTS_TABLE}\`
+       WHERE UPPER(short_token) IN UNNEST(@toks)
+       QUALIFY ROW_NUMBER() OVER (PARTITION BY UPPER(short_token) ORDER BY created_at DESC) = 1`, { toks })),
   ]);
 
   for (const t of toks) {
-    out[t] = { maLinks: maRows ? [] : null, loom_url: null, share_id: null };
+    out[t] = { maLinks: maRows ? [] : null, loom_url: null, share_id: null, checklist: null };
   }
   for (const r of maRows || []) out[r.short_token]?.maLinks?.push({
     creative_id: r.creative_id, name: r.name, template_slug: r.template_slug,
   });
   for (const r of loomRows || []) if (out[r.short_token]) out[r.short_token].loom_url = r.loom_url;
   for (const r of shareRows || []) if (out[r.short_token]) out[r.short_token].share_id = r.share_id;
+  for (const r of clRows || []) {
+    if (!out[r.short_token]) continue;
+    const uniq = (a) => [...new Set((a || []).map(x => String(x).trim()).filter(Boolean))];
+    out[r.short_token].checklist = {
+      products: uniq([...(r.products || []), ...(r.extra_products || [])]),
+      features: uniq([...(r.features || []), ...(r.cl_features || [])]),
+    };
+  }
   return out;
 }
 
 /** Fatos de um token a partir do mapa. */
 export function factsFor(map, token) {
-  return (map && map[String(token || '').toUpperCase()]) || { maLinks: null, loom_url: null, share_id: null };
+  return (map && map[String(token || '').toUpperCase()]) || { maLinks: null, loom_url: null, share_id: null, checklist: null };
 }
