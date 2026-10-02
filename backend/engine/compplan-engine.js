@@ -497,7 +497,22 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
   const featuresByTier = inferred.__featuresByTier || { tier1: [], tier2: [], tier3: [], unknown: [] };
 
   // 2. Items de métricas (Otimizações)
-  const metricEarned = inferMetricItems(campaign, metrics, manualChecks);
+  // 2026-Q4: com OPT_METRICS_SOURCE=rc, eCPM/CTR/VTR/Tech cost vêm do Report
+  // Center (mesma régua do painel). Over continua o do Compplan (o RC não
+  // tem essa métrica). Padrão: Compplan, com o RC exibido ao lado.
+  let optMetrics = metrics;
+  const rc = facts.rc_metrics || null;
+  const useRc = version === VERSION_2026_Q4 && rc && (process.env.OPT_METRICS_SOURCE || 'compplan') === 'rc';
+  if (useRc) {
+    optMetrics = {
+      ...(metrics || {}),
+      ecpm: rc.display_ecpm ?? metrics?.ecpm ?? 0,
+      ctr: rc.display_ctr_pct !== null && rc.display_ctr_pct !== undefined ? rc.display_ctr_pct / 100 : (metrics?.ctr ?? 0),
+      video_vtr_pct: rc.video_vtr_pct ?? metrics?.video_vtr_pct ?? 0,
+      video_tech_cost_pct: rc.tech_cost_pct ?? metrics?.video_tech_cost_pct,
+    };
+  }
+  const metricEarned = inferMetricItems(campaign, optMetrics, manualChecks);
 
   // 3. Constrói earned final por item:
   //    - 'auto':      sempre o inferido
@@ -744,6 +759,10 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
     pre_deck: inferred.__preDeck || null,
     pv_meeting: version === VERSION_2026_Q4 ? (manualChecks.__pv_meeting || null) : null,
     excluded_features: featuresByTier.excluded || [],
+    // Métricas do Report Center (exibidas ao lado; usadas no cálculo se OPT_METRICS_SOURCE=rc)
+    rc_metrics: version === VERSION_2026_Q4 ? rc : null,
+    opt_metrics_source: useRc ? 'rc' : 'compplan',
+    opt_metrics_used: useRc ? optMetrics : null,
     // Otimização "ao vivo": calcula com a entrega até hoje e só fecha depois do fim
     optimization_state: optimizationState(campaign, metrics),
     // Produtos/features efetivamente usados no cálculo (para a tela mostrar)

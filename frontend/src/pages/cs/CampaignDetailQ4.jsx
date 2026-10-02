@@ -550,7 +550,9 @@ function StagePanel({
       {catKey === 'optimization' && (
         <OptimizationBox
           state={breakdown.optimization_state}
-          metrics={campaign.metrics}
+          rc={breakdown.rc_metrics}
+          source={breakdown.opt_metrics_source}
+          metrics={breakdown.opt_metrics_used || campaign.metrics}
           isABS={isABS}
           isVideoOnly={isVideoOnly}
           locked={locked}
@@ -682,24 +684,28 @@ const OPT_STATE = {
   final:         () => ({ tone: 'ok', text: 'Resultado final — a campanha já fechou.' }),
 };
 
-function OptimizationBox({ state, metrics, isABS, isVideoOnly, locked, onAbsChange }) {
+function OptimizationBox({ state, rc, source, metrics, isABS, isVideoOnly, locked, onAbsChange }) {
+  const pctTxt = (v, d = 2) => (v === null || v === undefined ? '—' : `${Number(v).toFixed(d)}%`);
   const st = state && OPT_STATE[state.state] ? OPT_STATE[state.state](state.closes_on) : null;
   const tiles = [];
   if (metrics) {
     if (isVideoOnly) {
       const tc = Number(metrics.video_tech_cost_pct) || 0;
       const vtr = Number(metrics.video_vtr_pct) || 0;
-      tiles.push({ label: 'Tech cost', value: `${tc.toFixed(2)}%`, limit: 'até 3%', ok: tc <= 3 });
-      tiles.push({ label: 'VTR', value: `${vtr.toFixed(1)}%`, limit: 'mín. 85%', ok: vtr >= 85 });
+      tiles.push({ label: 'Tech cost', value: `${tc.toFixed(2)}%`, limit: 'até 3%', ok: tc <= 3, rc: rc ? pctTxt(rc.tech_cost_pct) : null });
+      tiles.push({ label: 'VTR', value: `${vtr.toFixed(1)}%`, limit: 'mín. 85%', ok: vtr >= 85, rc: rc ? pctTxt(rc.video_vtr_pct, 1) : null });
     } else {
       const over = Number(metrics.over_percent) || 0;
       const ecpm = Number(metrics.ecpm) || 0;
       const ctr = (Number(metrics.ctr) || 0) * 100;
       const ecpmLim = isABS ? 1.5 : 0.7;
       const ctrLim = isABS ? 0.5 : 0.7;
-      tiles.push({ label: 'Over', value: `${over.toFixed(1)}%`, limit: 'até 25%', ok: over <= 25 });
-      tiles.push({ label: 'eCPM', value: fmt.brl(ecpm), limit: `até ${fmt.brl(ecpmLim)}`, ok: ecpm > 0 && ecpm <= ecpmLim });
-      tiles.push({ label: 'CTR', value: `${ctr.toFixed(2)}%`, limit: `mín. ${ctrLim}%`, ok: ctr >= ctrLim });
+      tiles.push({ label: 'Over', value: `${over.toFixed(1)}%`, limit: 'até 25%', ok: over <= 25,
+        rc: rc && rc.display_pacing !== null ? `pacing ${pctTxt(rc.display_pacing, 1)}` : null });
+      tiles.push({ label: 'eCPM', value: fmt.brl(ecpm), limit: `até ${fmt.brl(ecpmLim)}`, ok: ecpm > 0 && ecpm <= ecpmLim,
+        rc: rc && rc.display_ecpm !== null ? fmt.brl(rc.display_ecpm) : null });
+      tiles.push({ label: 'CTR', value: `${ctr.toFixed(2)}%`, limit: `mín. ${ctrLim}%`, ok: ctr >= ctrLim,
+        rc: rc ? pctTxt(rc.display_ctr_pct) : null });
     }
   }
   return (
@@ -717,6 +723,7 @@ function OptimizationBox({ state, metrics, isABS, isVideoOnly, locked, onAbsChan
         </div>
       )}
       {isVideoOnly && <div className="q4-muted">Campanha exclusivamente de vídeo — avalia Tech cost e VTR.</div>}
+      {source === 'rc' && <div className="q4-muted">Números do Report Center (mesma régua do painel). Over calculado pelo Compplan.</div>}
       {tiles.length > 0 ? (
         <div className="q4-opt__tiles">
           {tiles.map(t => (
@@ -724,6 +731,7 @@ function OptimizationBox({ state, metrics, isABS, isVideoOnly, locked, onAbsChan
               <span className="q4-kpi__label">{t.label}</span>
               <span className="q4-tile__value mono">{t.value}</span>
               <span className="q4-tile__limit">{t.ok ? <CheckCircle2 size={12} /> : <X size={12} />} {t.limit}</span>
+              {t.rc && source !== 'rc' && <span className="q4-tile__rc">Report Center: {t.rc}</span>}
             </div>
           ))}
         </div>

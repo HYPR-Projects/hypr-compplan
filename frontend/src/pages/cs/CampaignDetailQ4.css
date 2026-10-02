@@ -303,3 +303,5 @@
   100% { box-shadow: 0 0 0 0 transparent; }
 }
 @media (prefers-reduced-motion: reduce) { .q4-livedot { animation: none; } }
+
+.q4-tile__rc { font-size: var(--text-xs); color: var(--text-tertiary); border-top: 1px dashed var(--border); padding-top: 4px; }
