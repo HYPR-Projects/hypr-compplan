@@ -207,7 +207,10 @@ export default function CampaignDetailQ4(props) {
         <div className="q4-kpi q4-kpi--accent">
           <span className="q4-kpi__label">Bônus desta campanha</span>
           <span className="q4-kpi__value mono">{fmt.brl(breakdown.total_brl)}</span>
-          <span className="q4-kpi__note">{(breakdown.total_pct * 100).toFixed(2)}% do líquido</span>
+          <span className="q4-kpi__note">
+            {(breakdown.total_pct * 100).toFixed(2)}% do líquido
+            {breakdown.optimization_state?.state === 'live' && breakdown.by_category.optimization?.subtotal_pct > 0 && ' · otimização parcial'}
+          </span>
         </div>
         <div className="q4-kpi">
           <span className="q4-kpi__label">Líquido da campanha</span>
@@ -276,6 +279,7 @@ export default function CampaignDetailQ4(props) {
             >
               <span className="q4-tab__label">
                 {STAGE_SHORT[st]}
+                {st === 'optimization' && breakdown.optimization_state?.state === 'live' && <span className="q4-livedot" title="Ao vivo" />}
                 {pending && <span className="q4-tab__dot" title="Tem pendência" />}
               </span>
               <span className="q4-tab__meta mono">
@@ -545,6 +549,7 @@ function StagePanel({
 
       {catKey === 'optimization' && (
         <OptimizationBox
+          state={breakdown.optimization_state}
           metrics={campaign.metrics}
           isABS={isABS}
           isVideoOnly={isVideoOnly}
@@ -604,6 +609,7 @@ function StagePanel({
             key={item.id}
             item={item}
             catKey={catKey}
+            optLive={breakdown.optimization_state?.state === 'live'}
             manualChecks={manualChecks}
             onCheck={onCheck}
             onEvidenceChange={onEvidenceChange}
@@ -669,7 +675,15 @@ function MaxAttentionBox({ breakdown, token }) {
   );
 }
 
-function OptimizationBox({ metrics, isABS, isVideoOnly, locked, onAbsChange }) {
+const OPT_STATE = {
+  not_started:   (d) => ({ tone: 'info', text: 'Campanha ainda não começou — a otimização é calculada com a entrega quando ela rodar.' }),
+  awaiting_data: (d) => ({ tone: 'info', text: 'Campanha no ar, ainda sem entrega na base. Atualiza automaticamente todo dia.' }),
+  live:          (d) => ({ tone: 'live', text: `Ao vivo: calculado com a entrega até hoje e atualizado todo dia. O resultado pode mudar e fecha em ${d ? fmt.date(d) : 'o dia seguinte ao fim'}.` }),
+  final:         () => ({ tone: 'ok', text: 'Resultado final — a campanha já fechou.' }),
+};
+
+function OptimizationBox({ state, metrics, isABS, isVideoOnly, locked, onAbsChange }) {
+  const st = state && OPT_STATE[state.state] ? OPT_STATE[state.state](state.closes_on) : null;
   const tiles = [];
   if (metrics) {
     if (isVideoOnly) {
@@ -690,6 +704,12 @@ function OptimizationBox({ metrics, isABS, isVideoOnly, locked, onAbsChange }) {
   }
   return (
     <div className="q4-opt">
+      {st && (
+        <div className={`q4-note q4-note--${st.tone === 'live' ? 'live' : 'info'}`}>
+          {st.tone === 'live' ? <span className="q4-livedot" /> : <Info size={14} />}
+          <span>{st.text}</span>
+        </div>
+      )}
       {!isVideoOnly && (
         <div className="q4-segment" role="group" aria-label="Campanha com ou sem ABS">
           <button type="button" className={isABS ? 'is-active' : ''} disabled={locked} onClick={() => onAbsChange(true)}>Com ABS</button>
@@ -717,7 +737,7 @@ function OptimizationBox({ metrics, isABS, isVideoOnly, locked, onAbsChange }) {
 // ─── Linha de item ───────────────────────────────────────────────────
 
 function ItemRowQ4({
-  item, catKey, manualChecks, onCheck, onEvidenceChange, metrics, isABS, invalidated, isAdmin,
+  item, catKey, optLive, manualChecks, onCheck, onEvidenceChange, metrics, isABS, invalidated, isAdmin,
   onAdminOverride, teamList, studiesCatalog, currentStudyAssignee, currentStudyId, onAssignStudy,
   locked, assignedElsewhere,
 }) {
@@ -750,6 +770,7 @@ function ItemRowQ4({
   if (invalidated && item.was_earned) status = { label: 'Anulado', tone: 'bad' };
   else if (item.assigned_to_other) status = { label: 'Vai pro responsável', tone: 'info' };
   else if (missingEvidence) status = { label: 'Falta evidência', tone: 'warn' };
+  else if (catKey === 'optimization' && item.earned && optLive) status = { label: 'Parcial · ao vivo', tone: 'warn' };
   else if (checked && item.validation && VALIDATION[item.validation]) status = VALIDATION[item.validation];
   else if (item.earned) status = { label: 'Conquistado', tone: 'ok' };
 
