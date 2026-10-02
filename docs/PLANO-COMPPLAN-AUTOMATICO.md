@@ -114,7 +114,7 @@ Reduzir ao mínimo o preenchimento manual do CS e, portanto, o erro humano:
 - **Caminho escolhido:** o Compplan **lê direto essas tabelas** (mesmo projeto BQ) para montar o dropdown
   e para saber quais features o deck oferece — sem chamar a API da Library e sem acesso novo ao Drive.
 - Ajustes na Library: (1) incluir no `TAXONOMY` todas as features do Compplan (formatos Max Attention,
-  Weather, Topics, Footfall, Video Survey, Purchase Context, HYPR Signals, GeoIQ, Groundflow…);
+  Weather, Topics, Footfall, Video Survey, Purchase Context, HYPR Signals, GeoIQ, RevIQ…);
   (2) expor um "sincronizar este cliente agora" para deck criado depois do resync das 6h.
 - Fallback (deck fora da pasta ou ainda não indexado): ler o arquivo na hora com o código portado de
   `drive_client.py` + `tagging.py` (precisa cobrir Google Docs e PDF, que a Library hoje não lê bem).
@@ -180,14 +180,14 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
 - Pré-visualização: "se eu mudar isso, quanto muda o bônus do time no último quarter?".
 - Tudo vai para `commplan_audit_log`.
 
-### 4.3 Exemplo de card (Pré-campanha → mapas GeoIQ e Groundflow)
-> **Enriquecimento — Uso de mapas do GeoIQ e Groundflow** · 0,20% (a confirmar)
-> **O que configura:** proposta com mapa gerado no GeoIQ ou no Groundflow **específico da campanha**
+### 4.3 Exemplo de card (Pré-campanha → mapas GeoIQ e RevIQ)
+> **Enriquecimento — Uso de mapas do GeoIQ e RevIQ** · 0,20% (a confirmar)
+> **O que configura:** proposta com mapa gerado no GeoIQ ou no RevIQ **específico da campanha**
 > (marca, praças, audiência ou dados de venda do cliente).
 > **Obs.:** não vale mapa genérico ou reaproveitado de outra proposta só para preencher slide. O
 > mapa precisa estar contextualizado (legenda/insight ligado ao objetivo da campanha).
 > **Evidência:** link do documento da pré-campanha (lido automaticamente).
-> **Validação:** deck do Audience Discovery cita GeoIQ/Groundflow + mesmo mapa não usado em outro cliente no quarter.
+> **Validação:** deck do Audience Discovery cita GeoIQ/RevIQ + mesmo mapa não usado em outro cliente no quarter.
 
 ---
 
@@ -196,7 +196,7 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
 ### Pré-campanha
 | Etapa | Mudança |
 |---|---|
-| Enriquecimento — Uso de dados de venda RMNF / Mapa no Kepler | **Vira** "Enriquecimento — Uso de mapas do GeoIQ e Groundflow" (card acima). ✔ |
+| Enriquecimento — Uso de dados de venda RMNF / Mapa no Kepler | **Vira** "Enriquecimento — Uso de mapas do GeoIQ e RevIQ" (card acima). ✔ |
 | Link da evidência da Pré-campanha | **Vira dropdown com busca**: digita o cliente → lista só os decks daquele cliente na pasta Audience Discovery (índice da Library). Colar link fica como exceção. |
 | Definição de features 1/2/3 | Passa a ser **automática**: conta `ofertadas no doc ∩ ativadas`. |
 | Definição de audiências, RMN Físico, Bench/estudo, Plano sazonal | Mantidas, com card + validação pelo doc. |
@@ -350,12 +350,12 @@ evidência · status de validação · preenchido por · quando · revisado por`
 > - nada de "um quarter em modo sombra": o teste de impacto é **recalcular o Q3 com as regras novas**
 >   (sem pagar nada) e comparar com o que foi pago;
 > - o que o CS já marcou em campanhas de Q4 na tela atual é migrado para os itens novos (ex.: Kepler →
->   GeoIQ/Groundflow) e aparece como "🟡 declarado" para revalidação.
+>   GeoIQ/RevIQ) e aparece como "🟡 declarado" para revalidação.
 
 | Fase | Entrega | Quando |
 |---|---|---|
 | **0 — Preparação (agora, sem deploy)** | Fechar decisões da §12; queries de validação (cobertura de `report_ma_links` no Q3, grafias de `cl_features`, decks do Audience Discovery por cliente); congelar regras do Q3. | Já |
-| **1 — Regras Q4** | Catálogo em BQ + versão `2026-Q4` (vigência 01/10) + tiers novos + Max Attention por formato + normalização de features + item GeoIQ/Groundflow + cards. Recalcular Q3 com regras novas para medir impacto. | 1º deploy após fechar o Q3 |
+| **1 — Regras Q4** | Catálogo em BQ + versão `2026-Q4` (vigência 01/10) + tiers novos + Max Attention por formato + normalização de features + item GeoIQ/RevIQ + cards. Recalcular Q3 com regras novas para medir impacto. | 1º deploy após fechar o Q3 |
 | **2 — Dados automáticos** | `integrations/` + `commplan_campaign_facts` + sync horário (Force, carteira, RC, Max Attention). Métricas do RC lado a lado com as atuais até validar. | Logo depois |
 | **3 — Pré-campanha e Account** | Dropdown de decks + features ofertadas (Library) · Loom e relatório do RC · vínculo de reunião via Calendar. | Meio do Q4 |
 | **4 — Validação e auditoria** | Status por item, fila de divergências, painel de qualidade, tabela de preenchimentos, editor de etapas para admin. | Antes do fechamento do Q4 |
@@ -369,7 +369,7 @@ evidência · status de validação · preenchido por · quando · revisado por`
    Carousel + Slide = 2, exigindo duas peças de carrossel vinculadas). Tap to Map não existe mais (é Tap to Go).
    Tap to Choose = Max Attention. Free Form e Creative Ad Server desconsiderados. Tier 1 segue com até 3 slots.
 2. Video Survey = Tier 3. CTV não é feature. Attention Ad e Seat saem do Tier 2.
-3. "Enriquecimento — Uso de dados de venda RMNF / Mapa no Kepler" vira "Enriquecimento — Uso de mapas do GeoIQ e Groundflow".
+3. "Enriquecimento — Uso de dados de venda RMNF / Mapa no Kepler" vira "Enriquecimento — Uso de mapas do GeoIQ e RevIQ".
 4. "Ativou" (fora Max Attention) = basta estar no checklist; taxonomia da line vira confirmação extra.
 5. Widget "Adicionar ao calendário" da Max Attention confirma Click to Calendar.
 6. Vigência: Q4/2026.
@@ -377,7 +377,7 @@ evidência · status de validação · preenchido por · quando · revisado por`
 8. Documento da pré-campanha: dropdown com os decks do cliente na pasta Audience Discovery, via índice da Library (§2.3, §7).
 
 **Em aberto**
-- % do item GeoIQ/Groundflow — mantém 0,20% do Kepler?
+- % do item GeoIQ/RevIQ — mantém 0,20% do Kepler?
 - Vínculo de peças Max Attention no RC passa a ser obrigatório quando a campanha entra no ar?
 - Outras etapas que saem/entram (além da troca do Kepler).
 
