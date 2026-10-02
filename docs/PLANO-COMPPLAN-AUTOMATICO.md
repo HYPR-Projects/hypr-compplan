@@ -73,22 +73,22 @@ Reduzir ao mínimo o preenchimento manual do CS e, portanto, o erro humano:
 >
 > | No Force (checklist) | No Report Center (`template_slug`) | No Compplan |
 > |---|---|---|
-> | Tap to Go, Tap to Map | `tap-to-map` | **Max Attention** |
+> | Tap to Go (Tap to Map não existe mais — tudo é Tap to Go) | `tap-to-map` | **Max Attention** |
 > | Tap To Carousel, Tap To Slide | `carrossel` / `slider` | **Max Attention** |
 > | Tap To Scratch | `scratch` (Tap to Reveal) | **Max Attention** |
 > | Tap To Chat, Tap To Hotspot, Tap to Max, Tap to Experience | — | **Max Attention** |
 > | — | `play` (Tap to Game) | **Max Attention** |
 > | — | `survey` (Tap to Choose) | **Max Attention** (✔ decidido — não é o Survey/Brand Lift) |
-> | — | `freeform`, `adserver` | a confirmar se conta como Max Attention |
+> | — (não existem no checklist hoje) | `freeform` (Free Form), `adserver` (Creative Ad Server) | **Max Attention** ✔ |
 > | Click to Calendar | widget `add_to_calendar` | Click to Calendar (feature própria) |
 >
 > Regra proposta: **cada formato Max Attention ativado** = formato no checklist **e** peça vinculada
 > daquele formato na aba Max Attention do RC **com impressões > 0**. Formatos diferentes somam
 > slots no Tier 1 (até 3).
 >
-> ⚠️ "Formato diferente" é medido pelo formato da Platform (`template_slug`). Tap to Go e Tap to Map
-> usam o mesmo template (`tap-to-map`), assim como Tap To Carousel e Tap To Slide (`carrossel`) —
-> nesses pares conta 1 (a confirmar).
+> **Contagem:** cada formato Max Attention **diferente** no checklist conta 1 feature (Tap to Go + Tap to
+> Carousel = 2; três diferentes = 3), limitado aos 3 slots do Tier 1. Free Form e Creative Ad Server
+> também contam. A prova é peça daquele formato na aba Max Attention com impressões > 0.
 >
 > Dependências: (1) o vínculo é manual no RC — se o admin não vincular, a feature fica "⚪ sem dado"
 > (não reprova); (2) o Compplan lê `report_ma_links` direto no BQ e, para impressões, chama o RC
@@ -202,7 +202,7 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
 
 ### Setup
 - **Max Attention** (Tier 1) agrupa no catálogo Tap to Go, Tap to Chat, Tap to Max, Tap to Carousel,
-  Tap to Scratch, Tap to Map, Tap to Experience, Tap To Slide, Tap To Hotspot, Tap to Choose e Tap to Game.
+  Tap to Scratch, Tap to Experience, Tap To Slide, Tap To Hotspot, Tap to Choose, Tap to Game, Free Form e Creative Ad Server.
   Cada formato diferente ativado conta como 1 feature do Tier 1 (o Tier 1 continua pagando até 3).
   Ganho: pagamento exige **prova na aba Max Attention**, não só a marcação no checklist.
 - **Video Survey** entra no **Tier 3**. **CTV não é feature** (não entra nos tiers).
@@ -335,11 +335,11 @@ evidência · status de validação · preenchido por · quando · revisado por`
 
 ## 12. Decisões que preciso de você
 
-1. ✔ Max Attention = Tier 1, cada formato conta 1 (Tap to Go + Tap to Choose = 2); Tier 1 segue com até 3 slots; Video Survey = Tier 3; CTV não é feature. Attention Ad e Seat saem do Tier 2. **Falta:** Tap to Go × Tap to Map (mesmo template) contam 1 ou 2?
+1. ✔ Max Attention = Tier 1, cada formato conta 1 (Tap to Go + Tap to Choose = 2); Tier 1 segue com até 3 slots; Video Survey = Tier 3; CTV não é feature. Attention Ad e Seat saem do Tier 2. Tap to Map não existe mais (é Tap to Go). Cada formato diferente no checklist = 1 feature (Tap to Go + Tap to Carousel = 2; 3 diferentes = 3). Free Form e Creative Ad Server contam como Max Attention.
 2. **Quais etapas saem** além do Kepler e quais entram além de Mapas HYPR.
 3. **% da etapa Mapas HYPR** — mantém o 0,20% do Kepler?
 4. **"Ativou"** — basta estar no checklist ou exige prova de entrega no RC?
-5. **Max Attention:** Free Form / Creative Ad Server contam? (Tap to Choose = Max Attention ✔.) Widget "Adicionar ao calendário" ativa Click to Calendar? e se o **vínculo de peças no RC** passa a ser obrigatório para toda campanha com rich media.
+5. **Max Attention:** (Tap to Choose, Free Form e Creative Ad Server = Max Attention ✔.) Free Form/Ad Server não existem no checklist do Force — criar a opção lá ou contar só pela aba Max Attention? Tap To Carousel × Tap To Slide (mesmo template na Platform) contam 1 ou 2? Widget "Adicionar ao calendário" ativa Click to Calendar? e se o **vínculo de peças no RC** passa a ser obrigatório para toda campanha com rich media.
 6. **Vigência** da nova versão: Q4/2026 ou Q1/2027?
 7. **Calendar:** Compplan pede o próprio escopo (recomendado) ou reaproveita o token do Force?
 8. **Docs no Drive:** shared drive de propostas acessível à service account, ou leitura com o token do CS?
