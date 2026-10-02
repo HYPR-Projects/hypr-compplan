@@ -206,6 +206,19 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
   Cada formato diferente ativado conta como 1 feature do Tier 1 (o Tier 1 continua pagando até 3).
   Ganho: pagamento exige **prova na aba Max Attention**, não só a marcação no checklist.
 - **Video Survey** entra no **Tier 3**. **CTV não é feature** (não entra nos tiers).
+- **Saem do Tier 2:** Attention Ad e Seat.
+
+**Tiers — nova versão (decididos):**
+
+| Tier | Features | Paga |
+|---|---|---|
+| Tier 1 | Max Attention (cada formato conta 1) · PDOOH · Survey · Purchase Context · HYPR Signals | até 3 (0,25% + 0,20% + 0,15%) |
+| Tier 2 | Spotify · Map Intelligence · Downloaded apps · Click to Calendar · Carbon Neutral · Footfall | até 2 (0,20% + 0,15%) |
+| Tier 3 | TV Sync · HYPR Pass · Brand Query · Topics · Weather · Twitch TV · Video Survey | 1 (0,20%) |
+| Fora | CTV · Attention Ad · Seat | — |
+
+> Valem só para a nova versão; o Q3/2026 segue com os tiers atuais. A tabela não usada
+> `commplan_features_catalog` (seeds com tiers divergentes) será substituída por esta lista.
 - Pré-marcação via checklist normalizado + confirmação de entrega pelo RC.
 
 ### Otimização
@@ -322,7 +335,7 @@ evidência · status de validação · preenchido por · quando · revisado por`
 
 ## 12. Decisões que preciso de você
 
-1. ✔ Max Attention = Tier 1, cada formato conta 1 (Tap to Go + Tap to Choose = 2); Tier 1 segue com até 3 slots; Video Survey = Tier 3; CTV não é feature. **Falta:** Tap to Go × Tap to Map (mesmo template) contam 1 ou 2?
+1. ✔ Max Attention = Tier 1, cada formato conta 1 (Tap to Go + Tap to Choose = 2); Tier 1 segue com até 3 slots; Video Survey = Tier 3; CTV não é feature. Attention Ad e Seat saem do Tier 2. **Falta:** Tap to Go × Tap to Map (mesmo template) contam 1 ou 2?
 2. **Quais etapas saem** além do Kepler e quais entram além de Mapas HYPR.
 3. **% da etapa Mapas HYPR** — mantém o 0,20% do Kepler?
 4. **"Ativou"** — basta estar no checklist ou exige prova de entrega no RC?
