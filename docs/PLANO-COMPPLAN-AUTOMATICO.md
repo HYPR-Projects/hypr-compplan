@@ -201,7 +201,8 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
 | Link da evidência da Pré-campanha | **Vira dropdown com busca**: digita o cliente → lista só os decks daquele cliente na pasta Audience Discovery (índice da Library). Colar link fica como exceção. |
 | Definição de features 1/2/3 | Passa a ser **automática**: conta `ofertadas no doc ∩ ativadas`. |
 | Enriquecimento — Bench/case/estudo/Explorer/Map Intelligence (0,10%) | **Vira** "Enriquecimento — Case, estudo ou bench" (0,10%). Explorer e Map Intelligence deixam de contar aqui. ✔ |
-| Definição de audiências, RMN Físico, Plano sazonal | Mantidas, com card + validação pelo doc. |
+| Definição de features — RMN Físico (0,25%) | **Vira** "Definição de features — GroundFlow" (0,25%). ✔ |
+| Definição de audiências, Plano sazonal | Mantidas, com card + validação pelo doc. |
 
 **Regra de features (pré × setup):**
 - Ofereceu no documento de pré-campanha **e** ativou → ganha **Pré-campanha** (feature N) **e** **Setup** (tier).
@@ -240,7 +241,7 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
 |---|---|---|
 | O2O / OOH | 0,45% | mantido |
 | RMN Digital | 0,15% | mantido |
-| RMN Físico | 0,55% | **Vira GroundFlow** ✔ (detecção automática: produto `Groundflow` no checklist do Force / tática `_GROUNDFLOW_` nas lines do RC). % mantido (a confirmar). |
+| RMN Físico | 0,55% | **Vira GroundFlow** ✔ (detecção automática: produto `Groundflow` no checklist do Force / tática `_GROUNDFLOW_` nas lines do RC). % mantido ✔. |
 
 ### Otimização
 - 100% automática a partir do Report Center (pacing, over, CTR, eCPM, VTR, tech cost).
@@ -254,10 +255,10 @@ rodar as duas fórmulas em paralelo e listar as campanhas onde o resultado de b�
 | Pós-venda — Reunião (0,30%) | Mantida ✔. Só pode ser marcada **vinculando um evento do Google Calendar** (ver §6). |
 | Pós-venda — Doc PDF (**0,20%**, antes 0,30%) | ✔ Link do Drive lido automaticamente (verifica se é do cliente/campanha). |
 | **Pós-venda — Slides / One page** (0,10%) | ✔ Novo (substitui o "One Page"). Link do Drive lido automaticamente. |
-| Renovação sem Value Proposition (0,25%) | Mantida (a confirmar). Dá para detectar via novo checklist do mesmo cliente na carteira do CS. |
+| **Renovação** (0,25%, antes "sem Value Proposition") | Mantida ✔. Dá para detectar via novo checklist do mesmo cliente na carteira do CS. |
 | ~~Renovação com Value Proposition (0,50%)~~ | **Sai** ✔ |
 
-> Pós-venda segue **não cumulativo** (paga o maior entre Reunião, Doc PDF e Slides/One page)? — a confirmar.
+> Pós-venda segue **não cumulativo** ✔: paga só o maior entre Reunião (0,30%), Doc PDF (0,20%) e Slides/One page (0,10%).
 
 ---
 
@@ -393,11 +394,10 @@ evidência · status de validação · preenchido por · quando · revisado por`
 10. Setup: RMN Físico vira GroundFlow.
 11. Account Management: Reunião mantida (0,30%); Doc PDF 0,30% → 0,20%; novo "Slides / One page" 0,10%; Renovação com Value Proposition sai.
 
+12. GroundFlow mantém 0,55% no Setup; na Pré-campanha "Definição de features — RMN Físico" vira "GroundFlow" (0,25%).
+13. Pós-venda continua não cumulativo (paga o maior). Renovação fica como item único "Renovação" (0,25%).
+
 **Em aberto**
-- GroundFlow mantém os 0,55% do RMN Físico?
-- Pré-campanha "Definição de features — RMN Físico" (0,25%) também vira GroundFlow ou continua?
-- Pós-venda continua não cumulativo (paga só o maior)?
-- Renovação sem VP fica como "Renovação" (0,25%)?
 - Outras etapas que saem/entram (além da troca do Kepler).
 
 ---
