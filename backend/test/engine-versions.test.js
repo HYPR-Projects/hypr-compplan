@@ -243,3 +243,9 @@ test('Q4: pendências do CS para o painel', () => {
   assert.ok(texts.some(t => t.includes('Doc. Pós Venda') && t.includes('falta evidência')));
   assert.deepEqual(collectPendingActions(computeBonus(base({ start_date: '2026-08-01' })), {}, {}), []);
 });
+
+test('Otimização: prévia do Report Center quando a base do Compplan ainda não tem entrega', () => {
+  const day = (n) => { const d = new Date(); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  assert.equal(optimizationState({ start_date: day(-1), end_date: day(30) }, null, { display_ctr_pct: 0.8, display_ecpm: 0.6 }).state, 'rc_preview');
+  assert.equal(optimizationState({ start_date: day(-1), end_date: day(30) }, null, null).state, 'awaiting_data');
+});
