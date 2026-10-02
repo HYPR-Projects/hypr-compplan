@@ -73,6 +73,10 @@ fi
 : "${JWT_SECRET:=$(extract_env JWT_SECRET)}"
 : "${GOOGLE_OAUTH_CLIENT_ID:=$(extract_env GOOGLE_OAUTH_CLIENT_ID)}"
 : "${EMAIL_PASS:=$(extract_env EMAIL_PASS)}"
+# Chaves de operação do Compplan Q4 — mudadas com `gcloud run services update`
+# e preservadas aqui para não voltarem ao padrão no próximo deploy.
+: "${COMPPLAN_2026Q4_FROM:=$(extract_env COMPPLAN_2026Q4_FROM)}"
+: "${OPT_METRICS_SOURCE:=$(extract_env OPT_METRICS_SOURCE)}"
 
 if [ -z "$JWT_SECRET" ]; then
   echo ""
@@ -123,6 +127,14 @@ if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ]; then
 fi
 if [ -n "$EMAIL_PASS" ]; then
   echo "EMAIL_PASS: '${EMAIL_PASS}'" >> "$ENV_FILE"
+fi
+if [ -n "$COMPPLAN_2026Q4_FROM" ]; then
+  echo "COMPPLAN_2026Q4_FROM: '${COMPPLAN_2026Q4_FROM}'" >> "$ENV_FILE"
+  echo "  ✓ COMPPLAN_2026Q4_FROM=${COMPPLAN_2026Q4_FROM}"
+fi
+if [ -n "$OPT_METRICS_SOURCE" ]; then
+  echo "OPT_METRICS_SOURCE: '${OPT_METRICS_SOURCE}'" >> "$ENV_FILE"
+  echo "  ✓ OPT_METRICS_SOURCE=${OPT_METRICS_SOURCE}"
 fi
 
 # ── 3. Deploy ────────────────────────────────────────────────────────────────
