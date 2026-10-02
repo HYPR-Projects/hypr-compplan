@@ -680,6 +680,7 @@ function MaxAttentionBox({ breakdown, token }) {
 const OPT_STATE = {
   not_started:   (d) => ({ tone: 'info', text: 'Campanha ainda não começou — a otimização é calculada com a entrega quando ela rodar.' }),
   awaiting_data: (d) => ({ tone: 'info', text: 'Campanha no ar, ainda sem entrega na base. Atualiza automaticamente todo dia.' }),
+  rc_preview:    (d) => ({ tone: 'live', text: `Prévia do Report Center: a entrega já aparece lá, mas ainda não chegou na base do Compplan (atualiza todo dia). O bônus passa a contar quando chegar. Fecha em ${d ? fmt.date(d) : 'o dia seguinte ao fim'}.` }),
   live:          (d) => ({ tone: 'live', text: `Ao vivo: calculado com a entrega até hoje e atualizado todo dia. O resultado pode mudar e fecha em ${d ? fmt.date(d) : 'o dia seguinte ao fim'}.` }),
   final:         () => ({ tone: 'ok', text: 'Resultado final — a campanha já fechou.' }),
 };
@@ -688,6 +689,18 @@ function OptimizationBox({ state, rc, source, metrics, isABS, isVideoOnly, locke
   const pctTxt = (v, d = 2) => (v === null || v === undefined ? '—' : `${Number(v).toFixed(d)}%`);
   const st = state && OPT_STATE[state.state] ? OPT_STATE[state.state](state.closes_on) : null;
   const tiles = [];
+  if (!metrics && rc && state?.state === 'rc_preview') {
+    if (isVideoOnly) {
+      if (rc.tech_cost_pct != null) tiles.push({ label: 'Tech cost · RC', value: pctTxt(rc.tech_cost_pct), limit: 'até 3%', ok: rc.tech_cost_pct <= 3 });
+      if (rc.video_vtr_pct != null) tiles.push({ label: 'VTR · RC', value: pctTxt(rc.video_vtr_pct, 1), limit: 'mín. 85%', ok: rc.video_vtr_pct >= 85 });
+    } else {
+      const ecpmLim = isABS ? 1.5 : 0.7;
+      const ctrLim = isABS ? 0.5 : 0.7;
+      if (rc.display_pacing != null) tiles.push({ label: 'Pacing · RC', value: pctTxt(rc.display_pacing, 1), limit: 'entregue ÷ esperado até hoje', ok: true });
+      if (rc.display_ecpm != null) tiles.push({ label: 'eCPM · RC', value: fmt.brl(rc.display_ecpm), limit: `até ${fmt.brl(ecpmLim)}`, ok: rc.display_ecpm > 0 && rc.display_ecpm <= ecpmLim });
+      if (rc.display_ctr_pct != null) tiles.push({ label: 'CTR · RC', value: pctTxt(rc.display_ctr_pct), limit: `mín. ${ctrLim}%`, ok: rc.display_ctr_pct >= ctrLim });
+    }
+  }
   if (metrics) {
     if (isVideoOnly) {
       const tc = Number(metrics.video_tech_cost_pct) || 0;

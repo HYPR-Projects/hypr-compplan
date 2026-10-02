@@ -329,7 +329,7 @@ export function isCampaignStillInGracePeriod(campaign) {
  *   final         — passou 1 dia do fim: resultado definitivo
  * `closes_on` = dia em que o resultado fica definitivo (fim + 1).
  */
-export function optimizationState(campaign, metrics) {
+export function optimizationState(campaign, metrics, rc = null) {
   const start = toDateStr(campaign?.start_date);
   const end = toDateStr(campaign?.end_date);
   const today = new Date().toISOString().slice(0, 10);
@@ -341,8 +341,12 @@ export function optimizationState(campaign, metrics) {
   }
   const hasData = !!metrics && (Number(metrics.display_impressions) > 0 || Number(metrics.video_starts) > 0
     || Number(metrics.ecpm) > 0 || Number(metrics.ctr) > 0);
+  // Prévia do Report Center: o RC já tem entrega mas a base do Compplan ainda não
+  const rcHasData = !!rc && [rc.display_ecpm, rc.display_ctr_pct, rc.video_vtr_pct, rc.display_pacing, rc.video_pacing]
+    .some(v => v !== null && v !== undefined && Number(v) > 0);
   let state;
   if (start && start > today) state = 'not_started';
+  else if (!hasData && rcHasData && isCampaignStillInGracePeriod(campaign)) state = 'rc_preview';
   else if (!hasData) state = isCampaignStillInGracePeriod(campaign) ? 'awaiting_data' : 'final';
   else state = isCampaignStillInGracePeriod(campaign) ? 'live' : 'final';
   return { state, closes_on: closesOn };
@@ -765,7 +769,7 @@ export function computeBonus(campaign, manualChecks = {}, metrics = null, adminO
     opt_metrics_source: useRc ? 'rc' : 'compplan',
     opt_metrics_used: useRc ? optMetrics : null,
     // Otimização "ao vivo": calcula com a entrega até hoje e só fecha depois do fim
-    optimization_state: optimizationState(campaign, metrics),
+    optimization_state: optimizationState(campaign, metrics, version === VERSION_2026_Q4 ? rc : null),
     // Produtos/features efetivamente usados no cálculo (para a tela mostrar)
     checklist_products: Array.isArray(effCampaign.products) ? effCampaign.products : [],
     checklist_features: Array.isArray(effCampaign.features) ? effCampaign.features : [],
