@@ -273,6 +273,8 @@ export const endpoints = {
     return api.get(`/commplan/me/campaign/${token}/decks${qs ? `?${qs}` : ''}`);
   },
   meLinkDeck(token, deckId, opts = {}) { return api.post(`/commplan/me/campaign/${token}/pre-deck${asQuery(opts)}`, { deck_id: deckId }); },
+  meTaskDocs(token, opts = {}) { return api.get(`/commplan/me/campaign/${token}/task-doc${asQuery(opts)}`); },
+  meLinkTaskDoc(token, body, opts = {}) { return api.post(`/commplan/me/campaign/${token}/pre-deck${asQuery(opts)}`, body); },
   meUnlinkDeck(token, opts = {}) { return api.delete(`/commplan/me/campaign/${token}/pre-deck${asQuery(opts)}`); },
   meLinkPvMeeting(token, body, opts = {}) { return api.post(`/commplan/me/campaign/${token}/pv-meeting${asQuery(opts)}`, body); },
   meUnlinkPvMeeting(token, opts = {}) { return api.delete(`/commplan/me/campaign/${token}/pv-meeting${asQuery(opts)}`); },

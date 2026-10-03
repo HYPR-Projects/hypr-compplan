@@ -305,3 +305,9 @@
 @media (prefers-reduced-motion: reduce) { .q4-livedot { animation: none; } }
 
 .q4-tile__rc { font-size: var(--text-xs); color: var(--text-tertiary); border-top: 1px dashed var(--border); padding-top: 4px; }
+
+.q4-deck__task { display: grid; gap: 6px; padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2);
+  border: 1px solid var(--brand-glow); background: var(--brand-soft); border-radius: var(--radius-sm); }
+.q4-deck__task-head { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--brand); }
+.q4-deck__task-row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); flex-wrap: wrap; font-size: var(--text-sm); }
+.q4-deck__task-row a { color: var(--text-primary); font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
