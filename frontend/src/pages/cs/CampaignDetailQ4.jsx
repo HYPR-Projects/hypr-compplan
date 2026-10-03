@@ -10,7 +10,7 @@
  *
  * Estado, salvar e recálculo local vêm do CampaignDetail (mesmas funções).
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, CheckCircle2, AlertCircle, AlertTriangle, Save, Info, Eye, Link2,
   MessageSquare, Shield, Copy, BookOpen, X, Download, FileSpreadsheet, UserPlus,
@@ -952,6 +952,26 @@ function DeckPicker({ campaign, breakdown, manualChecks, locked, token, opts, re
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [showLink, setShowLink] = useState(!!sharedLink && !deck);
+  const [taskDocs, setTaskDocs] = useState(null);
+
+  // Documento de entrega da task vinculada à proposta no Force (sugestão)
+  useEffect(() => {
+    if (deck || locked) return;
+    endpoints.meTaskDocs(token, opts).then(d => setTaskDocs(d.items || [])).catch(() => setTaskDocs([]));
+  }, [token, !!deck]);
+
+  async function useTaskDoc(t) {
+    setBusy(true); setErr(null);
+    try {
+      await endpoints.meLinkTaskDoc(token, {
+        url: t.doc_link, task_id: t.task_id,
+        title: [t.type, t.campaign_name || t.client].filter(Boolean).join(' · '),
+      }, opts);
+      await reload();
+      setOpen(false);
+    } catch (ex) { setErr(ex.message); }
+    finally { setBusy(false); }
+  }
 
   async function search(e) {
     e?.preventDefault();
@@ -992,6 +1012,7 @@ function DeckPicker({ campaign, breakdown, manualChecks, locked, token, opts, re
           <div className="q4-deck__title">
             <a href={deck.url} target="_blank" rel="noreferrer">{deck.title} <ExternalLink size={11} /></a>
             <span className="q4-muted">
+              {deck.source === 'force_task' && 'Task do Force · '}
               {deck.client}{deck.created_time && <> · criado em {fmt.date(deck.created_time)}</>}
             </span>
           </div>
@@ -1011,6 +1032,21 @@ function DeckPicker({ campaign, breakdown, manualChecks, locked, token, opts, re
               <button type="button" className="q4-chipbtn" onClick={unlink} disabled={busy}><Unlink size={11} /> Remover</button>
             </div>
           )}
+        </div>
+      )}
+
+      {!deck && !locked && taskDocs && taskDocs.length > 0 && (
+        <div className="q4-deck__task">
+          <div className="q4-deck__task-head"><Sparkles size={13} /> Documento da task vinculada no Force</div>
+          {taskDocs.map(t => (
+            <div key={t.task_id} className="q4-deck__task-row">
+              <div>
+                <a href={t.doc_link} target="_blank" rel="noreferrer">{t.type || 'Task'}{t.campaign_name ? ` · ${t.campaign_name}` : ''} <ExternalLink size={11} /></a>
+                <span className="q4-muted"> {t.client}{t.deadline ? ` · entrega ${fmt.date(t.deadline)}` : ''}{t.cs ? ` · ${t.cs}` : ''}</span>
+              </div>
+              <button type="button" className="q4-chipbtn q4-chipbtn--primary" onClick={() => useTaskDoc(t)} disabled={busy}>Usar este documento</button>
+            </div>
+          ))}
         </div>
       )}
 

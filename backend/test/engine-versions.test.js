@@ -249,3 +249,10 @@ test('Otimização: prévia do Report Center quando a base do Compplan ainda nã
   assert.equal(optimizationState({ start_date: day(-1), end_date: day(30) }, null, { display_ctr_pct: 0.8, display_ecpm: 0.6 }).state, 'rc_preview');
   assert.equal(optimizationState({ start_date: day(-1), end_date: day(30) }, null, null).state, 'awaiting_data');
 });
+
+test('Link do Drive da task do Force → id do arquivo', async () => {
+  const { driveFileId } = await import('../routes/q4.js');
+  assert.equal(driveFileId('https://docs.google.com/presentation/d/1BqDUHf5GWHTB82TfeuS8CPgePyjQBbiPbgJFkeXhw3A/edit?slide=id.g3'), '1BqDUHf5GWHTB82TfeuS8CPgePyjQBbiPbgJFkeXhw3A');
+  assert.equal(driveFileId('https://drive.google.com/open?id=1AbCdEfGhIjKlMnOpQrStU'), '1AbCdEfGhIjKlMnOpQrStU');
+  assert.equal(driveFileId('https://loom.com/share/abc'), null);
+});

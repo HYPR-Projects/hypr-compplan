@@ -90,22 +90,109 @@ router.get('/campaign/:token/decks', async (req, res) => {
   }
 });
 
+// ── Documento da task vinculada no Force ────────────────────────────────
+// Caminho: short_token → proposal_checklist_link (linha/proposta do pipeline)
+//          → task_proposal_link ou proposals.source_task_id → tasks.doc_link
+// Tabelas do Force no layout de taxonomia (hyprops_app.force_*) com fallback
+// para os nomes antigos (hyprforce.*).
+const FORCE_TABLES = {
+  pcl: ['site-hypr.hyprops_app.force_proposal_checklist_link', 'site-hypr.hyprforce.proposal_checklist_link'],
+  tpl: ['site-hypr.hyprops_app.force_task_proposal_link', 'site-hypr.hyprforce.task_proposal_link'],
+  proposals: ['site-hypr.hyprops_app.force_proposals', 'site-hypr.hyprforce.proposals'],
+};
+const COMMAND_TASKS_TABLE = process.env.COMMAND_TASKS_TABLE || 'site-hypr.hypr_sales_center.tasks';
+
+async function tryTables(names, build, params) {
+  let lastErr = null;
+  for (const n of names) {
+    try { return await query(build(n), params); } catch (e) { lastErr = e; }
+  }
+  console.warn('force tables:', lastErr?.message);
+  return [];
+}
+
+/** Drive file id a partir de um link (docs/presentation/file/open?id=). */
+export function driveFileId(url) {
+  const s = String(url || '');
+  const m = s.match(/\/d\/([A-Za-z0-9_-]{15,})/) || s.match(/[?&]id=([A-Za-z0-9_-]{15,})/);
+  return m ? m[1] : null;
+}
+
+export async function findForceTaskDocs(shortToken) {
+  const t = String(shortToken || '').toUpperCase();
+  const links = await tryTables(FORCE_TABLES.pcl,
+    (n) => `SELECT row_id, proposal_id FROM \`${n}\` WHERE UPPER(short_token) = @t`, { t });
+  if (links.length === 0) return [];
+  const rowIds = [...new Set(links.map(l => l.row_id).filter(Boolean))];
+  const propIds = [...new Set(links.map(l => l.proposal_id).filter(Boolean))];
+  const [viaLink, viaProposal] = await Promise.all([
+    tryTables(FORCE_TABLES.tpl,
+      (n) => `SELECT DISTINCT task_id FROM \`${n}\`
+              WHERE (proposal_id IS NOT NULL AND proposal_id IN UNNEST(@p)) OR (row_id IS NOT NULL AND row_id IN UNNEST(@r))`,
+      { p: propIds.length ? propIds : [''], r: rowIds.length ? rowIds : [''] }),
+    propIds.length ? tryTables(FORCE_TABLES.proposals,
+      (n) => `SELECT DISTINCT source_task_id AS task_id FROM \`${n}\`
+              WHERE proposal_id IN UNNEST(@p) AND source_task_id IS NOT NULL`, { p: propIds }) : [],
+  ]);
+  const taskIds = [...new Set([...viaLink, ...viaProposal].map(r => r.task_id).filter(Boolean))];
+  if (taskIds.length === 0) return [];
+  const tasks = await query(
+    `SELECT id, client, type, campaign_name, status, doc_link, deadline, cs
+     FROM \`${COMMAND_TASKS_TABLE}\` WHERE id IN UNNEST(@ids)`, { ids: taskIds });
+  return tasks
+    .filter(r => String(r.doc_link || '').trim())
+    .map(r => ({
+      task_id: r.id, client: r.client, type: r.type, campaign_name: r.campaign_name || null,
+      status: r.status, cs: r.cs || null,
+      deadline: r.deadline?.value || r.deadline || null,
+      doc_link: String(r.doc_link).trim(),
+      file_id: driveFileId(r.doc_link),
+    }));
+}
+
+router.get('/campaign/:token/task-doc', async (req, res) => {
+  try {
+    const ctx = await loadForStage(req, res, 'pre_campaign');
+    if (!ctx) return;
+    res.json({ items: await findForceTaskDocs(ctx.campaign.short_token) });
+  } catch (e) {
+    console.error('task-doc:', e);
+    res.status(502).json({ error: 'Não foi possível consultar as tasks do Force agora.' });
+  }
+});
+
 // ── Escolher o deck da pré-campanha ──────────────────────────────────────
 router.post('/campaign/:token/pre-deck', async (req, res) => {
   try {
     const ctx = await loadForStage(req, res, 'pre_campaign');
     if (!ctx) return;
-    const deckId = String(req.body?.deck_id || '').trim();
-    if (!deckId) return res.status(400).json({ error: 'deck_id obrigatório' });
+    const url = String(req.body?.url || '').trim();
+    const deckId = String(req.body?.deck_id || '').trim() || driveFileId(url) || '';
+    if (!deckId) return res.status(400).json({ error: 'deck_id ou url do Drive obrigatório' });
 
     const [meta] = await libraryQuery(p => `
       SELECT m.deck_id, m.client, m.title, m.drive_url, m.created_time, m.modified_time, c.full_text
       FROM \`${p}metadata\` m
       LEFT JOIN \`${p}content\` c ON c.deck_id = m.deck_id
       WHERE m.deck_id = @id LIMIT 1`, { id: deckId });
-    if (!meta) return res.status(404).json({ error: 'Deck não encontrado no índice da Library' });
+    if (!meta && !url) return res.status(404).json({ error: 'Deck não encontrado no índice da Library' });
 
-    const snapshot = {
+    // Documento da task do Force fora do índice da Library: vincula pelo link,
+    // sem detecção de features (os itens ficam como declarados).
+    const snapshot = !meta ? {
+      deck_id: deckId,
+      client: null,
+      title: req.body?.title ? String(req.body.title).slice(0, 200) : 'Documento da task (Force)',
+      url,
+      created_time: null,
+      modified_time: null,
+      offered_features: [],
+      text_indexed: false,
+      source: 'force_task',
+      task_id: req.body?.task_id || null,
+      linked_by: ctx.me,
+      linked_at: new Date().toISOString(),
+    } : {
       deck_id: meta.deck_id,
       client: meta.client,
       title: meta.title,
@@ -114,6 +201,8 @@ router.post('/campaign/:token/pre-deck', async (req, res) => {
       modified_time: meta.modified_time?.value || meta.modified_time || null,
       offered_features: detectDeckFeatures2026Q4(`${meta.title || ''}\n${meta.full_text || ''}`),
       text_indexed: !!meta.full_text,
+      source: req.body?.task_id ? 'force_task' : 'library',
+      task_id: req.body?.task_id || null,
       linked_by: ctx.me,
       linked_at: new Date().toISOString(),
     };
